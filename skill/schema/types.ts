@@ -228,6 +228,8 @@ export type Bundle = {
   round: number;
   // File type icons (from atom-material-icons): SVG per icon key, and the key for each file path. Null when not installed.
   fileIcons: { icons: Record<string, string>; byPath: Record<string, string> } | null;
+  // Pull request title and Markdown body, written from this report.
+  prDescription: { title: string; body: string };
   warnings: string[];
   builtAt: string;
 };

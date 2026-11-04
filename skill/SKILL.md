@@ -175,6 +175,14 @@ If you cannot run a background process, run build.mjs with `--open` instead. The
    - `noted`: for `accepted` comments and nits you skipped
 6. **Build and open it again** (steps 6 and 7). Repeat until the user sends a review with no comments.
 
+## 9. Open the PR
+
+build.mjs also writes `pr-description.md` next to the report: the first line is the title, the rest is the Markdown body. When the user asks to open the PR, or the review ends with no comments and the user wants a PR:
+
+1. Ask first: opening a PR is visible to others.
+2. Use the repo's own tool: `gh pr create --title "<title>" --body-file <body file>` for GitHub, `glab mr create --title "<title>" --description "$(cat <body file>)"` for GitLab. Write the body without the title line to a temporary file first.
+3. Without a CLI for the host, give the user the file path; the report page also has a "PR description" button with copy buttons.
+
 ## Follow-ups
 
 - **Wording or grouping changes:** edit report.json and run build.mjs again. No need to collect again.

@@ -1,6 +1,7 @@
 import { Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Settings } from "lucide-react";
 import { BASE_SOURCE, REVIEW, TAGS, TARGETS } from "../lib/meta";
 import { useReport } from "../lib/state";
+import { PrDescription } from "./PrDescription";
 import { cx, Dot, LocCount, Pill } from "./ui";
 
 export const TopBar = ({ onSettings }: { onSettings: () => void }) => {
@@ -127,8 +128,11 @@ export const Hero = () => {
             {coverage.sources.some((s) => s.stale) && <span className="text-xs text-amber-600 dark:text-amber-400">(coverage file is older than the changes)</span>}
           </a>
         )}
-        <span className="ml-auto text-xs text-zinc-500">
-          {viewedCount}/{stats.files} viewed
+        <span className="ml-auto inline-flex items-center gap-3 text-xs text-zinc-500">
+          <PrDescription />
+          <span>
+            {viewedCount}/{stats.files} viewed
+          </span>
         </span>
       </div>
     </div>

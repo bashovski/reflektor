@@ -278,7 +278,85 @@ if (errors.length) {
   process.exit(1);
 }
 
-const bundle = { diff, report, contextFiles, previousReview, round, fileIcons, warnings: [...notes, ...warnings], builtAt: new Date().toISOString() };
+// ------------------------------------------------------------------ PR description
+// Markdown for the pull request, built only from the checked report. Written next to the HTML and embedded in it.
+
+const TARGET_LABELS = { backend: "Backend", frontend: "Frontend", database: "Database", infrastructure: "Infrastructure", cicd: "CI/CD", misc: "Misc" };
+const SECTION_LABELS = {
+  database: "Database", infrastructure: "Infrastructure", config: "Config", dependencies: "Dependencies", backend: "Backend",
+  frontend: "Frontend", cicd: "CI/CD", tests: "Tests", refactors: "Refactors", generated: "Generated", other: "Other",
+};
+// Report text may hold short lists; a PR bullet needs one line.
+const oneLine = (text) =>
+  text
+    .split("\n")
+    .map((l) => l.trim().replace(/^([-*•]|\d+[.)])\s+/, ""))
+    .filter(Boolean)
+    .join("; ")
+    .replace(/:;/g, ":");
+const refText = (ref) => (ref ? ` (\`${ref.path}${ref.line ? `:${ref.line}` : ""}\`)` : "");
+
+function prDescription() {
+  const title = `[${report.tag}] ${report.title}`;
+  const lines = ["## Summary", "", report.summary, ""];
+  const areas = report.targets.map((t) => TARGET_LABELS[t]).join(", ");
+  lines.push(`**Areas:** ${areas} · **Size:** ${diff.stats.files} files, +${diff.stats.additions} −${diff.stats.deletions} · **Review time:** about ${report.reviewMinutes} min`, "");
+
+  lines.push("## What changed", "");
+  for (const s of report.sections) {
+    if (s.kind === "generated") continue;
+    const main = s.highlights.find((h) => h.kind === "behavior") ?? s.highlights[0];
+    const count = `${s.files.length} ${s.files.length === 1 ? "file" : "files"}`;
+    lines.push(`- **${s.title ?? SECTION_LABELS[s.kind]}** (${count}): ${oneLine(main?.text ?? s.reason)}`);
+  }
+  lines.push("");
+
+  if (report.beforeMerge.length) {
+    lines.push("## Before you merge", "");
+    for (const b of report.beforeMerge) lines.push(`- [ ] ${oneLine(b.text)}`);
+    lines.push("");
+  }
+
+  const risks = [
+    ...report.sections.flatMap((s) => s.highlights.filter((h) => h.kind === "risk").map((h) => `${oneLine(h.text)}${refText(h.ref)}`)),
+    ...report.flows.flatMap((f) => f.steps.flatMap((st) => (st.details ?? []).filter((d) => d.kind === "error").map((d) => `${oneLine(d.text)}${refText(st.ref)}`))),
+  ];
+  if (risks.length) {
+    lines.push("## Risks", "");
+    for (const r of [...new Set(risks)].slice(0, 5)) lines.push(`- ${r}`);
+    lines.push("");
+  }
+
+  const gaps = report.testing?.gaps ?? [];
+  if (diff.coverage?.percent != null || gaps.length) {
+    lines.push("## Testing", "");
+    if (diff.coverage?.percent != null) lines.push(`- Tests run ${diff.coverage.percent}% of the new lines (${diff.coverage.covered} of ${diff.coverage.covered + diff.coverage.uncovered}).`);
+    for (const g of gaps.slice(0, 3)) lines.push(`- Not tested: ${oneLine(g)}`);
+    lines.push("");
+  }
+
+  if (previousReview && report.review) {
+    const fixed = report.review.replies.filter((r) => r.status === "fixed").length;
+    lines.push("## Review", "", `Review round ${report.review.round}: ${previousReview.comments.length} comments, ${fixed} fixed.`, "");
+  }
+
+  lines.push("<sub>Written from a pr-report review report.</sub>");
+  return { title, body: lines.join("\n") };
+}
+
+const prText = prDescription();
+
+const bundle = {
+  diff,
+  report,
+  contextFiles,
+  previousReview,
+  round,
+  fileIcons,
+  prDescription: prText,
+  warnings: [...notes, ...warnings],
+  builtAt: new Date().toISOString(),
+};
 const json = JSON.stringify(bundle).replace(/</g, "\\u003c");
 
 if (args.jsonOut) writeFileSync(args.jsonOut, JSON.stringify(bundle, null, 2));
@@ -291,6 +369,8 @@ if (!html.includes("__PR_REPORT_DATA__")) throw new Error(`${viewerPath} has no 
 
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, html.replace("__PR_REPORT_DATA__", () => json));
+const prFile = join(dirname(out), "pr-description.md");
+writeFileSync(prFile, `${prText.title}\n\n${prText.body}\n`);
 
 const state = join(diff.repo.gitDir, "pr-report", "last.json");
 mkdirSync(dirname(state), { recursive: true });
@@ -310,6 +390,7 @@ console.log(
   `${report.sections.length} sections, ${diff.files.length} files, ${steps.filter((st) => st.verified).length}/${steps.length} flow steps verified, ${warnings.length} warnings`,
 );
 console.log("Saved this run for --since last (refs/pr-report/last)");
+console.log(`PR description: ${prFile} (first line is the title)`);
 for (const n of notes) console.log(`note: ${n}`);
 for (const w of warnings) console.log(`warning: ${w}`);
 
