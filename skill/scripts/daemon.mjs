@@ -306,7 +306,10 @@ main{max-width:900px;margin:0 auto;padding:40px 16px}h1{font-size:20px;margin:0 
 <script>
 const ago=(t)=>{const s=(Date.now()-Date.parse(t))/1000;return s<60?"now":s<3600?Math.round(s/60)+" min ago":s<86400?Math.round(s/3600)+" h ago":Math.round(s/86400)+" d ago"};
 for(const el of document.querySelectorAll("time"))el.textContent=ago(el.dataset.at);
-const es=new EventSource("/api/events?token=${pageToken}&watch=*");let t;es.addEventListener("state",()=>{clearTimeout(t);t=setTimeout(()=>location.reload(),400)});
+// The stream starts with every review's current state, so reload only for a review that changed or is new.
+const shown=${JSON.stringify(Object.fromEntries([...reviews.values()].map((r) => [r.id, r.updatedAt]))).replace(/</g, "\\u003c")};
+const es=new EventSource("/api/events?token=${pageToken}&watch=*");let t;
+es.addEventListener("state",(e)=>{const s=JSON.parse(e.data);if(shown[s.id]===s.updatedAt)return;clearTimeout(t);t=setTimeout(()=>location.reload(),400)});
 </script></body></html>`;
 }
 

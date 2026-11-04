@@ -129,6 +129,11 @@ async function daemonFlow() {
       return JSON.parse(new TextDecoder().decode(value).match(/data: (.*)/)[1]);
     };
 
+    // The inbox reloads on state events; the first one on connect must match what it shows, or it reloads forever.
+    const inbox = await (await fetch(`${base}/`)).text();
+    const shown = JSON.parse(inbox.match(/const shown=(\{.*?\});/)?.[1] ?? "{}");
+    if (shown[id] !== (await state()).updatedAt) fail("the inbox would reload on the stream's first state event (reload loop)");
+
     const round1 = await (await fetch(`${base}${config.api}/bundle?round=1`, { headers: { "x-review-token": config.token } })).json();
     if (!round1?.report?.title) fail("the daemon did not return round 1's report data as an object");
     await post("presence", { tab: "t1" });
