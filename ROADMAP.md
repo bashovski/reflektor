@@ -1,6 +1,6 @@
 # Roadmap
 
-## In progress
+## Done
 
 - PR description from the report
 - Secret and migration checks
