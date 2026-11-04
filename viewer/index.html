@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PR report</title>
+    <script>
+      // The saved theme (see lib/state.tsx), applied before the first paint so a dark page never starts white.
+      (() => {
+        let saved = "system";
+        try {
+          saved = JSON.parse(localStorage.getItem("pr-report:theme") ?? '"system"');
+        } catch {}
+        const system = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = saved === "dark" || saved === "light" ? saved : system;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
