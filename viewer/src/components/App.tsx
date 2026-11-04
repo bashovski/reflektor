@@ -5,6 +5,7 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { Bundle } from "../../../skill/schema/types";
 import { ReviewProvider, useReview } from "../lib/review";
 import { ReportProvider, useReport } from "../lib/state";
+import { useTab } from "../lib/tab";
 import { BeforeMerge } from "./BeforeMerge";
 import { Coverage } from "./Coverage";
 import { FileModal } from "./FileModal";
@@ -98,13 +99,7 @@ const Layout = () => {
   const [settings, setSettings] = useState(false);
   useShortcuts(() => setSettings(true));
   const { bundle } = useReport();
-  const { phase, latestRound, round } = useReview();
-
-  // A finished review gets a check mark in the tab title, for when this tab is in the background.
-  const finished = phase === "done" && latestRound === round;
-  useEffect(() => {
-    document.title = `${finished ? "✓ " : ""}${bundle.report.tag} ${bundle.report.title}`;
-  }, [bundle, finished]);
+  useTab();
 
   return (
     <>

@@ -454,8 +454,18 @@ if (htmlOut) {
   if (!viewerPath) throw new Error("Viewer not found. Build it with `pnpm build` or pass --viewer.");
   const html = readFileSync(viewerPath, "utf8");
   if (!html.includes("__PR_REPORT_DATA__")) throw new Error(`${viewerPath} has no data placeholder`);
+  // The page's base title (see viewer/src/lib/tab.ts), so the tab is right while the page loads.
+  const title = `${diff.branch.head} · ${diff.repo.name}${round > 1 ? ` · round ${round}` : ""}`.replace(
+    /[&<>]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c],
+  );
   mkdirSync(dirname(htmlOut), { recursive: true });
-  writeFileSync(htmlOut, html.replace("__PR_REPORT_DATA__", () => JSON.stringify(bundle).replace(/</g, "\\u003c")));
+  writeFileSync(
+    htmlOut,
+    html
+      .replace("<title>PR report</title>", () => `<title>${title}</title>`)
+      .replace("__PR_REPORT_DATA__", () => JSON.stringify(bundle).replace(/</g, "\\u003c")),
+  );
 }
 const prFile = join(dirname(out), "pr-description.md");
 writeFileSync(prFile, `${prText.title}\n\n${prText.body}\n`);

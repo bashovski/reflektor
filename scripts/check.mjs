@@ -82,6 +82,8 @@ try {
 
   const page = readFileSync(html, "utf8");
   if (page.includes("__PR_REPORT_DATA__")) fail("report data was not injected into the viewer");
+  // samples/ can hold review files from local runs, which makes this a later round.
+  if (!/<title>feat\/books · library( · round \d+)?<\/title>/.test(page)) fail("the standalone page does not carry the branch · repo title");
   if (statSync(html).size < 1_000_000) fail("the standalone page is too small; build.mjs probably used the unbuilt viewer");
 
   await daemonFlow();
@@ -129,6 +131,7 @@ async function daemonFlow() {
     const base = `http://127.0.0.1:${port}`;
     const page = await (await fetch(`${base}/r/${id}`)).text();
     const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)[1]);
+    if (!page.includes("<title>feat/books · library</title>")) fail("the review page does not carry the branch · repo title");
     if (page.length > 20_000) fail(`the review page is ${page.length} bytes; it should load the app and its data, not carry them`);
     await checkAppAssets(base, page);
     const post = (path, body) =>
@@ -146,6 +149,7 @@ async function daemonFlow() {
     const shown = JSON.parse(inbox.match(/const shown=(\{.*?\});/)?.[1] ?? "{}");
     if (shown[id] !== (await state()).updatedAt) fail("the inbox would reload on the stream's first state event (reload loop)");
     if (!/<span class="av" style="background:#[0-9a-f]{6}">AL<\/span>/.test(inbox)) fail("the inbox does not show the owner's initials");
+    if (!inbox.includes("<title>(1) PR reports</title>")) fail("the inbox title does not count the review waiting on you");
 
     const round1 = await (await fetch(`${base}${config.api}/bundle?round=1`, { headers: { "x-review-token": config.token } })).json();
     if (!round1?.report?.title) fail("the daemon did not return round 1's report data as an object");

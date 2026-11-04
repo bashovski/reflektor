@@ -141,9 +141,8 @@ export const ReportProvider = ({ bundle, children }: { bundle: Bundle; children:
   );
   const viewedCount = useMemo(() => bundle.diff.files.filter((f) => isViewed(f.path)).length, [bundle, isViewed]);
 
-  const [sectionOpen, setSectionOpenMap] = useState<Record<number, boolean>>(() =>
-    Object.fromEntries(bundle.report.sections.map((s, i) => [i, s.review === "must"])),
-  );
+  // Every section starts collapsed; the sidebar, links and j/k open the one they go to.
+  const [sectionOpen, setSectionOpenMap] = useState<Record<number, boolean>>({});
   const isSectionOpen = useCallback((i: number) => sectionOpen[i] ?? false, [sectionOpen]);
   const setSectionOpen = useCallback((i: number, open: boolean) => setSectionOpenMap((p) => ({ ...p, [i]: open })), []);
 

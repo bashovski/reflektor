@@ -297,6 +297,15 @@ const PHASES = {
   done: ["Done", "#059669"],
 };
 
+// The review icon from viewer/src/lib/favicon.ts in gray, with a red dot while a review waits on you.
+const inboxIcon = (dot) =>
+  `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#52525b"/>` +
+      `<path transform="translate(8 8) scale(2)" d="M20 14.5a2 2 0 0 1-2 2H8l-4 3.5V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" fill="none" stroke="white" stroke-width="2.6" stroke-linejoin="round"/>` +
+      (dot ? `<circle cx="50" cy="14" r="15" fill="white"/><circle cx="50" cy="14" r="11" fill="#ef4444"/>` : "") +
+      `</svg>`,
+  )}`;
+
 function inboxPage() {
   const rows = [...reviews.values()]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -311,8 +320,10 @@ function inboxPage() {
         <time data-at="${r.updatedAt}"></time></a>`;
     })
     .join("");
+  // Reviews that need the reviewer: their turn to review, or a plan to approve.
+  const waitingOnYou = [...reviews.values()].filter((r) => r.phase === "reviewing" || r.phase === "planning").length;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PR reports</title><style>
+<title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}PR reports</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}"><style>
 :root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#09090b;--surface:#111113;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa}}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif,system-ui,sans-serif}
@@ -354,7 +365,11 @@ function reviewPage(r, round) {
   const entry = r.rounds.find((x) => x.round === round) ?? r.rounds.at(-1);
   if (!entry || !existsSync(roundFile(entry))) return null;
   const config = { live: true, id: r.id, round: entry.round, token: pageToken, api: `/api/r/${encodeURIComponent(r.id)}` };
-  return readFileSync(join(APP_DIR, "index.html"), "utf8").replace("</head>", () => `<script>window.__PR_REVIEW__=${JSON.stringify(config)}</script></head>`);
+  // The page's base title (see viewer/src/lib/tab.ts), so the tab is right before the report loads.
+  const title = `${r.branch} · ${r.repo.split("/").at(-1)}${entry.round > 1 ? ` · round ${entry.round}` : ""}`;
+  return readFileSync(join(APP_DIR, "index.html"), "utf8")
+    .replace("<title>PR report</title>", () => `<title>${escapeHtml(title)}</title>`)
+    .replace("</head>", () => `<script>window.__PR_REVIEW__=${JSON.stringify(config)}</script></head>`);
 }
 
 // Vite puts a content hash in every asset name, so the browser can keep each one for good.
