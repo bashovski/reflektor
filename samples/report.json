@@ -833,5 +833,95 @@
         }
       }
     ]
+  },
+  "schema": {
+    "tables": [
+      {
+        "name": "books",
+        "status": "new",
+        "ref": {
+          "path": "db/migrations/0042_create_books.sql",
+          "line": 1
+        },
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "status": "new",
+            "key": "pk"
+          },
+          {
+            "name": "title",
+            "type": "text",
+            "status": "new"
+          },
+          {
+            "name": "isbn",
+            "type": "char(13)",
+            "status": "new",
+            "note": "unique per owner"
+          },
+          {
+            "name": "author_id",
+            "type": "uuid",
+            "status": "new",
+            "references": "authors.id",
+            "enforced": false,
+            "note": "no foreign key"
+          },
+          {
+            "name": "owner_id",
+            "type": "uuid",
+            "status": "new",
+            "references": "users.id"
+          },
+          {
+            "name": "created_at",
+            "type": "timestamptz",
+            "status": "new"
+          }
+        ]
+      },
+      {
+        "name": "authors",
+        "status": "changed",
+        "ref": {
+          "path": "db/migrations/0043_add_author_slug.sql",
+          "line": 1
+        },
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "status": "existing",
+            "key": "pk"
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "status": "existing"
+          },
+          {
+            "name": "slug",
+            "type": "text",
+            "status": "new",
+            "key": "unique",
+            "note": "NOT NULL, no default"
+          }
+        ]
+      },
+      {
+        "name": "users",
+        "status": "existing",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "status": "existing",
+            "key": "pk"
+          }
+        ]
+      }
+    ]
   }
 }

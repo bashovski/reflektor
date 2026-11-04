@@ -37,6 +37,7 @@ const STEP_STATUS = union("StepStatus");
 const DETAIL_KINDS = union("FlowDetailKind");
 const REPLY_STATUS = union("ReplyStatus");
 const PLAN_STATUS = union("PlanStatus");
+const SCHEMA_STATUS = union("SchemaStatus");
 
 function parseArgs(argv) {
   const args = { open: false };
@@ -184,6 +185,24 @@ if (report.plan) {
     oneOf(item.status, PLAN_STATUS, `plan.items[${i}].status`);
     if (item.status === "done" && !item.ref) warnings.push(`plan.items[${i}]: done, but no ref shows where`);
     return { ...item, ref: checkRef(item.ref, `plan.items[${i}]`) };
+  });
+}
+
+// ------------------------------------------------------------------ schema
+
+if (report.schema) {
+  const changedText = diff.files.map((f) => `${f.oldContent ?? ""}\n${f.newContent ?? ""}`).join("\n");
+  const names = new Set((report.schema.tables ?? []).map((t) => t.name));
+  report.schema.tables = (report.schema.tables ?? []).map((t, ti) => {
+    const where = `schema.tables[${ti}] (${t.name})`;
+    oneOf(t.status, SCHEMA_STATUS, `${where}.status`);
+    if (t.status !== "existing" && !changedText.includes(t.name)) warnings.push(`${where}: "${t.name}" does not appear in any changed file`);
+    for (const c of t.columns ?? []) {
+      oneOf(c.status, SCHEMA_STATUS, `${where}.columns.${c.name}.status`);
+      const target = c.references?.split(".")[0];
+      if (target && !names.has(target)) warnings.push(`${where}.${c.name}: references ${c.references}, but table ${target} is not in the diagram`);
+    }
+    return { ...t, ref: checkRef(t.ref, where) };
   });
 }
 

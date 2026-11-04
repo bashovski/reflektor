@@ -174,6 +174,22 @@ export type Flow = {
   steps: FlowStep[];
 };
 
+export type SchemaStatus = "new" | "changed" | "removed" | "existing";
+
+export type SchemaColumn = {
+  name: string;
+  type: string;
+  status: SchemaStatus;
+  key?: "pk" | "unique";
+  // "table.column" this column points to. enforced: false = no real foreign key in the database.
+  references?: string;
+  enforced?: boolean;
+  note?: string;
+};
+
+// A table touched by the change, or an existing table that a new relation points to (only the columns involved).
+export type SchemaTable = { name: string; status: SchemaStatus; columns: SchemaColumn[]; ref?: Ref };
+
 export type PlanStatus = "done" | "partial" | "missing" | "extra";
 
 // One item of the session's plan, checked against the diff. "extra" = a change the plan did not ask for.
@@ -190,6 +206,8 @@ export type Report = {
   flows: Flow[];
   sections: Section[];
   testing?: { gaps: string[] };
+  // Tables changed by this PR, drawn as a diagram. Leave out when the database is not touched.
+  schema?: { tables: SchemaTable[] };
   // Did the change do what this session planned? Leave out when there was no plan.
   plan?: { source: string; items: PlanItem[] };
   // Answers to the previous review round. Add one reply per comment in that round's review file.

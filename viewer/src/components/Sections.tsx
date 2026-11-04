@@ -6,6 +6,7 @@ import { sectionDomId, useReport } from "../lib/state";
 import { commentButtonClass, QuickActions, SuggestedFix, TargetComments } from "./Comments";
 import { FileCard } from "./FileCard";
 import { RichText } from "./RichText";
+import { SchemaDiagram } from "./SchemaDiagram";
 import { cx, LocCount, Pill, RefLink, SectionTitle } from "./ui";
 
 const QuestionItem = ({ target, id }: { target: Extract<CommentTarget, { type: "question" }>; id: string }) => {
@@ -62,6 +63,8 @@ const SectionCard = ({ section, index }: { section: Section; index: number }) =>
       {open && (
         <div className="space-y-5 border-t border-[var(--border)] px-3 pt-4 pb-4 sm:px-5">
           <p className="text-sm text-zinc-500 md:hidden">{section.reason}</p>
+
+          {section.kind === "database" && <SchemaDiagram />}
 
           {section.highlights.length > 0 && (
             <ul className="space-y-1">

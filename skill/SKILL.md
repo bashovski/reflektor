@@ -142,6 +142,13 @@ Write report.json to the **Report file** path that collect printed. Its shape is
 - Include middleware or error handlers only when the change relies on them.
 - `details`: the checks (validation, auth), rules (business logic), effects (writes, events, cache) and errors (wrong status codes, races) at that step. Give every `error` detail a `fix`, like risks.
 
+**schema:** when the change touches the database (migrations, ORM models, schema files), describe the tables so the page can draw them.
+
+- Every new, changed or removed table, with all its columns and a `status` per column.
+- Existing tables that a new relation points to, with only the columns involved.
+- `references: "table.column"` on columns that point to another table. Add `enforced: false` when there is no real foreign key in the database.
+- Keep `note` to a few words, like "NOT NULL, no default".
+
 **plan:** when this conversation had a plan, check the diff against it. A plan is an approved plan-mode plan, a task list you kept, a numbered list the user gave or agreed to, or a ticket the user pasted. Without one, leave `plan` out.
 
 - `source`: one line on where the plan came from, like "Plan approved in this session".
