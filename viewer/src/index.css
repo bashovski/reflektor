@@ -9,6 +9,15 @@
   --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
+/* Tailwind v4 gives buttons the default arrow cursor. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+}
+
 :root {
   --bg: #fafafa;
   --surface: #ffffff;
