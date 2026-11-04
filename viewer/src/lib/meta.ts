@@ -33,12 +33,14 @@ import type {
   BaseSource,
   BeforeMergeKind,
   CommentKind,
+  FindingKind,
   FlowDetailKind,
   FlowStep,
   HighlightKind,
   ReplyStatus,
   ReviewLevel,
   SectionKind,
+  Severity,
   Tag,
   Target,
 } from "../../../skill/schema/types";
@@ -190,4 +192,15 @@ export const REPLY_STATUS: Record<ReplyStatus, { label: string; className: strin
   answered: { label: "Answered", className: "bg-blue-500/10 text-blue-700 ring-blue-500/30 dark:text-blue-300" },
   wontfix: { label: "Won't fix", className: "bg-amber-500/10 text-amber-700 ring-amber-500/30 dark:text-amber-300" },
   noted: { label: "Noted", className: "bg-zinc-500/10 text-zinc-600 ring-zinc-500/25 dark:text-zinc-400" },
+};
+
+export const SEVERITY: Record<Severity, { label: string; className: string; border: string }> = {
+  high: { label: "High", className: "bg-red-500/10 text-red-700 ring-red-500/30 dark:text-red-300", border: "border-red-500/40" },
+  medium: { label: "Medium", className: "bg-amber-500/10 text-amber-700 ring-amber-500/30 dark:text-amber-300", border: "border-amber-500/40" },
+  low: { label: "Low", className: "bg-zinc-500/10 text-zinc-600 ring-zinc-500/25 dark:text-zinc-400", border: "border-zinc-500/30" },
+};
+
+export const FINDING_KINDS: Record<FindingKind, { label: string; icon: LucideIcon }> = {
+  secret: { label: "Secret", icon: KeyRound },
+  migration: { label: "Migration", icon: DatabaseZap },
 };

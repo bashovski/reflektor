@@ -68,6 +68,8 @@ It writes diff.json into the repo's git folder and prints:
 - the `git diff` command to read the changes
 - a table of changed files with their target (from `.pr-report.json`) and flags (generated, uncommitted, untracked)
 
+It also prints **Safety checks**: fixed rules that flag likely secrets (key formats, passwords in code, committed `.env` or key files) and risky migrations (dropped tables or columns, NOT NULL without a default, renames, type changes, writes without WHERE, indexes that lock a table). Secret values are masked.
+
 Exit code 3 means there are no changes: tell the user and stop.
 
 collect.mjs fetches the base branch first. If the fetch fails, it warns and uses the local copy; tell the user. Pass `--no-fetch` to skip fetching, for example when offline.
@@ -83,6 +85,7 @@ Before writing, find out:
 - **Who else is affected:** search the repo for changed functions, routes, types and tables. Callers outside the diff become `affected` highlights.
 - **What can break:** migrations, contract changes (API, database schema, public types, events), env vars, deploy order, concurrency, error handling, security (auth checks, input validation, secrets).
 - **What is not tested.**
+- **The safety checks:** every high or medium finding must appear in the report as a `risk` highlight with a `ref` to its line and a `fix`. A secret also gets a `beforeMerge` item: remove it, rotate it, and load it from the environment. A false positive still gets a highlight that says why it is safe. Never copy a secret value into report text.
 
 For large changes (more than about 60 files or 3000 changed lines), read must-review files fully and skim the rest. Say in the summary that the report focuses on the most important parts.
 

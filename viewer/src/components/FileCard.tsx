@@ -1,9 +1,9 @@
 import type { FileContents } from "@pierre/diffs";
 import { type DiffLineAnnotation, type FileDiffOptions, MultiFileDiff, type SelectedLineRange } from "@pierre/diffs/react";
-import { ChevronRight, FlaskConical, Maximize2, MessageSquarePlus, MessageSquareText } from "lucide-react";
+import { ChevronRight, FlaskConical, Maximize2, MessageSquarePlus, MessageSquareText, ShieldAlert } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { CommentTarget, DiffFile, SectionFile } from "../../../skill/schema/types";
-import { FILE_STATUS } from "../lib/meta";
+import type { CommentTarget, DiffFile, Finding, SectionFile } from "../../../skill/schema/types";
+import { FILE_STATUS, SEVERITY } from "../lib/meta";
 import { useReview } from "../lib/review";
 import { fileDomId, useReport } from "../lib/state";
 import { CommentItem, Composer, TargetComments } from "./Comments";
@@ -13,7 +13,11 @@ import { cx, DiffBar, FileIcon, IconButton, LocCount, Pill } from "./ui";
 type LineTarget = Extract<CommentTarget, { type: "line" }>;
 
 // What a line annotation shows: Claude's note, a review comment, or the open comment box.
-export type AnnotationMeta = { type: "note"; text: string } | { type: "comment"; id: string } | { type: "composer"; target: LineTarget };
+export type AnnotationMeta =
+  | { type: "note"; text: string }
+  | { type: "finding"; finding: Finding }
+  | { type: "comment"; id: string }
+  | { type: "composer"; target: LineTarget };
 
 const LineComment = ({ id }: { id: string }) => {
   const { comments } = useReview();
@@ -45,6 +49,16 @@ export const LineNoteBubble = ({ text }: { text: string }) => (
   <div className="my-1.5 mr-3 ml-12 flex max-w-2xl items-start gap-2 rounded-lg border border-blue-500/25 bg-blue-50 px-3 py-2 font-sans text-[13px] leading-snug text-zinc-800 shadow-sm dark:bg-blue-950/60 dark:text-zinc-200">
     <MessageSquareText className="mt-0.5 size-3.5 shrink-0 text-blue-500" />
     <RichText text={text} />
+  </div>
+);
+
+const FindingBubble = ({ finding }: { finding: Finding }) => (
+  <div className={cx("my-1.5 mr-3 ml-12 flex max-w-2xl items-start gap-2 rounded-lg border bg-[var(--surface)] px-3 py-2 font-sans text-[13px] leading-snug shadow-sm", SEVERITY[finding.severity].border)}>
+    <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-red-500" />
+    <span>
+      {finding.kind === "secret" && <span className="font-semibold">{finding.rule}. </span>}
+      {finding.message}
+    </span>
   </div>
 );
 
@@ -98,6 +112,9 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
       lineNumber: n.line,
       metadata: { type: "note", text: n.text },
     }));
+    for (const finding of bundle.diff.findings ?? []) {
+      if (finding.path === path && finding.line) list.push({ side: "additions", lineNumber: finding.line, metadata: { type: "finding", finding } });
+    }
     for (const c of comments) {
       if (c.target.type !== "line" || c.target.path !== path) continue;
       list.push({ side: c.target.side === "old" ? "deletions" : "additions", lineNumber: c.target.end, metadata: { type: "comment", id: c.id } });
@@ -107,7 +124,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
       list.push({ side: t.side === "old" ? "deletions" : "additions", lineNumber: t.end, metadata: { type: "composer", target: t } });
     }
     return list;
-  }, [sectionFile, comments, composer, path]);
+  }, [sectionFile, comments, composer, path, bundle]);
 
   // A ref keeps the diff options stable while the click handler sees fresh state.
   const onGutter = useRef<(range: SelectedLineRange) => void>(() => {});
@@ -153,6 +170,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
   const renderAnnotation = useCallback((a: DiffLineAnnotation<AnnotationMeta>) => {
     const m = a.metadata;
     if (m.type === "note") return <LineNoteBubble text={m.text} />;
+    if (m.type === "finding") return <FindingBubble finding={m.finding} />;
     if (m.type === "comment") return <LineComment id={m.id} />;
     return (
       <div className="mr-3 ml-12 max-w-2xl">

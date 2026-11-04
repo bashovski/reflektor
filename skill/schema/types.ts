@@ -42,6 +42,13 @@ export type CoverageData = {
   percent: number | null;
 };
 
+export type FindingKind = "secret" | "migration";
+
+export type Severity = "high" | "medium" | "low";
+
+// A safety check hit from collect.mjs. `preview` shows a masked secret, never the full value.
+export type Finding = { kind: FindingKind; rule: string; severity: Severity; path: string; line: number | null; message: string; preview?: string };
+
 export type DiffData = {
   version: 1;
   generatedAt: string;
@@ -62,6 +69,7 @@ export type DiffData = {
   stats: { files: number; additions: number; deletions: number; uncommittedFiles: number };
   files: DiffFile[];
   coverage: CoverageData | null;
+  findings: Finding[];
   config: RepoConfig | null;
   warnings: string[];
 };

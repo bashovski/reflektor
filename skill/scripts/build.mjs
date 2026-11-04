@@ -175,6 +175,16 @@ if (unassigned.length) {
   });
 }
 
+// ------------------------------------------------------------------ safety findings
+// Every high or medium finding from collect.mjs must show up in a highlight or a before-merge item.
+
+const mentioned = [...report.sections.flatMap((s) => s.highlights.map((h) => h.ref)), ...report.beforeMerge.map((b) => b.ref)].filter(Boolean);
+for (const f of diff.findings ?? []) {
+  if (f.severity === "low") continue;
+  const covered = mentioned.some((r) => r.path === f.path && (f.line == null || r.line == null || Math.abs(r.line - f.line) <= 3));
+  if (!covered) warnings.push(`safety check "${f.rule}" at ${f.path}${f.line ? `:${f.line}` : ""} is not in any highlight or before-merge item`);
+}
+
 // ------------------------------------------------------------------ flows
 
 const contextFiles = {};

@@ -376,6 +376,12 @@ CREATE INDEX books_owner_created_idx ON books (owner_id, created_at DESC);
 EOF
 commit "2026-11-02T10:12:00+01:00" "add books table migration"
 
+w db/migrations/0043_add_author_slug.sql <<'EOF'
+ALTER TABLE authors ADD COLUMN slug text NOT NULL;
+CREATE UNIQUE INDEX authors_slug_key ON authors (slug);
+EOF
+commit "2026-11-02T10:40:00+01:00" "add author slug"
+
 w apps/api/src/shared/pagination.ts <<'EOF'
 export type Pagination = { limit: number; offset: number };
 

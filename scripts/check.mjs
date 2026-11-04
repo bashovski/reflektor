@@ -5,7 +5,7 @@
 // Usage: node scripts/check.mjs [--open]
 
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,6 +29,14 @@ try {
   const collected = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"]);
   if (!collected.includes("Patch coverage: 51%")) fail("collect.mjs did not read coverage from .pr-report.json");
   if (!collected.includes("(config)")) fail("collect.mjs did not take the base branch from .pr-report.json");
+  if (!collected.includes("Safety checks: 1 high, 0 medium, 1 low")) fail("collect.mjs safety checks did not find the slug migration problems");
+
+  // A key-shaped value built at runtime, so no literal secret is stored in this repo.
+  const secretRepo = join(tmp, "secret");
+  run("bash", ["-c", `mkdir -p "${secretRepo}" && cd "${secretRepo}" && git init -q -b main && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m base && git checkout -qb feat`]);
+  writeFileSync(join(secretRepo, "config.js"), `export const key = "${"AKIA" + "Q".repeat(16)}";\n`);
+  const secretOut = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", secretRepo, "--no-fetch", "--base", "main", "--out", join(tmp, "secret.json")]);
+  if (!secretOut.includes("AWS access key [AKIA…(20 characters)]")) fail("collect.mjs did not flag or mask a fake AWS key");
 
   const built = run("node", [
     join(root, "skill/scripts/build.mjs"),

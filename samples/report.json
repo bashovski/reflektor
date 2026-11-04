@@ -14,7 +14,7 @@
   "beforeMerge": [
     {
       "kind": "migration",
-      "text": "Run migration 0042 before the new API code goes live. Without the books table, both /books endpoints return 500.",
+      "text": "Run migrations 0042 and 0043 before the new API code goes live. Without the books table, both /books endpoints return 500.",
       "ref": {
         "path": "db/migrations/0042_create_books.sql",
         "line": 1
@@ -309,6 +309,15 @@
         },
         {
           "kind": "risk",
+          "text": "New column `authors.slug` is NOT NULL with no default. The migration fails as soon as the authors table has rows.",
+          "ref": {
+            "path": "db/migrations/0043_add_author_slug.sql",
+            "line": 1
+          },
+          "fix": "Add `slug` as nullable, fill it for existing authors, then set NOT NULL."
+        },
+        {
+          "kind": "risk",
           "text": "author_id has no foreign key. Deleting an author leaves books that point to nothing.",
           "ref": {
             "path": "db/migrations/0042_create_books.sql",
@@ -318,7 +327,7 @@
         },
         {
           "kind": "contract",
-          "text": "Only adds a table. Safe to run before the new code ships. Undo with DROP TABLE books."
+          "text": "Adds the books table and an `authors.slug` column. Undo with `DROP TABLE books` and `DROP COLUMN slug`."
         },
         {
           "kind": "decision",
@@ -344,6 +353,16 @@
             {
               "line": 10,
               "text": "Unique per user, not across all users. Two users can save the same book."
+            }
+          ]
+        },
+        {
+          "path": "db/migrations/0043_add_author_slug.sql",
+          "note": "Adds a slug to authors, with a unique index. Nothing in this branch reads `slug` yet.",
+          "lineNotes": [
+            {
+              "line": 2,
+              "text": "Blocks writes to authors while the index builds. Fine while the table is small."
             }
           ]
         }

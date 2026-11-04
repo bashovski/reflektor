@@ -373,6 +373,101 @@ if (!files.length) {
 }
 
 
+// ------------------------------------------------------------------ safety checks
+// Fixed rules on added lines: likely secrets, and database migrations that can break a deploy.
+// These are facts for Claude to judge; secret values are never printed in full.
+
+const SECRET_RULES = [
+  ["aws-key", "AWS access key", /\b((?:AKIA|ASIA)[0-9A-Z]{16})\b/],
+  ["private-key", "Private key", /(-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----)/],
+  ["github-token", "GitHub token", /\b(gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,})\b/],
+  ["gitlab-token", "GitLab token", /\b(glpat-[A-Za-z0-9_-]{20,})\b/],
+  ["slack-token", "Slack token", /\b(xox[abposr]-[A-Za-z0-9-]{10,})\b/],
+  ["stripe-key", "Stripe live key", /\b((?:sk|rk)_live_[A-Za-z0-9]{20,})\b/],
+  ["google-key", "Google API key", /\b(AIza[0-9A-Za-z_-]{35})\b/],
+  ["ai-key", "AI API key", /\b(sk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,})\b/],
+  ["jwt", "JSON Web Token", /\b(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/],
+  ["password-in-code", "Password or secret in code", /\b(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret)\b["']?\s*[:=]\s*["']([^"'\s$<>{}]{8,})["']/i],
+  ["url-password", "Password in a connection URL", /\b[a-z][a-z0-9+.-]*:\/\/([^\s:@/]+):([^\s:@/]{3,})@/i],
+];
+// Values that are obviously placeholders, so "postgres://app:app@db" in a dev setup is not flagged.
+const PLACEHOLDER = /^(password|passwd|secret|changeme|change-me|example|sample|test|testing|dev|local|postgres|root|admin|user|pass|x+|\*+|\.+)$/i;
+const NOT_REAL = /(^|\/)(\.env\.(example|sample|template|dist)|[^/]*\.(example|sample|template)(\.[^/]+)?|[^/]*\.md)$|(^|\/)(tests?|__tests__|spec|fixtures?|testdata)\//i;
+const SECRET_FILES = [
+  [/(^|\/)\.env(\.(local|prod|production|staging|dev|development))?$/i, "Env file committed", "Env files usually hold real secrets. Keep them out of git and add them to .gitignore."],
+  [/\.(pem|key|p12|pfx|keystore|jks)$|(^|\/)id_(rsa|dsa|ecdsa|ed25519)$/i, "Key file committed", "Private key files must not be in git. Anyone with repo access can use the key."],
+];
+
+const MIGRATION_PATH = /(^|\/)(migrations?|migrate|alembic|flyway|liquibase)(\/|$)|\.sql$|(^|\/)schema\.(rb|sql|prisma)$/i;
+const MIGRATION_RULES = [
+  ["Drops a table", "high", /\bDROP\s+TABLE\b|\bdrop_table\b|\.dropTable\s*\(|\bDeleteModel\s*\(|Schema::drop/i,
+    "Drops a table. Its data is gone, and code that still reads it breaks during the deploy."],
+  ["Drops a column", "high", /\bDROP\s+COLUMN\b|\bremove_column\b|\.dropColumn\s*\(|\bRemoveField\s*\(/i,
+    "Drops a column. Its data is gone, and the old code that runs during the deploy breaks."],
+  ["Empties a table", "high", /\bTRUNCATE\b/i, "Deletes every row in a table."],
+  ["NOT NULL column without a default", "high",
+    (l) => (/\bADD\s+(COLUMN\s+)?(IF\s+NOT\s+EXISTS\s+)?\S+\s+\S+.*\bNOT\s+NULL\b/i.test(l) && !/\bDEFAULT\b/i.test(l)) ||
+      (/\badd_column\b.*\bnull:\s*false\b/.test(l) && !/\bdefault:/.test(l)),
+    "Adds a NOT NULL column without a default. This fails on a table that already has rows."],
+  ["Renames a table or column", "medium", /\bRENAME\s+(COLUMN\s+\S+\s+)?TO\b|\brename_(column|table)\b|\.renameColumn\s*\(|\bRename(Field|Model)\s*\(/i,
+    "Renames a table or column. Code from before the deploy still uses the old name until it is replaced."],
+  ["Changes a column type", "medium", /\bALTER\s+COLUMN\s+\S+\s+(SET\s+DATA\s+)?TYPE\b|\bchange_column\b|\bAlterField\s*\(/i,
+    "Changes a column type. The database may rewrite and lock the whole table."],
+  ["Writes rows without WHERE", "medium", (l) => /\b(DELETE\s+FROM|UPDATE\s+\S+\s+SET)\b/i.test(l) && !/\bWHERE\b/i.test(l),
+    "Changes or deletes rows without a WHERE clause, so it touches every row."],
+];
+const INDEX_RULE = /\bCREATE\s+(UNIQUE\s+)?INDEX\s+(?!CONCURRENTLY)(?:IF\s+NOT\s+EXISTS\s+)?\S+\s+ON\s+(?:ONLY\s+)?["`]?([\w.]+)/i;
+
+const mask = (value) => (value.length <= 8 ? "…" : `${value.slice(0, 4)}…(${value.length} characters)`);
+
+const findings = [];
+for (const f of files) {
+  if (f.status === "added" && !NOT_REAL.test(f.path)) {
+    for (const [re, rule, message] of SECRET_FILES) {
+      if (re.test(f.path)) findings.push({ kind: "secret", rule, severity: "high", path: f.path, line: null, message });
+    }
+  }
+  if (f.newContent == null || f.generated) continue;
+  const lines = f.newContent.split("\n");
+  const added = new Set(f.changedLines.added);
+  const scanSecrets = !NOT_REAL.test(f.path);
+  const isMigration = MIGRATION_PATH.test(f.path);
+  const createdTables = new Set([...f.newContent.matchAll(/\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["`]?([\w.]+)/gi)].map((m) => m[1].toLowerCase()));
+
+  for (const n of added) {
+    const text = lines[n - 1] ?? "";
+    if (scanSecrets) {
+      for (const [id, label, re] of SECRET_RULES) {
+        const m = text.match(re);
+        if (!m) continue;
+        if (id === "url-password" && (PLACEHOLDER.test(m[2]) || m[1] === m[2])) continue;
+        if (id === "password-in-code" && PLACEHOLDER.test(m[1])) continue;
+        const value = id === "url-password" ? m[2] : m[1];
+        const severity = id === "password-in-code" || id === "url-password" ? "medium" : "high";
+        findings.push({
+          kind: "secret", rule: label, severity, path: f.path, line: n, preview: mask(value),
+          message: "Looks like a real secret. Remove it, rotate it, and load it from the environment instead. If it was ever committed, it stays in the git history.",
+        });
+        break;
+      }
+    }
+    if (!isMigration) continue;
+    for (const [rule, severity, test, message] of MIGRATION_RULES) {
+      const hit = typeof test === "function" ? test(text) : test.test(text);
+      if (hit) findings.push({ kind: "migration", rule, severity, path: f.path, line: n, message });
+    }
+    const idx = text.match(INDEX_RULE);
+    if (idx && !createdTables.has(idx[2].toLowerCase())) {
+      findings.push({
+        kind: "migration", rule: "Creates an index that locks the table", severity: "low", path: f.path, line: n,
+        message: "Creates an index on an existing table without CONCURRENTLY. In Postgres this blocks writes while the index builds.",
+      });
+    }
+  }
+}
+const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 };
+findings.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.path.localeCompare(b.path) || (a.line ?? 0) - (b.line ?? 0));
+
 // ------------------------------------------------------------------ commits
 
 const commits = git("log", "--format=%H%x1f%h%x1f%s%x1f%an%x1f%aI", `${from}..HEAD`)
@@ -535,6 +630,7 @@ const data = {
   },
   files,
   coverage,
+  findings,
   config,
   warnings,
 };
@@ -580,5 +676,15 @@ for (const f of files) {
   const flags = [f.generated && "generated", f.untracked ? "untracked" : f.uncommitted && "uncommitted", f.binary && "binary", f.tooLarge && "too large"].filter(Boolean);
   const lines = `+${f.additions} -${f.deletions}`;
   console.log(`  ${code[f.status]}  ${lines.padEnd(10)} ${(f.target ?? "-").padEnd(15)} ${f.oldPath ? `${f.oldPath} -> ` : ""}${f.path}${flags.length ? `  [${flags.join(", ")}]` : ""}`);
+}
+console.log("");
+if (findings.length) {
+  const count = (sev) => findings.filter((f) => f.severity === sev).length;
+  console.log(`Safety checks: ${count("high")} high, ${count("medium")} medium, ${count("low")} low`);
+  for (const f of findings) {
+    console.log(`  ${f.severity.toUpperCase().padEnd(6)} ${f.kind.padEnd(9)} ${f.path}${f.line ? `:${f.line}` : ""}  ${f.rule}${f.preview ? ` [${f.preview}]` : ""}`);
+  }
+} else {
+  console.log("Safety checks: no likely secrets or risky migrations found");
 }
 for (const w of warnings) console.log(`warning: ${w}`);

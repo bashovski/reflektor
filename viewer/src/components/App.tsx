@@ -6,6 +6,7 @@ import { ReportProvider, useReport } from "../lib/state";
 import { BeforeMerge } from "./BeforeMerge";
 import { Coverage } from "./Coverage";
 import { FileModal } from "./FileModal";
+import { Findings } from "./Findings";
 import { Flows } from "./Flows";
 import { Hero, TopBar } from "./Header";
 import { PreviousReview } from "./PreviousReview";
@@ -88,6 +89,7 @@ const Layout = () => {
           <Hero />
           <PreviousReview />
           <BeforeMerge />
+          <Findings />
           <Flows />
           <Sections />
           <Coverage />
