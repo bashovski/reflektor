@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// Checks report.json against diff.json, then writes one self-contained HTML file.
+// Checks report.json against diff.json, then writes the report data (one JSON file per round) that the
+// review daemon serves. --html also writes one self-contained HTML file to keep or send.
 // Problems that Claude should fix are printed as "warning:" lines; hard errors exit with code 1.
 //
 // Usage:
-//   node build.mjs --diff diff.json --report report.json [--out report.html] [--json-out bundle.json]
-//                  [--viewer viewer.html] [--open]
+//   node build.mjs --diff diff.json --report report.json [--out report-r1.json]
+//                  [--html report.html] [--viewer viewer.html] [--open]
 
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -47,7 +48,7 @@ function parseArgs(argv) {
     if (a === "--diff") args.diff = next();
     else if (a === "--report") args.report = next();
     else if (a === "--out") args.out = next();
-    else if (a === "--json-out") args.jsonOut = next();
+    else if (a === "--html") args.html = next();
     else if (a === "--viewer") args.viewer = next();
     else if (a === "--checks") args.checks = next();
     else if (a === "--open") args.open = true;
@@ -428,7 +429,7 @@ const prText = prDescription();
 
 // The round is part of the name: fixes are often uncommitted, so two rounds can share a commit.
 const slug = diff.branch.head.replace(/[^\w.-]+/g, "-");
-const out = resolve(args.out ?? join(diff.repo.gitDir, "pr-report", `${slug}-${diff.branch.headSha.slice(0, 7)}-r${round}.html`));
+const out = resolve(args.out ?? join(diff.repo.gitDir, "pr-report", `${slug}-${diff.branch.headSha.slice(0, 7)}-r${round}.json`));
 
 const bundle = {
   diff,
@@ -442,18 +443,20 @@ const bundle = {
   warnings: [...notes, ...warnings],
   builtAt: new Date().toISOString(),
 };
-const json = JSON.stringify(bundle).replace(/</g, "\\u003c");
-
-if (args.jsonOut) writeFileSync(args.jsonOut, JSON.stringify(bundle, null, 2));
-
-// Installed skill ships assets/viewer.html; the source checkout uses the Vite build output.
-const viewerPath = args.viewer ?? [join(here, "../assets/viewer.html"), join(here, "../../viewer/dist/index.html")].find(existsSync);
-if (!viewerPath) throw new Error("Viewer not found. Build it with `pnpm build` in viewer/ or pass --viewer.");
-const html = readFileSync(viewerPath, "utf8");
-if (!html.includes("__PR_REPORT_DATA__")) throw new Error(`${viewerPath} has no data placeholder`);
-
 mkdirSync(dirname(out), { recursive: true });
-writeFileSync(out, html.replace("__PR_REPORT_DATA__", () => json));
+writeFileSync(out, JSON.stringify(bundle));
+
+// The standalone page: the viewer with this report's data inside, for keeping or sending.
+const htmlOut = args.html ? resolve(args.html) : args.open ? out.replace(/\.json$/, ".html") : null;
+if (htmlOut) {
+  // Installed skill ships assets/viewer.html; the source checkout uses the Vite build output.
+  const viewerPath = args.viewer ?? [join(here, "../assets/viewer.html"), join(here, "../../viewer/dist/standalone/index.html")].find(existsSync);
+  if (!viewerPath) throw new Error("Viewer not found. Build it with `pnpm build` or pass --viewer.");
+  const html = readFileSync(viewerPath, "utf8");
+  if (!html.includes("__PR_REPORT_DATA__")) throw new Error(`${viewerPath} has no data placeholder`);
+  mkdirSync(dirname(htmlOut), { recursive: true });
+  writeFileSync(htmlOut, html.replace("__PR_REPORT_DATA__", () => JSON.stringify(bundle).replace(/</g, "\\u003c")));
+}
 const prFile = join(dirname(out), "pr-description.md");
 writeFileSync(prFile, `${prText.title}\n\n${prText.body}\n`);
 
@@ -471,6 +474,7 @@ if (diff.branch.snapshot) {
 
 const steps = report.flows.flatMap((f) => f.steps);
 console.log(`Wrote ${out}`);
+if (htmlOut) console.log(`Standalone page: ${htmlOut}`);
 console.log(
   `${report.sections.length} sections, ${diff.files.length} files, ${steps.filter((st) => st.verified).length}/${steps.length} flow steps verified, ${warnings.length} warnings`,
 );
@@ -481,5 +485,5 @@ for (const w of warnings) console.log(`warning: ${w}`);
 
 if (args.open) {
   const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
-  spawn(opener, [out], { detached: true, stdio: "ignore" }).unref();
+  spawn(opener, [htmlOut], { detached: true, stdio: "ignore" }).unref();
 }

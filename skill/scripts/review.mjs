@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The agent's side of a review. Talks to the pr-report daemon and starts it when needed.
 //
-//   open    --report <html> [--open]     publish a report (a new review, or the next round of one)
+//   open    --report <json> [--open]     publish a report (a new review, or the next round of one)
 //   wait    --id <review>                block until the reviewer does something; run in the background
 //   answer  --id <review> --question <id> (--text <t> | --text-file <f>) [--ref path:line]
 //   plan    --id <review> --file <plan.json>
@@ -115,7 +115,7 @@ const self = `node ${join(here, "review.mjs")}`;
 if (command === "open") {
   need("report");
   const info = await ensureDaemon();
-  const { data } = await api(info, "POST", "/api/reviews", { html: resolve(args.report) });
+  const { data } = await api(info, "POST", "/api/reviews", { report: resolve(args.report) });
   console.log(`Review: ${data.url}`);
   console.log(`Review id: ${data.id} (round ${data.round})`);
   if (args.open && data.tabs === 0) {
@@ -161,7 +161,7 @@ if (command === "open") {
       if (kinds.length) console.log(`Kind changes by step: ${kinds.map(([step, kind]) => `step ${Number(step) + 1} -> ${kind}`).join(", ")}`);
       if (event.decision.note) console.log(`Note: ${event.decision.note}`);
       console.log(`\nNext: make the changes. Report each comment as you go: ${self} status --id ${review.id} --comment <id> --status working|fixed|answered|wontfix|noted --text "<short>"`);
-      console.log(`Then collect --since last, write report.json with review.replies, build, and publish: ${self} open --report <new html>`);
+      console.log(`Then collect --since last, write report.json with review.replies, build, and publish: ${self} open --report <new json>`);
     } else if (event.type === "plan-decision") {
       console.log(`The reviewer wants a different plan for ${review.id}.`);
       if (event.decision.note) console.log(`Note: ${event.decision.note}`);

@@ -165,14 +165,14 @@ Line numbers refer to the new version of a file. Use `"side": "old"` only for de
 node ${CLAUDE_SKILL_DIR}/scripts/build.mjs --diff <diff file> --report <report file>
 ```
 
-It writes `<branch>-<sha>.html` next to the report file and records the run for `--since last`. Fix every `warning:` line by editing report.json and building again, at most two rounds. Mention anything left. `note:` lines come from collect (for example a stale coverage file); they need no report change, but tell the user when they matter.
+It writes the report data, `<branch>-<sha>-r<round>.json`, next to the report file and records the run for `--since last`. Fix every `warning:` line by editing report.json and building again, at most two rounds. Mention anything left. `note:` lines come from collect (for example a stale coverage file); they need no report change, but tell the user when they matter.
 
 ## 7. Open it for review
 
 Publish the report to the pr-report daemon. It is one local server for every review on this machine (`http://127.0.0.1:7337`, with an inbox of all reviews at `/`), and `review.mjs` starts it when it is not running:
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/review.mjs open --report <html file> --open
+node ${CLAUDE_SKILL_DIR}/scripts/review.mjs open --report <json file from build> --open
 ```
 
 It prints the review address and the review id, and opens the browser unless a tab already shows this review (open tabs get a banner for each new round instead). Then start the waiter as a background process. In Claude Code, use the Bash tool with `run_in_background`:
@@ -196,7 +196,7 @@ node ${CLAUDE_SKILL_DIR}/scripts/review.mjs answer --id <review id> --question <
 
 **A sent review:** go to the fix loop. **A review sent with no comments:** the review is done; offer to open the PR (step 9).
 
-If you cannot run a background process, run build.mjs with `--open` instead. The page then shows "Copy for Claude", and the user pastes the comments into the chat.
+If you cannot run a background process, run build.mjs with `--open` instead. It writes one self-contained HTML page and opens it. The page then shows "Copy for Claude", and the user pastes the comments into the chat. When the user wants a file to keep, pass `--html <file>` to build.mjs.
 
 ## 8. Fix loop
 

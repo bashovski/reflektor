@@ -22,7 +22,9 @@ else
   npm run build --silent >/dev/null
 fi
 mkdir -p "$ROOT/skill/assets"
-cp "$ROOT/viewer/dist/index.html" "$ROOT/skill/assets/viewer.html"
+rm -rf "$ROOT/skill/assets/app"
+cp -R "$ROOT/viewer/dist/app" "$ROOT/skill/assets/app"
+cp "$ROOT/viewer/dist/standalone/index.html" "$ROOT/skill/assets/viewer.html"
 node "$ROOT/scripts/build-icons.mjs" >/dev/null
 
 mkdir -p "$SKILLS_DIR"

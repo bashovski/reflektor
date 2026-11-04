@@ -9,12 +9,13 @@
 - Schema diagram for database changes
 - Live questions while reviewing
 - Review daemon: one address for every review, an inbox, live plan, live progress per comment, new rounds as a banner
+- Speed: diffs render only near the screen, code colored with WebAssembly lexers, the daemon serves the viewer as cached files and each report is only its data (44-file change: 2.4 s frozen and 161 MB before, under 0.3 s and 37 MB after)
 
 ## Later (remind)
 
 - **Before/after screenshots** of changed UI pages, when Playwright and a dev server are available.
 - **Tests on other stacks:** fake repos in Go, Python and Rust run by `pnpm check`, to prove the skill works for any stack.
-- **Smaller reports:** embed only the syntax grammars the diff uses (about 12 MB down to about 2 MB).
+- **Smaller exported pages:** `build.mjs --html` still writes about 11 MB, almost all of it Shiki grammars kept as a fallback for browsers without WebAssembly. Drop them, or embed only the languages the diff uses. Reports opened through the daemon are not affected.
 
 ## Open decisions
 

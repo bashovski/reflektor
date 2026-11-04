@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // End-to-end check: rebuilds the fake books repo, runs collect.mjs and build.mjs on it with
 // samples/report.json, and fails on any warning. Then drives a whole review through a private daemon.
-// Also refreshes samples/bundle.json for `pnpm dev`.
+// Also refreshes samples/bundle.json for `pnpm dev` and the standalone samples/books-report.html.
 //
 // Usage: node scripts/check.mjs [--open]
 
@@ -51,8 +51,8 @@ try {
     join(root, "skill/scripts/build.mjs"),
     "--diff", join(repo, ".git/pr-report/diff.json"),
     "--report", join(root, "samples/report.json"),
-    "--json-out", join(root, "samples/bundle.json"),
-    "--out", html,
+    "--out", join(root, "samples/bundle.json"),
+    "--html", html,
   ]);
   for (const line of built.split("\n").filter((l) => l.startsWith("warning:"))) fail(line);
 
@@ -62,13 +62,32 @@ try {
 
   const page = readFileSync(html, "utf8");
   if (page.includes("__PR_REPORT_DATA__")) fail("report data was not injected into the viewer");
-  if (statSync(html).size < 1_000_000) fail("the report is too small; build.mjs probably used the unbuilt viewer");
+  if (statSync(html).size < 1_000_000) fail("the standalone page is too small; build.mjs probably used the unbuilt viewer");
 
   await daemonFlow();
 } catch (e) {
   fail(e.stderr?.toString() || e.message);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
+}
+
+// ------------------------------------------------------------------ app size
+// The page's own scripts and styles load once and stay cached. Languages, themes and fonts load
+// separately when needed, so this budget catches a build that bundles them into the entry again.
+async function checkAppAssets(base, page) {
+  const ENTRY_BUDGET = 1_200_000;
+  const urls = [...page.matchAll(/(?:src|href)="(\/app\/assets\/[^"]+\.(?:js|css))"/g)].map((m) => m[1]);
+  if (!urls.length) return fail("the review page links no app scripts");
+  let bytes = 0;
+  for (const url of urls) {
+    const res = await fetch(`${base}${url}`);
+    if (!res.ok) fail(`${url}: HTTP ${res.status}`);
+    if (!res.headers.get("cache-control")?.includes("immutable")) fail(`${url} is not cached for good`);
+    bytes += (await res.arrayBuffer()).byteLength;
+  }
+  if (bytes > ENTRY_BUDGET) fail(`the app's entry files are ${Math.round(bytes / 1000)} KB, over the ${ENTRY_BUDGET / 1000} KB budget`);
+  // %2f keeps the dots in one path segment, so they reach the daemon instead of being resolved by fetch.
+  if ((await fetch(`${base}/app/assets/..%2f..%2f..%2fpackage.json`)).ok) fail("the asset route serves files outside the app folder");
 }
 
 // ------------------------------------------------------------------ daemon flow
@@ -81,8 +100,8 @@ async function daemonFlow() {
   const build = (out) =>
     run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
   try {
-    build(join(reviewDir, "round1.html"));
-    const opened = review("open", "--report", join(reviewDir, "round1.html"));
+    build(join(reviewDir, "round1.json"));
+    const opened = review("open", "--report", join(reviewDir, "round1.json"));
     const id = opened.match(/Review id: (\S+)/)?.[1];
     if (!id) return fail(`review.mjs open printed no id:\n${opened}`);
 
@@ -90,6 +109,8 @@ async function daemonFlow() {
     const base = `http://127.0.0.1:${port}`;
     const page = await (await fetch(`${base}/r/${id}`)).text();
     const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)[1]);
+    if (page.length > 20_000) fail(`the review page is ${page.length} bytes; it should load the app and its data, not carry them`);
+    await checkAppAssets(base, page);
     const post = (path, body) =>
       fetch(`${base}${config.api}/${path}`, { method: "POST", headers: { "x-review-token": config.token, "content-type": "application/json" }, body: JSON.stringify(body) });
     const state = async () => {
@@ -103,7 +124,7 @@ async function daemonFlow() {
     const round1 = await (await fetch(`${base}${config.api}/bundle?round=1`, { headers: { "x-review-token": config.token } })).json();
     if (!round1?.report?.title) fail("the daemon did not return round 1's report data as an object");
     await post("presence", { tab: "t1" });
-    if (!review("open", "--report", join(reviewDir, "round1.html")).includes("Already open in 1 tab")) fail("an open tab was not counted");
+    if (!review("open", "--report", join(reviewDir, "round1.json")).includes("Already open in 1 tab")) fail("an open tab was not counted");
 
     await post("questions", { id: "q_1", target: { type: "report" }, text: "Why two migrations?" });
     if (!review("wait", "--id", id).includes("Live question q_1")) fail("wait did not return the live question");
@@ -123,8 +144,8 @@ async function daemonFlow() {
     review("status", "--id", id, "--comment", "c_1", "--status", "fixed", "--text", "Renamed");
     if ((await state()).statuses.c_1?.status !== "fixed") fail("the status did not reach the page state");
 
-    build(join(reviewDir, "round2.html"));
-    if (!review("open", "--report", join(reviewDir, "round2.html")).includes("round 2")) fail("publishing the next build did not start round 2");
+    build(join(reviewDir, "round2.json"));
+    if (!review("open", "--report", join(reviewDir, "round2.json")).includes("round 2")) fail("publishing the next build did not start round 2");
     const round2 = await state();
     if (round2.round !== 2 || round2.phase !== "reviewing") fail(`round 2 is not open for review: ${JSON.stringify({ round: round2.round, phase: round2.phase })}`);
 

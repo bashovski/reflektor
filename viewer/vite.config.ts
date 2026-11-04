@@ -18,7 +18,19 @@ const sampleData = (): Plugin => ({
   },
 });
 
-export default defineConfig({
-  plugins: [react(), tailwindcss(), sampleData(), viteSingleFile()],
-  build: { assetsInlineLimit: 100_000_000, chunkSizeWarningLimit: 100_000 },
-});
+// Two builds:
+//   app         dist/app: the page the review daemon serves at /app/. Normal files the browser caches,
+//               with each language and theme in its own chunk, loaded only when a diff needs it.
+//   standalone  dist/standalone/index.html: one self-contained file for exporting a report.
+export default defineConfig(({ command, mode }) =>
+  mode === "standalone"
+    ? {
+        plugins: [react(), tailwindcss(), viteSingleFile()],
+        build: { outDir: "dist/standalone", assetsInlineLimit: 100_000_000, chunkSizeWarningLimit: 100_000 },
+      }
+    : {
+        base: command === "build" ? "/app/" : "/",
+        plugins: [react(), tailwindcss(), sampleData()],
+        build: { outDir: "dist/app", chunkSizeWarningLimit: 2_000 },
+      },
+);

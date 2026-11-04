@@ -10,11 +10,11 @@
 // Started by review.mjs when needed. Stops itself after 4 hours without activity.
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { connect } from "node:net";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
@@ -138,7 +138,14 @@ function save(r) {
   wakeWaiters(r);
 }
 
-const bundleText = (html) => html.match(/<script id="pr-report-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1] ?? null;
+// A round's report data: the JSON file build.mjs wrote, or the data inside an exported page.
+const roundFile = (entry) => entry.file ?? entry.html;
+function roundText(file) {
+  if (!file || !existsSync(file)) return null;
+  const text = readFileSync(file, "utf8");
+  if (extname(file) !== ".html") return text;
+  return text.match(/<script id="pr-report-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1] ?? null;
+}
 
 const submittedComments = (r) => (r.phase === "reviewing" ? [] : (readJson(reviewFile(r, r.round), {}).comments ?? []));
 
@@ -303,11 +310,36 @@ const es=new EventSource("/api/events?token=${pageToken}&watch=*");let t;es.addE
 </script></body></html>`;
 }
 
+// The viewer's app build. Every review page is the same app; it loads its round's data from the API.
+const here = dirname(fileURLToPath(import.meta.url));
+const APP_DIR = [join(here, "../assets/app"), join(here, "../../viewer/dist/app")].find((d) => existsSync(join(d, "index.html")));
+const ASSET_TYPES = {
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".wasm": "application/wasm",
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+};
+
 function reviewPage(r, round) {
   const entry = r.rounds.find((x) => x.round === round) ?? r.rounds.at(-1);
-  if (!entry || !existsSync(entry.html)) return null;
+  if (!entry || !existsSync(roundFile(entry))) return null;
   const config = { live: true, id: r.id, round: entry.round, token: pageToken, api: `/api/r/${encodeURIComponent(r.id)}` };
-  return readFileSync(entry.html, "utf8").replace("</head>", () => `<script>window.__PR_REVIEW__=${JSON.stringify(config)}</script></head>`);
+  return readFileSync(join(APP_DIR, "index.html"), "utf8").replace("</head>", () => `<script>window.__PR_REVIEW__=${JSON.stringify(config)}</script></head>`);
+}
+
+// Vite puts a content hash in every asset name, so the browser can keep each one for good.
+function sendAsset(res, parts) {
+  const file = resolve(APP_DIR, ...parts);
+  if (!file.startsWith(APP_DIR + sep) || !existsSync(file) || !statSync(file).isFile()) return send(res, 404, "Not found", "text/plain");
+  res.writeHead(200, {
+    "content-type": ASSET_TYPES[extname(file)] ?? "application/octet-stream",
+    "cache-control": "public, max-age=31536000, immutable",
+    "x-content-type-options": "nosniff",
+  });
+  res.end(readFileSync(file));
 }
 
 // ------------------------------------------------------------------ routes
@@ -325,6 +357,8 @@ async function handle(req, res, port) {
   if (!url.pathname.endsWith("/next-event")) lastActivity = Date.now();
 
   if (req.method === "GET" && url.pathname === "/") return send(res, 200, inboxPage(), "text/html; charset=utf-8");
+  if ((parts[0] === "r" || parts[0] === "app") && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
+  if (req.method === "GET" && parts[0] === "app" && parts[1] === "assets") return sendAsset(res, parts.slice(1));
   if (req.method === "GET" && parts[0] === "r" && parts[1]) {
     const r = reviews.get(parts[1]);
     const html = r && reviewPage(r, Number(url.searchParams.get("round")) || r.round);
@@ -363,12 +397,12 @@ async function handle(req, res, port) {
   // Register a report, or publish a new round of an existing review.
   if (parts[1] === "reviews" && req.method === "POST") {
     if (!admin) return send(res, 401, { error: "bad token" });
-    const { html } = JSON.parse(await readBody(req));
-    if (!html || !existsSync(html)) return send(res, 400, { error: "report file not found" });
-    const raw = bundleText(readFileSync(html, "utf8"));
+    const { report: file } = JSON.parse(await readBody(req));
+    if (!file || !existsSync(file)) return send(res, 400, { error: "report file not found" });
+    const raw = roundText(file);
     if (!raw || !raw.startsWith("{")) return send(res, 400, { error: "the report has no data; build it with build.mjs" });
     const bundle = JSON.parse(raw);
-    const dir = join(html, "..");
+    const dir = dirname(file);
     const repo = [bundle.diff.repo.owner, bundle.diff.repo.name].filter(Boolean).join("/");
     const branch = bundle.diff.branch.head;
     let r = [...reviews.values()].find((x) => x.dir === dir && x.branch === branch);
@@ -380,7 +414,7 @@ async function handle(req, res, port) {
     r.title = bundle.report.title;
     r.tag = bundle.report.tag;
     const round = bundle.round ?? r.round;
-    r.rounds = [...r.rounds.filter((x) => x.round !== round), { round, html, publishedAt: now() }].sort((a, b) => a.round - b.round);
+    r.rounds = [...r.rounds.filter((x) => x.round !== round), { round, file, publishedAt: now() }].sort((a, b) => a.round - b.round);
     if (round !== r.round || r.phase !== "reviewing") {
       r.round = round;
       r.phase = "reviewing";
@@ -458,7 +492,7 @@ async function handle(req, res, port) {
     if (action === "draft") return send(res, 200, { round: r.round, comments: readJson(draftFile(r), { comments: [] }).comments ?? [] });
     if (action === "bundle") {
       const entry = r.rounds.find((x) => x.round === Number(url.searchParams.get("round"))) ?? r.rounds.at(-1);
-      const raw = entry && existsSync(entry.html) ? bundleText(readFileSync(entry.html, "utf8")) : null;
+      const raw = entry ? roundText(roundFile(entry)) : null;
       // Already JSON text, so send it as is.
       return raw ? send(res, 200, raw, "application/json; charset=utf-8") : send(res, 404, { error: "no such round" });
     }
@@ -515,7 +549,7 @@ async function handle(req, res, port) {
       submittedAt: now(),
       comments: body.comments,
       questions: r.questions.map(({ deliveredAt: _, ...q }) => q),
-      report: bundleHead?.html ?? null,
+      report: bundleHead ? roundFile(bundleHead) : null,
     };
     writeJson(reviewFile(r, r.round), review);
     rmSync(draftFile(r), { force: true });

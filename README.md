@@ -1,6 +1,6 @@
 # pr-report
 
-A Claude Code skill that turns a branch into one HTML review report. The report has:
+A Claude Code skill that turns a branch into a review report in your browser. The report has:
 
 - a plain-English title and summary
 - the files to review, in order of risk
@@ -28,13 +28,13 @@ Then, in any git repo, ask Claude for a PR report or type:
 /pr-report --session    only files changed in this Claude session
 ```
 
-The report is written to `<git folder>/pr-report/<branch>-<sha>.html` (usually `.git/pr-report/`) and opens in your browser. Nothing is added to the repo's tracked files or branches. One hidden ref, `refs/pr-report/last`, records what the last report showed (uncommitted work included), so `--since last` shows only what is new.
+The report data is written to `<git folder>/pr-report/<branch>-<sha>-r<round>.json` (usually `.git/pr-report/`) and opens in your browser through the review daemon. Nothing is added to the repo's tracked files or branches. One hidden ref, `refs/pr-report/last`, records what the last report showed (uncommitted work included), so `--since last` shows only what is new.
 
 ## How it works
 
 1. **`skill/scripts/collect.mjs`** reads git and writes `diff.json`: changed files, full old and new contents, commits, and coverage of new lines.
 2. **Claude** reads the changes and writes `report.json`: title, summary, sections, highlights, notes and flows. It points at lines and never copies code.
-3. **`skill/scripts/build.mjs`** checks `report.json` against the git facts, drops anything that points at code that doesn't exist, and puts both files into the prebuilt viewer as one offline HTML file.
+3. **`skill/scripts/build.mjs`** checks `report.json` against the git facts, drops anything that points at code that doesn't exist, and writes both into one JSON file per round. With `--html <file>` it also writes a self-contained HTML page to keep or send.
 4. **`skill/scripts/review.mjs open`** publishes the report to the **pr-report daemon**, one local server for every review on this machine: `http://127.0.0.1:7337`, with an inbox of all reviews at `/`. It starts the daemon when needed, and the daemon stops after 4 idle hours. In the report you can:
    - comment on lines (hover a line number and click +), files or the whole change
    - use "Fix this" or "It's fine" on problems, and answer Claude's questions
@@ -42,6 +42,8 @@ The report is written to `<git folder>/pr-report/<branch>-<sha>.html` (usually `
    - click "Send to Claude"
 
    Claude's plan then shows up in the page to approve, each comment shows Claude's progress live, and the next round arrives as a banner in the same tab. Each repo's `.git/pr-report/` folder stays the source of truth; the daemon only keeps a list of them in `~/.pr-report/`.
+
+   The daemon serves the viewer as normal files the browser caches (about 1.3 MB on first visit). Each report is only its JSON data. Diffs render the lines near the screen only, and code is colored with WebAssembly lexers, so a 40-file change opens in well under a second.
 
 ## Layout
 
@@ -72,7 +74,7 @@ Commands:
 ```bash
 pnpm check    # typecheck, then run the whole pipeline on the fake repo; fails on any warning
 pnpm dev      # viewer with live reload, using the sample data (run pnpm check once first)
-pnpm build    # build the viewer into skill/assets/viewer.html
+pnpm build    # build the viewer: skill/assets/app/ (served by the daemon) and skill/assets/viewer.html (standalone)
 pnpm sample   # check, then open the sample report
 ```
 
