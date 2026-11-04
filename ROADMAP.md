@@ -8,6 +8,7 @@
 - Project checks: run the repo's lint, typecheck and test commands
 - Schema diagram for database changes
 - Live questions while reviewing
+- Review daemon: one address for every review, an inbox, live plan, live progress per comment, new rounds as a banner
 
 ## Later (remind)
 

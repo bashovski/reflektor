@@ -1,10 +1,11 @@
-import { CircleCheck, ClipboardCopy, ListChecks, MessageCircleQuestion, MessageSquarePlus, Send, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { CircleCheck, ClipboardCopy, ListChecks, ListOrdered, Loader2, MessageCircleQuestion, MessageSquarePlus, Send, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import type { CommentTarget, ReviewComment } from "../../../skill/schema/types";
 import { COMMENT_KINDS } from "../lib/meta";
 import { describeTarget, targetKey, useReview } from "../lib/review";
 import { useReport } from "../lib/state";
 import { Composer } from "./Comments";
+import { PlanPanel } from "./PlanPanel";
 import { RichText } from "./RichText";
 import { cx, Pill } from "./ui";
 
@@ -65,6 +66,12 @@ export const ReviewBar = () => {
   };
   const review = useReview();
   const problems = useProblems();
+  // Re-render every 30 seconds so "no update from Claude" can appear without a new event.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
   const [listOpen, setListOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const { comments, mode, sent, round, saveState, error, composer } = review;
@@ -76,11 +83,45 @@ export const ReviewBar = () => {
   const composingGeneral = composer?.key === "report" && !composer.editingId;
 
   if (sent) {
+    const total = comments.length;
+    const done = comments.filter((c) => {
+      const status = review.statusOf(c.id);
+      return status && status.status !== "working";
+    }).length;
+    const quiet = review.lastAgentActivity ? Date.now() - Date.parse(review.lastAgentActivity) : 0;
+    const stale = review.phase === "working" && quiet > 10 * 60_000;
+    const message =
+      review.latestRound > round
+        ? `This is round ${round}. Round ${review.latestRound} is newer.`
+        : review.phase === "done"
+          ? total
+            ? `Round ${round} is finished.`
+            : "Review finished. Claude can open the PR now."
+          : review.phase === "sent"
+            ? `Sent round ${round} with ${total} ${total === 1 ? "comment" : "comments"}. Claude is reading them and will post a plan here.`
+            : review.phase === "planning"
+              ? "Claude's plan is ready. Approve it, or ask for a new one."
+              : `Claude is working: ${done} of ${total} done.`;
+    const Icon = review.phase === "planning" ? ListOrdered : review.phase === "done" || review.latestRound > round ? CircleCheck : Loader2;
+
     return (
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-emerald-500/30 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
-        <div className="mx-auto flex max-w-[1440px] items-center gap-2">
-          <CircleCheck className="size-4" />
-          Sent to Claude as review round {round} ({comments.length} comments). Claude is reading them now. You can close this tab.
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur">
+        {review.phase === "planning" && review.plan && review.latestRound === round && (
+          <div className="mx-auto max-h-[55vh] max-w-[1440px] overflow-auto border-b border-[var(--border)] px-4 py-3 sm:px-6">
+            <PlanPanel />
+          </div>
+        )}
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm sm:px-6">
+          <Icon className={cx("size-4", Icon === Loader2 ? "animate-spin text-violet-500" : Icon === ListOrdered ? "text-violet-500" : "text-emerald-500")} />
+          <span>{message}</span>
+          {review.phase === "working" && total > 0 && (
+            <span className="h-1.5 w-32 overflow-hidden rounded-full bg-zinc-500/15">
+              <span className="block h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.round((done / total) * 100)}%` }} />
+            </span>
+          )}
+          {stale && <span className="text-xs text-amber-600 dark:text-amber-400">No update from Claude for 10 minutes. Is the Claude session still running?</span>}
+          {!review.connected && <span className="text-xs text-red-600 dark:text-red-400">Not connected to the review server.</span>}
+          {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
         </div>
       </div>
     );
@@ -154,6 +195,7 @@ export const ReviewBar = () => {
           General comment
         </button>
         {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
+        {mode === "server" && !review.connected && <span className="text-xs text-red-600 dark:text-red-400">Not connected to the review server.</span>}
 
         <span className="ml-auto inline-flex items-center gap-3">
           {mode === "server" ? (

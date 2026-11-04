@@ -2,7 +2,7 @@
 name: pr-report
 description: Builds a visual HTML review report for the current branch or PR against its base branch, with a plain-English title and summary, review order, highlights, request flows, GitHub-style diffs with notes, and test coverage of new lines. The user can comment in the report and send the comments back for fixing. Use when the user asks for a PR report, a review report, a summary of branch changes for review, or wants to review changes before opening a PR. Works with any language or stack.
 argument-hint: "[base-branch] [--since last] [--session]"
-allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/questions.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/serve.mjs *)
+allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/review.mjs *)
 ---
 
 # PR report
@@ -169,57 +169,61 @@ It writes `<branch>-<sha>.html` next to the report file and records the run for 
 
 ## 7. Open it for review
 
-Start the review server as a background process. In Claude Code, use the Bash tool with `run_in_background`:
+Publish the report to the pr-report daemon. It is one local server for every review on this machine (`http://localhost:4317`, with an inbox of all reviews at `/`), and `review.mjs` starts it when it is not running:
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/serve.mjs --report <html file> --open
+node ${CLAUDE_SKILL_DIR}/scripts/review.mjs open --report <html file> --open
 ```
 
-It opens the report in the browser. Then tell the user, in a few lines:
+It prints the review address and the review id, and opens the browser unless a tab already shows this review (open tabs get a banner for each new round instead). Then start the waiter as a background process. In Claude Code, use the Bash tool with `run_in_background`:
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/review.mjs wait --id <review id>
+```
+
+Tell the user, in a few lines:
 
 - the title, how many files are must-read, and the top one or two risks
-- that they can comment: hover a line number and click +, use "Fix this" or "It's fine" on problems, answer the questions, then click "Send to Claude"
+- that they can comment (hover a line number and click +), use "Fix this" or "It's fine" on problems, answer the questions, ask Claude live with "Ask Claude now", and click "Send to Claude" when done
 
-Also start the question waiter as a second background process, so the user can ask questions while reviewing:
+Do not paste the report into the chat. End your turn and do not poll: the waiter exits when the reviewer does something, and that wakes you. Its output says what happened and what to run next. After handling it, start the waiter again in the background, unless the review is done.
+
+**A live question:** read the code it points at and answer in 1 to 4 short sentences or a short list, following the style guide. Answer only: do not change code. If the answer shows something should change, say so and suggest a comment or "Fix this".
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/questions.mjs wait --dir <folder of the html file>
+node ${CLAUDE_SKILL_DIR}/scripts/review.mjs answer --id <review id> --question <question id> --text "<answer>" [--ref path:line]
 ```
 
-Do not paste the report into the chat. End your turn and do not poll: each process exits when there is something for you, and that wakes you.
-
-When the **waiter** exits with a live question:
-
-1. Read the code it points at, and answer in 1 to 4 short sentences or a short list, following the style guide. Answer only: do not change code. If the answer shows something should change, say so and suggest the user adds a comment or clicks Fix this.
-2. Send it: `node ${CLAUDE_SKILL_DIR}/scripts/questions.mjs answer --dir <folder> --id <id> --text "<answer>"`, with `--ref path:line` when one place in the code is the answer.
-3. Start the waiter again in the background and end your turn.
-
-If the waiter says the review server stopped, ignore it: the server's own output says what happened.
-
-When the **review server** exits, its output tells you what happened:
-
-- `Review submitted: <file>`: go to the fix loop with that file.
-- `No comments: the reviewer is happy with this round.`: tell the user the review is done and the branch is ready for a PR.
-- `No review was sent within ...`: do nothing unless the user asks.
+**A sent review:** go to the fix loop. **A review sent with no comments:** the review is done; offer to open the PR (step 9).
 
 If you cannot run a background process, run build.mjs with `--open` instead. The page then shows "Copy for Claude", and the user pastes the comments into the chat.
 
 ## 8. Fix loop
 
-1. **Read the review file.** Its shape is `Review` in schema/types.ts. Each comment's `target` says what it is about: a line range (with the code), a file, a highlight (with its suggested fix), a question, a flow problem, a before-merge item, or the whole report.
+The reviewer follows along in the page: your plan and your progress on each comment show up live.
+
+1. **Read the review file** the waiter named. Its shape is `Review` in schema/types.ts. Each comment's `target` says what it is about: a line range (with the code), a file, a highlight (with its suggested fix), a question, a plan item, a flow problem, a before-merge item, or the whole report.
 2. **Work out the kind** of every comment that has none:
    - `question`: asks why, what or whether, or starts with `q:`. Answer it; no code change.
    - `fix`: asks for a change.
    - `nit`: starts with `nit:`, or is optional or cosmetic. Fix it if it is cheap.
-   Split a comment that mixes kinds into separate plan items. Kinds set by buttons are final: `fix` with empty text means "do the suggested fix", `accepted` means the reviewer accepts the risk (no change, and do not flag it again in later reports), `decision` is the reviewer's answer to a report question (apply it).
-3. **Show a numbered plan:** where, the kind you read, and what you will do. Wait for the user's OK unless they already told you to go ahead. They may correct a kind or an item.
-4. **Make the changes.** If you think a requested fix is wrong, do not make it; explain why in the reply.
-5. **Rebuild for the next round:** run collect.mjs with `--since last`, then write a new report.json about these changes only. Add `review: { round, replies }`: `round` is the round you answered, and every comment gets one reply:
-   - `fixed`: what you changed, with a `ref` to the new code
-   - `answered`: the answer
-   - `wontfix`: the reason
-   - `noted`: for `accepted` comments and nits you skipped
-6. **Build and open it again** (steps 6 and 7). Repeat until the user sends a review with no comments.
+   Split a comment that mixes kinds into separate steps. Kinds set by buttons are final: `fix` with empty text means "do the suggested fix", `accepted` means the reviewer accepts the risk (no change, and do not flag it again in later reports), `decision` is the reviewer's answer to a report question (apply it).
+3. **Post the plan** and wait for the decision. Write a plan file, then:
+
+   ```bash
+   node ${CLAUDE_SKILL_DIR}/scripts/review.mjs plan --id <review id> --file <plan.json>
+   ```
+
+   The file: `{ "steps": [{ "comments": ["<comment id>"], "where": "book.service.ts:19", "kind": "fix" | "question" | "nit", "action": "<what you will do>" }], "note": "<optional>" }`. Every comment belongs to at least one step. Start the waiter again. The reviewer approves in the page (and can change a step's kind or skip it) or asks for a new plan. If the user approves in the chat instead, go ahead.
+4. **Make the changes,** reporting each comment as you go:
+
+   ```bash
+   node ${CLAUDE_SKILL_DIR}/scripts/review.mjs status --id <review id> --comment <comment id> --status working|fixed|answered|wontfix|noted --text "<one line>" [--ref path:line]
+   ```
+
+   Mark a comment `working` when you start it and give the final status when done. If you think a requested fix is wrong, do not make it; use `wontfix` and say why.
+5. **Rebuild for the next round:** run collect.mjs with `--since last`, then write a new report.json about these changes only. Add `review: { round, replies }`: `round` is the round you answered, and every comment gets one reply with the same status and text as above (`fixed` with a `ref` to the new code, `answered`, `wontfix` with the reason, `noted` for `accepted` comments and nits you skipped).
+6. **Build and publish** with `review.mjs open` (steps 6 and 7) and start the waiter again. Open tabs show "Round N is ready". Repeat until the reviewer sends a round with no comments.
 
 ## 9. Open the PR
 

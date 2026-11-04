@@ -1,15 +1,11 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Bundle, CommentKind, CommentTarget, LiveQuestion, ReviewComment } from "../../../skill/schema/types";
+import { type AgentPlan, type CommentStatus, type Phase, useLive } from "./live";
 import { SECTIONS } from "./meta";
 
-// Review comments live here. Served by serve.mjs, the page saves them to the repo's git folder
-// and can send them to Claude. Opened as a plain file, they stay in this browser and can be copied.
-
-declare global {
-  interface Window {
-    __PR_REVIEW__?: { token: string; round: number };
-  }
-}
+// Review comments live here. Served by the pr-report daemon, the page saves them to the repo's git
+// folder, asks live questions, and sends the review to Claude. Opened as a plain file, comments stay
+// in this browser and can be copied.
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
 type Composer = { key: string; target: CommentTarget; editingId?: string; kind?: CommentKind };
@@ -34,6 +30,14 @@ type ReviewState = {
   questions: LiveQuestion[];
   questionsFor: (target: CommentTarget) => LiveQuestion[];
   ask: (target: CommentTarget, text: string) => Promise<void>;
+  // Live review state from the daemon (null when opened as a file).
+  phase: Phase | null;
+  latestRound: number;
+  plan: AgentPlan | null;
+  statusOf: (commentId: string) => CommentStatus | undefined;
+  decidePlan: (decision: "approve" | "changes", kinds: Record<number, string>, note: string) => Promise<void>;
+  connected: boolean;
+  lastAgentActivity: string | null;
 };
 
 const Ctx = createContext<ReviewState | null>(null);
@@ -151,54 +155,59 @@ const copyText = async (text: string) => {
 };
 
 export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children: ReactNode }) => {
-  const server = window.__PR_REVIEW__;
-  const mode = server ? "server" : "local";
-  const round = server?.round ?? bundle.round;
+  const { live, connected, config } = useLive();
+  const mode = config ? "server" : "local";
+  const round = bundle.round;
   const { repo, branch } = bundle.diff;
   const storageKey = `pr-report:review:${repo.owner ?? ""}/${repo.name}:${branch.snapshot}`;
 
-  const [comments, setComments] = useState<ReviewComment[]>([]);
+  // A round can be edited only while it is the latest one and has not been sent.
+  const current = !live || live.round === round;
+  const phase: Phase | null = live ? (current ? live.phase : "done") : null;
+  const sent = mode === "server" && phase !== null && phase !== "reviewing";
+
+  const [draft, setDraft] = useState<ReviewComment[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [sent, setSent] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [composer, setComposer] = useState<Composer | null>(null);
 
   const api = useCallback(
     async (path: string, method: string, body?: unknown) => {
-      const res = await fetch(path, {
+      const res = await fetch(`${config!.api}/${path}`, {
         method,
-        headers: { "x-review-token": server!.token, ...(body ? { "content-type": "application/json" } : {}) },
+        headers: { "x-review-token": config!.token, ...(body ? { "content-type": "application/json" } : {}) },
         body: body ? JSON.stringify(body) : undefined,
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`);
       return res.json();
     },
-    [server],
+    [config],
   );
 
   useEffect(() => {
     if (mode === "server") {
-      api("/api/review", "GET")
-        .then((data) => setComments(data.comments ?? []))
+      if (!current) return setLoaded(true);
+      api("draft", "GET")
+        .then((data) => setDraft(data.comments ?? []))
         .catch((e: Error) => setError(`Could not load saved comments: ${e.message}`))
         .finally(() => setLoaded(true));
     } else {
       try {
-        setComments(JSON.parse(localStorage.getItem(storageKey) ?? "[]"));
+        setDraft(JSON.parse(localStorage.getItem(storageKey) ?? "[]"));
       } catch {
         // Storage can be blocked; comments then last for this tab only.
       }
       setLoaded(true);
     }
-  }, [mode, api, storageKey]);
+  }, [mode, api, storageKey, current]);
 
   const saveTimer = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (!loaded || sent) return;
     if (mode === "local") {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(comments));
+        localStorage.setItem(storageKey, JSON.stringify(draft));
       } catch {
         // See above.
       }
@@ -207,22 +216,25 @@ export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children:
     setSaveState("saving");
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
-      api("/api/review", "PUT", { comments })
+      api("draft", "PUT", { comments: draft })
         .then(() => setSaveState("saved"))
         .catch((e: Error) => {
           setSaveState("error");
-          setError(`Could not save: ${e.message}. Is the review server still running?`);
+          setError(`Could not save: ${e.message}`);
         });
     }, 400);
-  }, [comments, loaded, sent, mode, api, storageKey]);
+  }, [draft, loaded, sent, mode, api, storageKey]);
+
+  // After sending, the page shows what was sent, so a reload or another tab sees the same comments.
+  const comments = sent && live && current ? live.submitted : draft;
 
   const add = useCallback((target: CommentTarget, fields: { text?: string; kind?: CommentKind }) => {
-    setComments((prev) => [...prev, { id: newId(), target, text: fields.text ?? "", kind: fields.kind, createdAt: new Date().toISOString() }]);
+    setDraft((prev) => [...prev, { id: newId(), target, text: fields.text ?? "", kind: fields.kind, createdAt: new Date().toISOString() }]);
   }, []);
   const update = useCallback((id: string, fields: { text?: string; kind?: CommentKind }) => {
-    setComments((prev) => prev.map((c) => (c.id === id ? { ...c, ...fields } : c)));
+    setDraft((prev) => prev.map((c) => (c.id === id ? { ...c, ...fields } : c)));
   }, []);
-  const remove = useCallback((id: string) => setComments((prev) => prev.filter((c) => c.id !== id)), []);
+  const remove = useCallback((id: string) => setDraft((prev) => prev.filter((c) => c.id !== id)), []);
 
   const byKey = useMemo(() => {
     const map = new Map<string, ReviewComment[]>();
@@ -245,40 +257,30 @@ export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children:
     setError(null);
     try {
       window.clearTimeout(saveTimer.current);
-      await api("/api/submit", "POST", { comments, branch: branch.head, headSha: branch.headSha, snapshot: branch.snapshot });
-      setSent(true);
+      await api("submit", "POST", { comments: draft, headSha: branch.headSha, snapshot: branch.snapshot });
       setComposer(null);
     } catch (e) {
-      setError(`Could not send: ${(e as Error).message}. Is the review server still running?`);
+      setError(`Could not send: ${(e as Error).message}`);
     }
-  }, [api, comments, branch]);
+  }, [api, draft, branch]);
 
   const copyForClaude = useCallback(() => copyText(toMarkdown(bundle, round, comments)), [bundle, round, comments]);
 
-  // Live questions: sent to the server now, answered by the agent while the review goes on.
-  const [questions, setQuestions] = useState<LiveQuestion[]>([]);
-  const pending = questions.some((q) => !q.answer);
-  const loadQuestions = useCallback(() => {
-    if (mode !== "server") return;
-    api("/api/questions", "GET")
-      .then((data) => setQuestions(data.questions ?? []))
-      .catch(() => {});
-  }, [mode, api]);
-  useEffect(loadQuestions, [loadQuestions]);
-  useEffect(() => {
-    if (!pending || sent) return;
-    const id = window.setInterval(loadQuestions, 3000);
-    return () => window.clearInterval(id);
-  }, [pending, sent, loadQuestions]);
+  // Live questions: the daemon streams them back with answers. Asked ones show at once, before the stream confirms them.
+  const [asked, setAsked] = useState<LiveQuestion[]>([]);
+  const questions = useMemo(() => {
+    const fromLive = current ? (live?.questions ?? []) : [];
+    return [...fromLive, ...asked.filter((q) => !fromLive.some((x) => x.id === q.id))];
+  }, [live, asked, current]);
 
   const ask = useCallback(
     async (target: CommentTarget, text: string) => {
       const question: LiveQuestion = { id: `q_${newId().slice(2)}`, target, text, askedAt: new Date().toISOString(), answer: null };
-      setQuestions((prev) => [...prev, question]);
+      setAsked((prev) => [...prev, question]);
       try {
-        await api("/api/questions", "POST", { id: question.id, target, text });
+        await api("questions", "POST", { id: question.id, target, text });
       } catch (e) {
-        setError(`Could not ask: ${(e as Error).message}. Is the review server still running?`);
+        setError(`Could not ask: ${(e as Error).message}`);
       }
     },
     [api],
@@ -291,11 +293,25 @@ export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children:
   }, [questions]);
   const questionsFor = useCallback((target: CommentTarget) => questionsByKey.get(targetKey(target)) ?? [], [questionsByKey]);
 
+  const statusOf = useCallback((commentId: string) => (current ? live?.statuses[commentId] : undefined), [live, current]);
+
+  const decidePlan = useCallback(
+    async (decision: "approve" | "changes", kinds: Record<number, string>, note: string) => {
+      setError(null);
+      try {
+        await api("plan-decision", "POST", { decision, kinds, note: note.trim() || null });
+      } catch (e) {
+        setError(`Could not send the decision: ${(e as Error).message}`);
+      }
+    },
+    [api],
+  );
+
   const value: ReviewState = {
     mode,
     round,
     comments,
-    editable: !sent,
+    editable: !sent && current,
     sent,
     saveState,
     error,
@@ -311,6 +327,13 @@ export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children:
     questions,
     questionsFor,
     ask,
+    phase,
+    latestRound: live?.round ?? round,
+    plan: current ? (live?.plan ?? null) : null,
+    statusOf,
+    decidePlan,
+    connected,
+    lastAgentActivity: live?.lastAgentActivity ?? null,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

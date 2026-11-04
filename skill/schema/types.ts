@@ -239,7 +239,7 @@ export type ReviewComment = {
   createdAt: string;
 };
 
-// A question asked while reviewing, answered live by the agent through questions.mjs.
+// A question asked while reviewing, answered live by the agent through review.mjs.
 export type LiveQuestion = {
   id: string;
   target: CommentTarget;

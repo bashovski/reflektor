@@ -282,13 +282,11 @@ function pickFileIcons(paths) {
 
 const fileIcons = pickFileIcons([...diff.files.map((f) => f.path), ...Object.keys(contextFiles)]);
 
-const slug = diff.branch.head.replace(/[^\w.-]+/g, "-");
-const out = resolve(args.out ?? join(diff.repo.gitDir, "pr-report", `${slug}-${diff.branch.headSha.slice(0, 7)}.html`));
 
 // ------------------------------------------------------------------ review rounds
-// serve.mjs writes review-<round>.json next to the report. report.review answers one of them.
+// The daemon writes review-<round>.json next to the report. report.review answers one of them.
 
-const reviewDir = dirname(out);
+const reviewDir = args.out ? dirname(resolve(args.out)) : join(diff.repo.gitDir, "pr-report");
 const rounds = existsSync(reviewDir)
   ? readdirSync(reviewDir)
       .map((f) => f.match(/^review-(\d+)\.json$/)?.[1])
@@ -427,6 +425,10 @@ function prDescription() {
 }
 
 const prText = prDescription();
+
+// The round is part of the name: fixes are often uncommitted, so two rounds can share a commit.
+const slug = diff.branch.head.replace(/[^\w.-]+/g, "-");
+const out = resolve(args.out ?? join(diff.repo.gitDir, "pr-report", `${slug}-${diff.branch.headSha.slice(0, 7)}-r${round}.html`));
 
 const bundle = {
   diff,

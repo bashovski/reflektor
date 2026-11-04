@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // End-to-end check: rebuilds the fake books repo, runs collect.mjs and build.mjs on it with
-// samples/report.json, and fails on any warning. Also refreshes samples/bundle.json for `pnpm dev`.
+// samples/report.json, and fails on any warning. Then drives a whole review through a private daemon.
+// Also refreshes samples/bundle.json for `pnpm dev`.
 //
 // Usage: node scripts/check.mjs [--open]
 
@@ -15,7 +16,7 @@ const tmp = mkdtempSync(join(tmpdir(), "pr-report-check-"));
 const repo = join(tmp, "books");
 const html = join(root, "samples", "books-report.html");
 
-const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const run = (cmd, args, env) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...env } });
 
 let failed = false;
 const fail = (message) => {
@@ -62,10 +63,81 @@ try {
   const page = readFileSync(html, "utf8");
   if (page.includes("__PR_REPORT_DATA__")) fail("report data was not injected into the viewer");
   if (statSync(html).size < 1_000_000) fail("the report is too small; build.mjs probably used the unbuilt viewer");
+
+  await daemonFlow();
 } catch (e) {
   fail(e.stderr?.toString() || e.message);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
+}
+
+// ------------------------------------------------------------------ daemon flow
+// A whole review against a private daemon (own home folder and port), driven like an agent and a page.
+
+async function daemonFlow() {
+  const env = { PR_REPORT_HOME: join(tmp, "home"), PR_REPORT_PORT: String(4400 + Math.floor(Math.random() * 500)) };
+  const reviewDir = join(tmp, "review");
+  const review = (...args) => run("node", [join(root, "skill/scripts/review.mjs"), ...args], env);
+  const build = (out) =>
+    run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
+  try {
+    build(join(reviewDir, "round1.html"));
+    const opened = review("open", "--report", join(reviewDir, "round1.html"));
+    const id = opened.match(/Review id: (\S+)/)?.[1];
+    if (!id) return fail(`review.mjs open printed no id:\n${opened}`);
+
+    const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8"));
+    const base = `http://127.0.0.1:${port}`;
+    const page = await (await fetch(`${base}/r/${id}`)).text();
+    const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)[1]);
+    const post = (path, body) =>
+      fetch(`${base}${config.api}/${path}`, { method: "POST", headers: { "x-review-token": config.token, "content-type": "application/json" }, body: JSON.stringify(body) });
+    const state = async () => {
+      const res = await fetch(`${base}/api/events?token=${config.token}&watch=${id}`, { signal: AbortSignal.timeout(2000) });
+      const reader = res.body.getReader();
+      const { value } = await reader.read();
+      reader.cancel();
+      return JSON.parse(new TextDecoder().decode(value).match(/data: (.*)/)[1]);
+    };
+
+    const round1 = await (await fetch(`${base}${config.api}/bundle?round=1`, { headers: { "x-review-token": config.token } })).json();
+    if (!round1?.report?.title) fail("the daemon did not return round 1's report data as an object");
+    await post("presence", { tab: "t1" });
+    if (!review("open", "--report", join(reviewDir, "round1.html")).includes("Already open in 1 tab")) fail("an open tab was not counted");
+
+    await post("questions", { id: "q_1", target: { type: "report" }, text: "Why two migrations?" });
+    if (!review("wait", "--id", id).includes("Live question q_1")) fail("wait did not return the live question");
+    review("answer", "--id", id, "--question", "q_1", "--text", "One per change.");
+    if (!(await state()).questions[0]?.answer) fail("the answer did not reach the page state");
+
+    const comment = { id: "c_1", target: { type: "report" }, text: "Rename slug to handle", createdAt: new Date().toISOString() };
+    await post("submit", { comments: [comment] });
+    if (!review("wait", "--id", id).includes("was sent with 1 comments")) fail("wait did not report the sent review");
+
+    writeFileSync(join(tmp, "plan.json"), JSON.stringify({ steps: [{ comments: ["c_1"], where: "0043_add_author_slug.sql", kind: "fix", action: "Rename the column" }] }));
+    review("plan", "--id", id, "--file", join(tmp, "plan.json"));
+    if ((await state()).phase !== "planning") fail("posting a plan did not move the review to planning");
+    await post("plan-decision", { decision: "approve", kinds: {} });
+    if (!review("wait", "--id", id).includes("approved the plan")) fail("wait did not report the approved plan");
+
+    review("status", "--id", id, "--comment", "c_1", "--status", "fixed", "--text", "Renamed");
+    if ((await state()).statuses.c_1?.status !== "fixed") fail("the status did not reach the page state");
+
+    build(join(reviewDir, "round2.html"));
+    if (!review("open", "--report", join(reviewDir, "round2.html")).includes("round 2")) fail("publishing the next build did not start round 2");
+    const round2 = await state();
+    if (round2.round !== 2 || round2.phase !== "reviewing") fail(`round 2 is not open for review: ${JSON.stringify({ round: round2.round, phase: round2.phase })}`);
+
+    await post("submit", { comments: [] });
+    if (!review("wait", "--id", id).includes("The review is done")) fail("an empty review did not end the review");
+    console.log("daemon flow: question, sent review, plan, status, round 2 and finish all worked");
+  } finally {
+    try {
+      review("stop");
+    } catch {
+      // Already stopped.
+    }
+  }
 }
 
 if (failed) process.exit(1);

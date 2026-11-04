@@ -1,7 +1,7 @@
 import { Check, Loader2, MessageCircleQuestion, MessageSquarePlus, Pencil, Sparkles, Trash2, Undo2, Wrench } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import type { CommentKind, CommentTarget, LiveQuestion, ReviewComment } from "../../../skill/schema/types";
-import { COMMENT_KINDS } from "../lib/meta";
+import { COMMENT_KINDS, REPLY_STATUS } from "../lib/meta";
 import { describeTarget, targetKey, useReview } from "../lib/review";
 import { RichText } from "./RichText";
 import { cx, Pill, RefLink } from "./ui";
@@ -89,6 +89,28 @@ const kindLabel = (c: ReviewComment) => {
   return c.kind ? COMMENT_KINDS[c.kind].label : "Claude decides the kind";
 };
 
+// Claude's progress on a sent comment, streamed live from the daemon.
+export const CommentStatusLine = ({ commentId }: { commentId: string }) => {
+  const { statusOf } = useReview();
+  const status = statusOf(commentId);
+  if (!status) return null;
+  if (status.status === "working") {
+    return (
+      <p className="mt-1 flex items-center gap-1.5 text-xs text-violet-700 dark:text-violet-300">
+        <Loader2 className="size-3 animate-spin" /> Claude is working on this
+      </p>
+    );
+  }
+  const meta = REPLY_STATUS[status.status];
+  return (
+    <div className="mt-1.5 flex items-start gap-2 border-t border-[var(--border)] pt-1.5 text-[13px]">
+      <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", meta.className)}>{meta.label}</Pill>
+      {status.text && <RichText text={status.text} className="block min-w-0 flex-1" />}
+      {status.ref && <RefLink refTo={status.ref} />}
+    </div>
+  );
+};
+
 export const CommentItem = ({ comment, compact }: { comment: ReviewComment; compact?: boolean }) => {
   const { editable, openComposer, remove, composer } = useReview();
   if (composer?.editingId === comment.id) return <Composer target={comment.target} />;
@@ -97,7 +119,10 @@ export const CommentItem = ({ comment, compact }: { comment: ReviewComment; comp
   return (
     <div className={cx("group/comment flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] font-sans", compact ? "px-2 py-1.5" : "my-1.5 px-3 py-2")}>
       <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", tone)}>{kindLabel(comment)}</Pill>
-      <div className="min-w-0 flex-1 text-[13px] leading-snug">{comment.text ? <RichText text={comment.text} /> : null}</div>
+      <div className="min-w-0 flex-1 text-[13px] leading-snug">
+        {comment.text ? <RichText text={comment.text} /> : null}
+        <CommentStatusLine commentId={comment.id} />
+      </div>
       {editable && (
         <span className="flex shrink-0 gap-0.5 opacity-60 group-hover/comment:opacity-100">
           <button type="button" title="Edit" onClick={() => openComposer(comment.target, { editingId: comment.id })} className="rounded p-1 hover:bg-zinc-500/10">
@@ -178,30 +203,35 @@ export const QuickActions = ({
   labels?: { fix: string; fine: string; queued: string; accepted: string };
 }) => {
   const { editable, commentsFor, add, remove, openComposer } = useReview();
-  if (!editable) return null;
   const existing = commentsFor(target);
   const decided = existing.find((c) => c.kind === "fix" || c.kind === "accepted");
 
   if (decided) {
     return (
-      <div className="mt-1 flex flex-wrap items-center gap-1">
-        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-          <Check className="size-3.5" />
-          {decided.kind === "accepted"
-            ? (labels?.accepted ?? "Marked as fine")
-            : (labels?.queued ?? (variant === "todo" ? "Queued for Claude" : "Queued: fix as suggested"))}
-        </span>
-        {!decided.text && (
-          <button type="button" className={ghost} onClick={() => openComposer(target, { editingId: decided.id })}>
-            <MessageSquarePlus className="size-3.5" /> Add a note
-          </button>
-        )}
-        <button type="button" className={ghost} onClick={() => remove(decided.id)}>
-          <Undo2 className="size-3.5" /> Undo
-        </button>
+      <div className="mt-1">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+            <Check className="size-3.5" />
+            {decided.kind === "accepted"
+              ? (labels?.accepted ?? "Marked as fine")
+              : (labels?.queued ?? (variant === "todo" ? "Queued for Claude" : "Queued: fix as suggested"))}
+          </span>
+          {editable && !decided.text && (
+            <button type="button" className={ghost} onClick={() => openComposer(target, { editingId: decided.id })}>
+              <MessageSquarePlus className="size-3.5" /> Add a note
+            </button>
+          )}
+          {editable && (
+            <button type="button" className={ghost} onClick={() => remove(decided.id)}>
+              <Undo2 className="size-3.5" /> Undo
+            </button>
+          )}
+        </div>
+        {!decided.text && <CommentStatusLine commentId={decided.id} />}
       </div>
     );
   }
+  if (!editable) return null;
 
   const comment = (kind?: CommentKind) => () => openComposer(target, { kind });
 

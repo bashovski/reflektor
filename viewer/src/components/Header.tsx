@@ -1,4 +1,4 @@
-import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Settings } from "lucide-react";
+import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Inbox, Settings } from "lucide-react";
 import { BASE_SOURCE, REVIEW, TAGS, TARGETS } from "../lib/meta";
 import { useReport } from "../lib/state";
 import { PrDescription } from "./PrDescription";
@@ -21,11 +21,16 @@ export const TopBar = ({ onSettings }: { onSettings: () => void }) => {
           <span className="text-zinc-400">→</span>
           {branch.base}
         </span>
+        {window.__PR_REVIEW__ && (
+          <a href="/" className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
+            <Inbox className="size-3.5" /> All reviews
+          </a>
+        )}
         <button
           type="button"
           onClick={onSettings}
           title="Settings and keyboard shortcuts (?)"
-          className="ml-auto inline-flex rounded-md p-2 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100"
+          className={cx(!window.__PR_REVIEW__ && "ml-auto", "inline-flex rounded-md p-2 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100")}
         >
           <Settings className="size-4" />
         </button>

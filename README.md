@@ -35,13 +35,13 @@ The report is written to `<git folder>/pr-report/<branch>-<sha>.html` (usually `
 1. **`skill/scripts/collect.mjs`** reads git and writes `diff.json`: changed files, full old and new contents, commits, and coverage of new lines.
 2. **Claude** reads the changes and writes `report.json`: title, summary, sections, highlights, notes and flows. It points at lines and never copies code.
 3. **`skill/scripts/build.mjs`** checks `report.json` against the git facts, drops anything that points at code that doesn't exist, and puts both files into the prebuilt viewer as one offline HTML file.
-4. **`skill/scripts/serve.mjs`** serves the report on `127.0.0.1` so you can review it:
-   - comment on lines (hover a line number and click +)
-   - comment on files or on the whole change
+4. **`skill/scripts/review.mjs open`** publishes the report to the **pr-report daemon**, one local server for every review on this machine: `http://localhost:4317`, with an inbox of all reviews at `/`. It starts the daemon when needed, and the daemon stops after 4 idle hours. In the report you can:
+   - comment on lines (hover a line number and click +), files or the whole change
    - use "Fix this" or "It's fine" on problems, and answer Claude's questions
+   - ask Claude live with "Ask Claude now"
    - click "Send to Claude"
 
-   That writes `review-<round>.json` and stops the server, which wakes Claude. "Ask Claude now" in the comment box sends a live question instead: `questions.mjs` wakes Claude, and the answer shows up in the page while you keep reviewing. Claude shows a plan, fixes after your OK, and opens a new report with only the new changes and a reply to each comment.
+   Claude's plan then shows up in the page to approve, each comment shows Claude's progress live, and the next round arrives as a banner in the same tab. Each repo's `.git/pr-report/` folder stays the source of truth; the daemon only keeps a list of them in `~/.pr-report/`.
 
 ## Layout
 
@@ -51,7 +51,7 @@ The report is written to `<git folder>/pr-report/<branch>-<sha>.html` (usually `
 | `skill/SKILL.md` | The steps Claude follows |
 | `skill/style-guide.md` | How report text is written |
 | `skill/schema/types.ts` | The data contract, and the only list of allowed values |
-| `skill/scripts/` | `collect.mjs`, `checks.mjs`, `build.mjs`, `serve.mjs` and `questions.mjs`. No dependencies. |
+| `skill/scripts/` | `collect.mjs`, `checks.mjs`, `build.mjs`, `review.mjs` (agent CLI) and `daemon.mjs` (review server). No dependencies. |
 | `viewer/` | React source of the report page |
 | `fixtures/make-books-repo.sh` | Builds a fake repo with a "books" feature branch |
 | `samples/report.json` | A hand-written report for that fake repo |
