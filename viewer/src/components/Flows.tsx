@@ -58,7 +58,7 @@ const FlowTrace = ({ flow }: { flow: FlowData }) => {
                         const Icon = meta.icon;
                         const target: CommentTarget = { type: "flow-detail", flow: flow.id, step: i, detail: di, symbol: step.symbol, text: d.text, fix: d.fix };
                         return (
-                          <li key={di} className="group/row flex items-start gap-2 text-[13px] leading-snug">
+                          <li key={di} className="group/row relative flex items-start gap-2 text-[13px] leading-snug">
                             <Icon className={cx("mt-[2px] size-3.5 shrink-0", meta.className)} />
                             <div className="min-w-0 flex-1">
                               <RichText text={d.text} className={cx("block", d.kind === "error" ? "text-red-700 dark:text-red-300" : "text-zinc-600 dark:text-zinc-400")} />

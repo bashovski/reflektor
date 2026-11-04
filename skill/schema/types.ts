@@ -167,6 +167,11 @@ export type Flow = {
   steps: FlowStep[];
 };
 
+export type PlanStatus = "done" | "partial" | "missing" | "extra";
+
+// One item of the session's plan, checked against the diff. "extra" = a change the plan did not ask for.
+export type PlanItem = { text: string; status: PlanStatus; ref?: Ref; note?: string };
+
 export type Report = {
   version: 1;
   tag: Tag;
@@ -178,6 +183,8 @@ export type Report = {
   flows: Flow[];
   sections: Section[];
   testing?: { gaps: string[] };
+  // Did the change do what this session planned? Leave out when there was no plan.
+  plan?: { source: string; items: PlanItem[] };
   // Answers to the previous review round. Add one reply per comment in that round's review file.
   review?: { round: number; replies: Reply[] };
 };
@@ -194,6 +201,7 @@ export type CommentTarget =
   | { type: "question"; section: SectionKind; index: number; text: string }
   | { type: "flow-detail"; flow: string; step: number; detail: number; symbol: string; text: string; fix?: string }
   | { type: "before-merge"; index: number; text: string }
+  | { type: "plan-item"; index: number; status: PlanStatus; text: string }
   | { type: "report" };
 
 export type ReviewComment = {

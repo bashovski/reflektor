@@ -118,7 +118,15 @@ export const TargetComments = ({ target, placeholder }: { target: CommentTarget;
 };
 
 // Buttons on rows that describe a problem (risk, gap, flow error) or a to-do (before merge).
-export const QuickActions = ({ target, variant }: { target: CommentTarget; variant: "problem" | "todo" | "info" }) => {
+export const QuickActions = ({
+  target,
+  variant,
+  labels,
+}: {
+  target: CommentTarget;
+  variant: "problem" | "todo" | "info";
+  labels?: { fix: string; fine: string; queued: string; accepted: string };
+}) => {
   const { editable, commentsFor, add, remove, openComposer } = useReview();
   if (!editable) return null;
   const existing = commentsFor(target);
@@ -129,7 +137,9 @@ export const QuickActions = ({ target, variant }: { target: CommentTarget; varia
       <div className="mt-1 flex flex-wrap items-center gap-1">
         <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
           <Check className="size-3.5" />
-          {decided.kind === "accepted" ? "Marked as fine" : variant === "todo" ? "Queued for Claude" : "Queued: fix as suggested"}
+          {decided.kind === "accepted"
+            ? (labels?.accepted ?? "Marked as fine")
+            : (labels?.queued ?? (variant === "todo" ? "Queued for Claude" : "Queued: fix as suggested"))}
         </span>
         {!decided.text && (
           <button type="button" className={ghost} onClick={() => openComposer(target, { editingId: decided.id })}>
@@ -145,24 +155,28 @@ export const QuickActions = ({ target, variant }: { target: CommentTarget; varia
 
   const comment = (kind?: CommentKind) => () => openComposer(target, { kind });
 
+  // Rows that are information only get a small floating button, so they keep their height.
   if (variant === "info") {
     return (
-      <div className="mt-1 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
-        <button type="button" className={ghost} onClick={comment()}>
-          <MessageSquarePlus className="size-3.5" /> Comment
-        </button>
-      </div>
+      <button
+        type="button"
+        title="Comment"
+        onClick={comment()}
+        className="absolute right-1.5 bottom-1 rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 text-zinc-500 opacity-0 shadow-sm transition-opacity group-hover/row:opacity-100 hover:text-zinc-900 focus:opacity-100 dark:hover:text-zinc-100"
+      >
+        <MessageSquarePlus className="size-3.5" />
+      </button>
     );
   }
 
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1">
       <button type="button" className={cx(button, "bg-blue-600/10 text-blue-700 hover:bg-blue-600/20 dark:text-blue-300")} onClick={() => add(target, { kind: "fix" })}>
-        <Wrench className="size-3.5" /> {variant === "todo" ? "Do this" : "Fix this"}
+        <Wrench className="size-3.5" /> {labels?.fix ?? (variant === "todo" ? "Do this" : "Fix this")}
       </button>
       {variant === "problem" && (
         <button type="button" className={ghost} onClick={() => add(target, { kind: "accepted" })}>
-          <Check className="size-3.5" /> It's fine
+          <Check className="size-3.5" /> {labels?.fine ?? "It's fine"}
         </button>
       )}
       <button type="button" className={ghost} onClick={comment()}>

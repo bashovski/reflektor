@@ -36,6 +36,7 @@ const BEFORE_MERGE = union("BeforeMergeKind");
 const STEP_STATUS = union("StepStatus");
 const DETAIL_KINDS = union("FlowDetailKind");
 const REPLY_STATUS = union("ReplyStatus");
+const PLAN_STATUS = union("PlanStatus");
 
 function parseArgs(argv) {
   const args = { open: false };
@@ -172,6 +173,16 @@ if (unassigned.length) {
     highlights: [],
     questions: [],
     files: unassigned.map((f) => ({ path: f.path, note: "" })),
+  });
+}
+
+// ------------------------------------------------------------------ plan
+
+if (report.plan) {
+  report.plan.items = (report.plan.items ?? []).map((item, i) => {
+    oneOf(item.status, PLAN_STATUS, `plan.items[${i}].status`);
+    if (item.status === "done" && !item.ref) warnings.push(`plan.items[${i}]: done, but no ref shows where`);
+    return { ...item, ref: checkRef(item.ref, `plan.items[${i}]`) };
   });
 }
 
@@ -334,6 +345,17 @@ function prDescription() {
   if (risks.length) {
     lines.push("## Risks", "");
     for (const r of [...new Set(risks)].slice(0, 5)) lines.push(`- ${r}`);
+    lines.push("");
+  }
+
+  if (report.plan?.items.length) {
+    const planned = report.plan.items.filter((i) => i.status !== "extra");
+    const done = planned.filter((i) => i.status === "done").length;
+    lines.push("## Plan", "", `${done} of ${planned.length} planned items done (${report.plan.source}).`);
+    for (const i of report.plan.items.filter((i) => i.status !== "done")) {
+      const label = { partial: "Partly done", missing: "Not done", extra: "Not in the plan" }[i.status];
+      lines.push(`- ${label}: ${oneLine(i.text)}${i.note ? `. ${oneLine(i.note)}` : ""}`);
+    }
     lines.push("");
   }
 

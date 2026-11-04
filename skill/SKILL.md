@@ -128,6 +128,12 @@ Write report.json to the **Report file** path that collect printed. Its shape is
 - Include middleware or error handlers only when the change relies on them.
 - `details`: the checks (validation, auth), rules (business logic), effects (writes, events, cache) and errors (wrong status codes, races) at that step. Give every `error` detail a `fix`, like risks.
 
+**plan:** when this conversation had a plan, check the diff against it. A plan is an approved plan-mode plan, a task list you kept, a numbered list the user gave or agreed to, or a ticket the user pasted. Without one, leave `plan` out.
+
+- `source`: one line on where the plan came from, like "Plan approved in this session".
+- `items`: every planned item with `status` `done` (with a `ref` to where it happens), `partial` (say what is left in `note`) or `missing`. Then add `extra` items for notable changes the plan did not ask for, so the user can catch scope creep. Leave out small supporting changes.
+- Missing and partial items show "Finish it" and "Not needed" buttons. In the fix loop, a `fix` comment on one means: finish it.
+
 **testing.gaps:** behavior no test checks, most important first, at most 5. When collect printed per-file coverage (tested lines and untested line numbers), use it.
 
 Line numbers refer to the new version of a file. Use `"side": "old"` only for deleted lines.

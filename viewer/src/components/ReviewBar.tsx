@@ -10,7 +10,7 @@ import { cx, Pill } from "./ui";
 
 const REPORT_TARGET: CommentTarget = { type: "report" };
 
-// Every risk, gap and flow error is a problem the reviewer should decide on.
+// Every risk, gap, flow error and unfinished plan item is a problem the reviewer should decide on.
 const useProblems = () => {
   const { bundle } = useReport();
   return useMemo(() => {
@@ -19,6 +19,9 @@ const useProblems = () => {
       s.highlights.forEach((h, i) => {
         if (h.kind === "risk" || h.kind === "gap") keys.push(targetKey({ type: "highlight", section: s.kind, index: i, kind: h.kind, text: h.text }));
       });
+    bundle.report.plan?.items.forEach((item, i) => {
+      if (item.status === "missing" || item.status === "partial") keys.push(targetKey({ type: "plan-item", index: i, status: item.status, text: item.text }));
+    });
     for (const f of bundle.report.flows)
       f.steps.forEach((step, si) =>
         step.details?.forEach((d, di) => {
@@ -41,6 +44,8 @@ export const targetAnchor = (t: CommentTarget, sections: { kind: string }[]): { 
       return { id: `flow-${t.flow}` };
     case "before-merge":
       return { id: `bm-${t.index}` };
+    case "plan-item":
+      return { id: `plan-${t.index}` };
     default:
       return null;
   }

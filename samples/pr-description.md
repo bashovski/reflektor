@@ -33,6 +33,14 @@ Users can now add a book on the Library page and see the books they saved. The A
 - Two saves at the same moment both pass the duplicate check. The database rejects one, and that user gets 500 instead of 409. (`apps/api/src/books/book.service.ts:19`)
 - Tests now run with --coverage, but @vitest/coverage-v8 is not in devDependencies. Vitest stops with a missing dependency error, so CI goes red. (`.github/workflows/ci.yml:21`)
 
+## Plan
+
+4 of 6 planned items done (Plan approved in this session: let users save books and see them on /library).
+- Partly done: A list of the user's books on /library. Shows the first 20 books only. There is no paging yet.
+- Not done: Tests for the new endpoints. Only `BookService` has tests. The controller and repository have none.
+- Not in the plan: Postgres 17 in docker-compose. Not part of the plan.
+- Not in the plan: An `authors.slug` column. Not part of the plan, and nothing reads it yet.
+
 ## Testing
 
 - Tests run 51% of the new lines (42 of 83).

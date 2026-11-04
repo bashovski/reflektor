@@ -55,6 +55,8 @@ export const targetKey = (t: CommentTarget): string => {
       return `flow:${t.flow}:${t.step}:${t.detail}`;
     case "before-merge":
       return `before-merge:${t.index}`;
+    case "plan-item":
+      return `plan:${t.index}`;
     case "report":
       return "report";
   }
@@ -77,6 +79,8 @@ export const describeTarget = (t: CommentTarget): string => {
       return `${t.symbol}: ${clip(t.text.replace(/\n/g, " "))}`;
     case "before-merge":
       return `Before you merge: ${clip(t.text)}`;
+    case "plan-item":
+      return `Plan: ${clip(t.text)}`;
     case "report":
       return "Whole report";
   }
@@ -108,6 +112,8 @@ const toMarkdown = (bundle: Bundle, round: number, comments: ReviewComment[]) =>
         return `Flow step ${t.symbol}`;
       case "before-merge":
         return "Before you merge";
+      case "plan-item":
+        return `Plan item (${t.status})`;
       case "report":
         return "The whole change";
     }

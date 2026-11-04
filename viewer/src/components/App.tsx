@@ -9,6 +9,7 @@ import { FileModal } from "./FileModal";
 import { Findings } from "./Findings";
 import { Flows } from "./Flows";
 import { Hero, TopBar } from "./Header";
+import { PlanCheck } from "./PlanCheck";
 import { PreviousReview } from "./PreviousReview";
 import { ReviewBar } from "./ReviewBar";
 import { Sections } from "./Sections";
@@ -88,6 +89,7 @@ const Layout = () => {
         <main className="min-w-0 space-y-10">
           <Hero />
           <PreviousReview />
+          <PlanCheck />
           <BeforeMerge />
           <Findings />
           <Flows />

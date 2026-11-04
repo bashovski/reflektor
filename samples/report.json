@@ -756,5 +756,74 @@
       "No test for two saves of the same ISBN at the same moment.",
       "No frontend tests for AddBookForm error messages."
     ]
+  },
+  "plan": {
+    "source": "Plan approved in this session: let users save books and see them on /library",
+    "items": [
+      {
+        "text": "A books table, one row per saved book",
+        "status": "done",
+        "ref": {
+          "path": "db/migrations/0042_create_books.sql",
+          "line": 1
+        }
+      },
+      {
+        "text": "`POST /books` with an ISBN check and a duplicate check",
+        "status": "done",
+        "ref": {
+          "path": "apps/api/src/books/book.service.ts",
+          "line": 13
+        }
+      },
+      {
+        "text": "A per-user book limit, set by `BOOKS_MAX_PER_USER`",
+        "status": "done",
+        "ref": {
+          "path": "apps/api/src/books/book.service.ts",
+          "line": 25
+        }
+      },
+      {
+        "text": "An Add book form on /library",
+        "status": "done",
+        "ref": {
+          "path": "apps/web/src/pages/library/AddBookForm.tsx",
+          "line": 15
+        }
+      },
+      {
+        "text": "A list of the user's books on /library",
+        "status": "partial",
+        "note": "Shows the first 20 books only. There is no paging yet.",
+        "ref": {
+          "path": "apps/web/src/pages/library/BookList.tsx",
+          "line": 4
+        }
+      },
+      {
+        "text": "Tests for the new endpoints",
+        "status": "missing",
+        "note": "Only `BookService` has tests. The controller and repository have none."
+      },
+      {
+        "text": "Postgres 17 in docker-compose",
+        "status": "extra",
+        "note": "Not part of the plan.",
+        "ref": {
+          "path": "infra/docker-compose.yml",
+          "line": 3
+        }
+      },
+      {
+        "text": "An `authors.slug` column",
+        "status": "extra",
+        "note": "Not part of the plan, and nothing reads it yet.",
+        "ref": {
+          "path": "db/migrations/0043_add_author_slug.sql",
+          "line": 1
+        }
+      }
+    ]
   }
 }

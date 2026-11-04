@@ -70,7 +70,7 @@ const SectionCard = ({ section, index }: { section: Section; index: number }) =>
                 const HIcon = hm.icon;
                 const target: CommentTarget = { type: "highlight", section: section.kind, index: i, kind: h.kind, text: h.text, fix: h.fix };
                 return (
-                  <li key={i} id={`hl-${index}-${i}`} className="group/row flex items-start gap-3 rounded-lg px-2 py-1.5 hover:bg-zinc-500/[0.04]">
+                  <li key={i} id={`hl-${index}-${i}`} className="group/row relative flex items-start gap-3 rounded-lg px-2 py-1.5 hover:bg-zinc-500/[0.04]">
                     <span className={cx("mt-[1px] inline-flex w-[86px] shrink-0 items-center gap-1.5 text-xs font-medium", hm.className)}>
                       <HIcon className="size-3.5" />
                       {hm.label}
