@@ -20,6 +20,7 @@ Users can now add a book on the Library page and see the books they saved. The A
 
 ## Before you merge
 
+- [ ] Typecheck fails: `isbn3` has no type declarations. Add a small `declare module "isbn3"` file or a types package.
 - [ ] Run migrations 0042 and 0043 before the new API code goes live. Without the books table, both /books endpoints return 500.
 - [ ] Commit BookList.tsx and the LibraryPage.tsx change. They exist only on your machine.
 - [ ] Add @vitest/coverage-v8 to apps/api devDependencies, or remove --coverage from CI. Otherwise CI fails.
@@ -40,6 +41,12 @@ Users can now add a book on the Library page and see the books they saved. The A
 - Not done: Tests for the new endpoints. Only `BookService` has tests. The controller and repository have none.
 - Not in the plan: Postgres 17 in docker-compose. Not part of the plan.
 - Not in the plan: An `authors.slug` column. Not part of the plan, and nothing reads it yet.
+
+## Checks
+
+- Passed: whitespace (`git diff --check HEAD`)
+- **Failed**: typecheck (`node -e "console.error('apps/api/src/books/book.service.ts(1,18): error TS7016: Could not find a declaration file for module isbn3.'); process.exit(2)"`)
+- Passed: tests (`node -e "console.log('3 passed')"`)
 
 ## Testing
 

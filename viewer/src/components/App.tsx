@@ -11,6 +11,7 @@ import { Flows } from "./Flows";
 import { Hero, TopBar } from "./Header";
 import { PlanCheck } from "./PlanCheck";
 import { PreviousReview } from "./PreviousReview";
+import { ProjectChecks } from "./ProjectChecks";
 import { ReviewBar } from "./ReviewBar";
 import { Sections } from "./Sections";
 import { SettingsDialog } from "./Settings";
@@ -91,6 +92,7 @@ const Layout = () => {
           <PreviousReview />
           <PlanCheck />
           <BeforeMerge />
+          <ProjectChecks />
           <Findings />
           <Flows />
           <Sections />

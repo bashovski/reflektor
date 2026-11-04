@@ -2,7 +2,7 @@
 name: pr-report
 description: Builds a visual HTML review report for the current branch or PR against its base branch, with a plain-English title and summary, review order, highlights, request flows, GitHub-style diffs with notes, and test coverage of new lines. The user can comment in the report and send the comments back for fixing. Use when the user asks for a PR report, a review report, a summary of branch changes for review, or wants to review changes before opening a PR. Works with any language or stack.
 argument-hint: "[base-branch] [--since last] [--session]"
-allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/serve.mjs *)
+allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/serve.mjs *)
 ---
 
 # PR report
@@ -54,6 +54,20 @@ Rules:
 - In a monorepo, run only the packages that changed.
 - If tests fail but a coverage file was written, use it and add the failing tests to `beforeMerge`.
 - Pass each file with `--coverage <file>`.
+
+## 2b. Run the project's checks
+
+Run the project's own lint, typecheck and test commands once, so the report shows what passes:
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo . --run "lint=<command>" --run "typecheck=<command>" --run "tests=<command>"
+```
+
+- Use `checks` from `.pr-report.json` when it is set (then leave out `--run`).
+- Otherwise pick the project's own commands: scripts in package.json, Makefile targets, `go vet ./...` and `go test ./...`, `cargo clippy` and `cargo test`, `ruff check`, `mypy` and `pytest`, and so on. In a monorepo, run only the packages that changed.
+- Run the tests through checks.mjs with the coverage flags from step 2, so one run gives both the result and the coverage file.
+- The same rules as coverage apply: never install anything, and ask first if a command needs services or looks slow.
+- It writes `checks.json` next to diff.json, and build.mjs picks it up. A failing check is not an error: add a `beforeMerge` item that names the check and the first error.
 
 ## 3. Collect
 

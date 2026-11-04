@@ -1,4 +1,4 @@
-import { Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Settings } from "lucide-react";
+import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Settings } from "lucide-react";
 import { BASE_SOURCE, REVIEW, TAGS, TARGETS } from "../lib/meta";
 import { useReport } from "../lib/state";
 import { PrDescription } from "./PrDescription";
@@ -39,6 +39,7 @@ export const Hero = () => {
   const { diff, report } = bundle;
   const { branch, scope, stats, commits, coverage } = diff;
 
+  const failedChecks = bundle.projectChecks?.results.filter((r) => r.status !== "passed").length ?? 0;
   const levelCounts = report.sections.reduce(
     (acc, s) => ({ ...acc, [s.review]: acc[s.review] + s.files.length }),
     { must: 0, skim: 0, skip: 0 },
@@ -121,6 +122,12 @@ export const Hero = () => {
             </span>
           ))}
         </span>
+        {failedChecks > 0 && (
+          <a href="#project-checks" className="inline-flex items-center gap-1.5 font-medium text-red-600 hover:underline dark:text-red-400">
+            <CircleX className="size-4" />
+            {failedChecks} {failedChecks === 1 ? "check" : "checks"} failed
+          </a>
+        )}
         {coverage?.percent != null && (
           <a href="#coverage" className="inline-flex items-center gap-1.5 hover:underline">
             <FlaskConical className="size-4 text-zinc-400" />

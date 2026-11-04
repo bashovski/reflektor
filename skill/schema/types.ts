@@ -49,6 +49,11 @@ export type Severity = "high" | "medium" | "low";
 // A safety check hit from collect.mjs. `preview` shows a masked secret, never the full value.
 export type Finding = { kind: FindingKind; rule: string; severity: Severity; path: string; line: number | null; message: string; preview?: string };
 
+export type CheckStatus = "passed" | "failed" | "timeout";
+
+// One project check run by checks.mjs. outputTail holds the last lines of stdout and stderr.
+export type ProjectCheck = { name: string; command: string; status: CheckStatus; exitCode: number | null; durationMs: number; outputTail: string };
+
 export type DiffData = {
   version: 1;
   generatedAt: string;
@@ -80,6 +85,8 @@ export type RepoConfig = {
   targets?: Partial<Record<Target, string[]>>;
   generated?: string[];
   coverage?: { command?: string; files?: string[] };
+  // The project's own checks, run by checks.mjs.
+  checks?: { name: string; command: string; timeout?: number }[];
 };
 
 // ------------------------------------------------------------------ report.json
@@ -244,6 +251,8 @@ export type Bundle = {
   round: number;
   // File type icons (from atom-material-icons): SVG per icon key, and the key for each file path. Null when not installed.
   fileIcons: { icons: Record<string, string>; byPath: Record<string, string> } | null;
+  // Results from checks.mjs. `stale` = code changed after the checks ran.
+  projectChecks: { ranAt: string; stale: boolean; results: ProjectCheck[] } | null;
   // Pull request title and Markdown body, written from this report.
   prDescription: { title: string; body: string };
   warnings: string[];

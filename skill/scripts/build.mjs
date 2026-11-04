@@ -7,7 +7,7 @@
 //                  [--viewer viewer.html] [--open]
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -48,6 +48,7 @@ function parseArgs(argv) {
     else if (a === "--out") args.out = next();
     else if (a === "--json-out") args.jsonOut = next();
     else if (a === "--viewer") args.viewer = next();
+    else if (a === "--checks") args.checks = next();
     else if (a === "--open") args.open = true;
     else throw new Error(`Unknown argument: ${a}`);
   }
@@ -299,6 +300,30 @@ if (errors.length) {
   process.exit(1);
 }
 
+// ------------------------------------------------------------------ project checks
+// checks.json from checks.mjs, next to diff.json unless --checks says otherwise.
+
+function loadProjectChecks() {
+  const file = args.checks ?? join(dirname(resolve(args.diff)), "checks.json");
+  if (!existsSync(file)) return null;
+  const data = JSON.parse(readFileSync(file, "utf8"));
+  const ranAt = Date.parse(data.ranAt);
+  // Stale when a commit or an uncommitted file is newer than the run.
+  const newestCommit = Math.max(0, ...diff.commits.map((c) => Date.parse(c.date)));
+  const newestFile = Math.max(
+    0,
+    ...diff.files.filter((f) => f.uncommitted).map((f) => {
+      const full = join(diff.repo.root, f.path);
+      return existsSync(full) ? statSync(full).mtimeMs : 0;
+    }),
+  );
+  const stale = data.headSha !== diff.branch.headSha || newestCommit > ranAt || newestFile > ranAt;
+  if (stale) notes.push("Project checks ran before the latest code change; run checks.mjs again for current results.");
+  return { ranAt: data.ranAt, stale, results: data.results };
+}
+
+const projectChecks = loadProjectChecks();
+
 // ------------------------------------------------------------------ PR description
 // Markdown for the pull request, built only from the checked report. Written next to the HTML and embedded in it.
 
@@ -359,6 +384,12 @@ function prDescription() {
     lines.push("");
   }
 
+  if (projectChecks?.results.length) {
+    lines.push("## Checks", "");
+    for (const c of projectChecks.results) lines.push(`- ${c.status === "passed" ? "Passed" : c.status === "failed" ? "**Failed**" : "**Timed out**"}: ${c.name} (\`${c.command}\`)`);
+    lines.push("");
+  }
+
   const gaps = report.testing?.gaps ?? [];
   if (diff.coverage?.percent != null || gaps.length) {
     lines.push("## Testing", "");
@@ -385,6 +416,7 @@ const bundle = {
   previousReview,
   round,
   fileIcons,
+  projectChecks,
   prDescription: prText,
   warnings: [...notes, ...warnings],
   builtAt: new Date().toISOString(),

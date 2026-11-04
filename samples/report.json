@@ -13,6 +13,14 @@
   "reviewMinutes": 15,
   "beforeMerge": [
     {
+      "kind": "manual",
+      "text": "Typecheck fails: `isbn3` has no type declarations. Add a small `declare module \"isbn3\"` file or a types package.",
+      "ref": {
+        "path": "apps/api/src/books/book.service.ts",
+        "line": 1
+      }
+    },
+    {
       "kind": "migration",
       "text": "Run migrations 0042 and 0043 before the new API code goes live. Without the books table, both /books endpoints return 500.",
       "ref": {

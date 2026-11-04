@@ -38,6 +38,14 @@ try {
   const secretOut = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", secretRepo, "--no-fetch", "--base", "main", "--out", join(tmp, "secret.json")]);
   if (!secretOut.includes("AWS access key [AKIA…(20 characters)]")) fail("collect.mjs did not flag or mask a fake AWS key");
 
+  const checked = run("node", [
+    join(root, "skill/scripts/checks.mjs"), "--repo", repo,
+    "--run", "whitespace=git diff --check HEAD",
+    "--run", `typecheck=node -e "console.error('apps/api/src/books/book.service.ts(1,18): error TS7016: Could not find a declaration file for module isbn3.'); process.exit(2)"`,
+    "--run", `tests=node -e "console.log('3 passed')"`,
+  ]);
+  if (!checked.includes("Project checks: 2 passed, 1 failed")) fail("checks.mjs did not report 2 passed and 1 failed");
+
   const built = run("node", [
     join(root, "skill/scripts/build.mjs"),
     "--diff", join(repo, ".git/pr-report/diff.json"),
