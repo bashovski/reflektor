@@ -1,10 +1,10 @@
-import { Check, MessageSquarePlus, Pencil, Trash2, Undo2, Wrench } from "lucide-react";
+import { Check, Loader2, MessageCircleQuestion, MessageSquarePlus, Pencil, Sparkles, Trash2, Undo2, Wrench } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
-import type { CommentKind, CommentTarget, ReviewComment } from "../../../skill/schema/types";
+import type { CommentKind, CommentTarget, LiveQuestion, ReviewComment } from "../../../skill/schema/types";
 import { COMMENT_KINDS } from "../lib/meta";
 import { describeTarget, targetKey, useReview } from "../lib/review";
 import { RichText } from "./RichText";
-import { cx, Pill } from "./ui";
+import { cx, Pill, RefLink } from "./ui";
 
 const button =
   "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40";
@@ -22,8 +22,9 @@ export const SuggestedFix = ({ text, className }: { text: string; className?: st
 );
 
 export const Composer = ({ target, placeholder }: { target: CommentTarget; placeholder?: string }) => {
-  const { composer, comments, add, update, closeComposer } = useReview();
+  const { composer, comments, add, update, closeComposer, mode, ask } = useReview();
   const editing = composer?.editingId ? comments.find((c) => c.id === composer.editingId) : undefined;
+  const canAsk = mode === "server" && !editing && composer?.kind !== "decision";
   const [text, setText] = useState(editing?.text ?? "");
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -35,6 +36,12 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
     const clean = text.trim();
     if (editing) update(editing.id, { text: clean });
     else if (clean) add(target, { text: clean, kind: composer?.kind });
+    closeComposer();
+  };
+
+  const askNow = () => {
+    const clean = text.trim();
+    if (clean) void ask(target, clean);
     closeComposer();
   };
 
@@ -57,12 +64,17 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
       />
       <div className="mt-1.5 flex items-center gap-2">
         <span className="hidden text-[11px] text-zinc-400 sm:inline">
-          Start with <code>nit:</code> or <code>q:</code> to mark it, or let Claude decide. ⌘↵ saves.
+          {canAsk ? "Ask now: Claude answers while you review. Add comment: saved for Send to Claude." : <>Start with <code>nit:</code> or <code>q:</code> to mark it, or let Claude decide. ⌘↵ saves.</>}
         </span>
         <span className="ml-auto" />
         <button type="button" onClick={closeComposer} className={ghost}>
           Cancel
         </button>
+        {canAsk && (
+          <button type="button" onClick={askNow} className={cx(ghost, "border border-violet-500/40 text-violet-700 dark:text-violet-300")} disabled={!text.trim()}>
+            <MessageCircleQuestion className="size-3.5" /> Ask Claude now
+          </button>
+        )}
         <button type="button" onClick={save} className={primary} disabled={!editing && !text.trim()}>
           {editing ? "Save" : "Add comment"}
         </button>
@@ -100,15 +112,53 @@ export const CommentItem = ({ comment, compact }: { comment: ReviewComment; comp
   );
 };
 
+// A live question and, once it arrives, Claude's answer.
+export const QuestionThread = ({ question }: { question: LiveQuestion }) => {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (question.answer) return;
+    const timer = window.setTimeout(() => setSlow(true), 90_000 - (Date.now() - Date.parse(question.askedAt)));
+    return () => window.clearTimeout(timer);
+  }, [question]);
+
+  return (
+    <div className="rounded-lg border border-violet-500/30 bg-violet-500/[0.05] px-3 py-2 font-sans text-[13px] leading-snug">
+      <p className="flex items-start gap-2">
+        <MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-violet-500" />
+        <span>
+          <span className="font-medium">You asked: </span>
+          {question.text}
+        </span>
+      </p>
+      {question.answer ? (
+        <div className="mt-1.5 flex items-start gap-2 border-t border-violet-500/20 pt-1.5">
+          <Sparkles className="mt-0.5 size-3.5 shrink-0 text-violet-500" />
+          <RichText text={question.answer.text} className="block min-w-0 flex-1" />
+          {question.answer.ref && <RefLink refTo={question.answer.ref} />}
+        </div>
+      ) : (
+        <p className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
+          <Loader2 className="size-3 animate-spin" />
+          {slow ? "Claude has not picked this up yet. Is the Claude session still open?" : "Waiting for Claude…"}
+        </p>
+      )}
+    </div>
+  );
+};
+
 // Saved comments and the open composer for one target.
 export const TargetComments = ({ target, placeholder }: { target: CommentTarget; placeholder?: string }) => {
-  const { commentsFor, composer } = useReview();
+  const { commentsFor, composer, questionsFor } = useReview();
   // One-click decisions without a note are shown by QuickActions, not as a comment.
   const list = commentsFor(target).filter((c) => c.text || composer?.editingId === c.id || (c.kind !== "fix" && c.kind !== "accepted"));
+  const asked = questionsFor(target);
   const composing = composer?.key === targetKey(target) && !composer.editingId;
-  if (!list.length && !composing) return null;
+  if (!list.length && !composing && !asked.length) return null;
   return (
     <div className="mt-1.5 space-y-1.5">
+      {asked.map((q) => (
+        <QuestionThread key={q.id} question={q} />
+      ))}
       {list.map((c) => (
         <CommentItem key={c.id} comment={c} compact />
       ))}

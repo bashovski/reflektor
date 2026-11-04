@@ -41,7 +41,7 @@ The report is written to `<git folder>/pr-report/<branch>-<sha>.html` (usually `
    - use "Fix this" or "It's fine" on problems, and answer Claude's questions
    - click "Send to Claude"
 
-   That writes `review-<round>.json` and stops the server, which wakes Claude. Claude shows a plan, fixes after your OK, and opens a new report with only the new changes and a reply to each comment.
+   That writes `review-<round>.json` and stops the server, which wakes Claude. "Ask Claude now" in the comment box sends a live question instead: `questions.mjs` wakes Claude, and the answer shows up in the page while you keep reviewing. Claude shows a plan, fixes after your OK, and opens a new report with only the new changes and a reply to each comment.
 
 ## Layout
 
@@ -51,7 +51,7 @@ The report is written to `<git folder>/pr-report/<branch>-<sha>.html` (usually `
 | `skill/SKILL.md` | The steps Claude follows |
 | `skill/style-guide.md` | How report text is written |
 | `skill/schema/types.ts` | The data contract, and the only list of allowed values |
-| `skill/scripts/` | `collect.mjs`, `build.mjs` and `serve.mjs`. No dependencies. |
+| `skill/scripts/` | `collect.mjs`, `checks.mjs`, `build.mjs`, `serve.mjs` and `questions.mjs`. No dependencies. |
 | `viewer/` | React source of the report page |
 | `fixtures/make-books-repo.sh` | Builds a fake repo with a "books" feature branch |
 | `samples/report.json` | A hand-written report for that fake repo |

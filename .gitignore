@@ -10,3 +10,5 @@ samples/bundle.json
 samples/*.html
 samples/review-*.json
 fixtures/.books-repo/
+samples/questions-*.json
+samples/review-session.json

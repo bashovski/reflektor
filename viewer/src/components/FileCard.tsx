@@ -6,7 +6,7 @@ import type { CommentTarget, DiffFile, Finding, SectionFile } from "../../../ski
 import { FILE_STATUS, SEVERITY } from "../lib/meta";
 import { useReview } from "../lib/review";
 import { fileDomId, useReport } from "../lib/state";
-import { CommentItem, Composer, TargetComments } from "./Comments";
+import { CommentItem, Composer, QuestionThread, TargetComments } from "./Comments";
 import { RichText } from "./RichText";
 import { cx, DiffBar, FileIcon, IconButton, LocCount, Pill } from "./ui";
 
@@ -17,7 +17,18 @@ export type AnnotationMeta =
   | { type: "note"; text: string }
   | { type: "finding"; finding: Finding }
   | { type: "comment"; id: string }
+  | { type: "question"; id: string }
   | { type: "composer"; target: LineTarget };
+
+const LineQuestion = ({ id }: { id: string }) => {
+  const { questions } = useReview();
+  const question = questions.find((q) => q.id === id);
+  return question ? (
+    <div className="my-1.5 mr-3 ml-12 max-w-2xl">
+      <QuestionThread question={question} />
+    </div>
+  ) : null;
+};
 
 const LineComment = ({ id }: { id: string }) => {
   const { comments } = useReview();
@@ -103,7 +114,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
 
   const input = useMemo(() => toDiffInput(file), [file]);
 
-  const { comments, composer, openComposer, editable } = useReview();
+  const { comments, composer, openComposer, editable, questions } = useReview();
   const fileTarget = useMemo<CommentTarget>(() => ({ type: "file", path }), [path]);
 
   const annotations = useMemo<DiffLineAnnotation<AnnotationMeta>[]>(() => {
@@ -119,12 +130,16 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
       if (c.target.type !== "line" || c.target.path !== path) continue;
       list.push({ side: c.target.side === "old" ? "deletions" : "additions", lineNumber: c.target.end, metadata: { type: "comment", id: c.id } });
     }
+    for (const q of questions) {
+      if (q.target.type !== "line" || q.target.path !== path) continue;
+      list.push({ side: q.target.side === "old" ? "deletions" : "additions", lineNumber: q.target.end, metadata: { type: "question", id: q.id } });
+    }
     if (composer?.target.type === "line" && composer.target.path === path && !composer.editingId) {
       const t = composer.target;
       list.push({ side: t.side === "old" ? "deletions" : "additions", lineNumber: t.end, metadata: { type: "composer", target: t } });
     }
     return list;
-  }, [sectionFile, comments, composer, path, bundle]);
+  }, [sectionFile, comments, composer, path, bundle, questions]);
 
   // A ref keeps the diff options stable while the click handler sees fresh state.
   const onGutter = useRef<(range: SelectedLineRange) => void>(() => {});
@@ -172,6 +187,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
     if (m.type === "note") return <LineNoteBubble text={m.text} />;
     if (m.type === "finding") return <FindingBubble finding={m.finding} />;
     if (m.type === "comment") return <LineComment id={m.id} />;
+    if (m.type === "question") return <LineQuestion id={m.id} />;
     return (
       <div className="mr-3 ml-12 max-w-2xl">
         <Composer target={m.target} />

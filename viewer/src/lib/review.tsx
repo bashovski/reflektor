@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { Bundle, CommentKind, CommentTarget, ReviewComment } from "../../../skill/schema/types";
+import type { Bundle, CommentKind, CommentTarget, LiveQuestion, ReviewComment } from "../../../skill/schema/types";
 import { SECTIONS } from "./meta";
 
 // Review comments live here. Served by serve.mjs, the page saves them to the repo's git folder
@@ -31,6 +31,9 @@ type ReviewState = {
   closeComposer: () => void;
   submit: () => Promise<void>;
   copyForClaude: () => Promise<boolean>;
+  questions: LiveQuestion[];
+  questionsFor: (target: CommentTarget) => LiveQuestion[];
+  ask: (target: CommentTarget, text: string) => Promise<void>;
 };
 
 const Ctx = createContext<ReviewState | null>(null);
@@ -252,6 +255,42 @@ export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children:
 
   const copyForClaude = useCallback(() => copyText(toMarkdown(bundle, round, comments)), [bundle, round, comments]);
 
+  // Live questions: sent to the server now, answered by the agent while the review goes on.
+  const [questions, setQuestions] = useState<LiveQuestion[]>([]);
+  const pending = questions.some((q) => !q.answer);
+  const loadQuestions = useCallback(() => {
+    if (mode !== "server") return;
+    api("/api/questions", "GET")
+      .then((data) => setQuestions(data.questions ?? []))
+      .catch(() => {});
+  }, [mode, api]);
+  useEffect(loadQuestions, [loadQuestions]);
+  useEffect(() => {
+    if (!pending || sent) return;
+    const id = window.setInterval(loadQuestions, 3000);
+    return () => window.clearInterval(id);
+  }, [pending, sent, loadQuestions]);
+
+  const ask = useCallback(
+    async (target: CommentTarget, text: string) => {
+      const question: LiveQuestion = { id: `q_${newId().slice(2)}`, target, text, askedAt: new Date().toISOString(), answer: null };
+      setQuestions((prev) => [...prev, question]);
+      try {
+        await api("/api/questions", "POST", { id: question.id, target, text });
+      } catch (e) {
+        setError(`Could not ask: ${(e as Error).message}. Is the review server still running?`);
+      }
+    },
+    [api],
+  );
+
+  const questionsByKey = useMemo(() => {
+    const map = new Map<string, LiveQuestion[]>();
+    for (const q of questions) map.set(targetKey(q.target), [...(map.get(targetKey(q.target)) ?? []), q]);
+    return map;
+  }, [questions]);
+  const questionsFor = useCallback((target: CommentTarget) => questionsByKey.get(targetKey(target)) ?? [], [questionsByKey]);
+
   const value: ReviewState = {
     mode,
     round,
@@ -269,6 +308,9 @@ export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children:
     closeComposer,
     submit,
     copyForClaude,
+    questions,
+    questionsFor,
+    ask,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

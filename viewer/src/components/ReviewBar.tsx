@@ -1,4 +1,4 @@
-import { CircleCheck, ClipboardCopy, ListChecks, MessageSquarePlus, Send, X } from "lucide-react";
+import { CircleCheck, ClipboardCopy, ListChecks, MessageCircleQuestion, MessageSquarePlus, Send, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { CommentTarget, ReviewComment } from "../../../skill/schema/types";
 import { COMMENT_KINDS } from "../lib/meta";
@@ -138,6 +138,13 @@ export const ReviewBar = () => {
           <ListChecks className="size-3.5" />
           {comments.length} {comments.length === 1 ? "comment" : "comments"}
         </button>
+        {review.questions.length > 0 && (
+          <span className="inline-flex items-center gap-1.5 text-xs text-violet-700 dark:text-violet-300">
+            <MessageCircleQuestion className="size-3.5" />
+            {review.questions.length} {review.questions.length === 1 ? "question" : "questions"}
+            {review.questions.some((q) => !q.answer) && <span className="text-zinc-500">({review.questions.filter((q) => !q.answer).length} waiting)</span>}
+          </span>
+        )}
         <button
           type="button"
           onClick={() => review.openComposer(REPORT_TARGET)}

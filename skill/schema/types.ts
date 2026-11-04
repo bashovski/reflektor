@@ -239,6 +239,15 @@ export type ReviewComment = {
   createdAt: string;
 };
 
+// A question asked while reviewing, answered live by the agent through questions.mjs.
+export type LiveQuestion = {
+  id: string;
+  target: CommentTarget;
+  text: string;
+  askedAt: string;
+  answer: { text: string; ref?: Ref; answeredAt: string } | null;
+};
+
 export type Review = {
   version: 1;
   round: number;
@@ -247,6 +256,8 @@ export type Review = {
   snapshot: string;
   submittedAt: string;
   comments: ReviewComment[];
+  // Live questions from this round, with their answers.
+  questions?: LiveQuestion[];
 };
 
 export type ReplyStatus = "fixed" | "answered" | "wontfix" | "noted";

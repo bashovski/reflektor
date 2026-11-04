@@ -2,7 +2,7 @@
 name: pr-report
 description: Builds a visual HTML review report for the current branch or PR against its base branch, with a plain-English title and summary, review order, highlights, request flows, GitHub-style diffs with notes, and test coverage of new lines. The user can comment in the report and send the comments back for fixing. Use when the user asks for a PR report, a review report, a summary of branch changes for review, or wants to review changes before opening a PR. Works with any language or stack.
 argument-hint: "[base-branch] [--since last] [--session]"
-allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/serve.mjs *)
+allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/questions.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/serve.mjs *)
 ---
 
 # PR report
@@ -180,7 +180,23 @@ It opens the report in the browser. Then tell the user, in a few lines:
 - the title, how many files are must-read, and the top one or two risks
 - that they can comment: hover a line number and click +, use "Fix this" or "It's fine" on problems, answer the questions, then click "Send to Claude"
 
-Do not paste the report into the chat. End your turn and do not poll: the process exits when the user sends the review, and that wakes you. Its output tells you what happened:
+Also start the question waiter as a second background process, so the user can ask questions while reviewing:
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/questions.mjs wait --dir <folder of the html file>
+```
+
+Do not paste the report into the chat. End your turn and do not poll: each process exits when there is something for you, and that wakes you.
+
+When the **waiter** exits with a live question:
+
+1. Read the code it points at, and answer in 1 to 4 short sentences or a short list, following the style guide. Answer only: do not change code. If the answer shows something should change, say so and suggest the user adds a comment or clicks Fix this.
+2. Send it: `node ${CLAUDE_SKILL_DIR}/scripts/questions.mjs answer --dir <folder> --id <id> --text "<answer>"`, with `--ref path:line` when one place in the code is the answer.
+3. Start the waiter again in the background and end your turn.
+
+If the waiter says the review server stopped, ignore it: the server's own output says what happened.
+
+When the **review server** exits, its output tells you what happened:
 
 - `Review submitted: <file>`: go to the fix loop with that file.
 - `No comments: the reviewer is happy with this round.`: tell the user the review is done and the branch is ready for a PR.
