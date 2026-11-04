@@ -1,0 +1,730 @@
+{
+  "version": 1,
+  "tag": "FEATURE",
+  "title": "Save and list books in the library (new books table, POST and GET /books)",
+  "summary": "Users can now add a book on the Library page and see the books they saved. The API stores books in a new books table and blocks one user from saving the same ISBN twice.",
+  "targets": [
+    "backend",
+    "frontend",
+    "database",
+    "infrastructure",
+    "cicd"
+  ],
+  "reviewMinutes": 15,
+  "beforeMerge": [
+    {
+      "kind": "migration",
+      "text": "Run migration 0042 before the new API code goes live. Without the books table, both /books endpoints return 500.",
+      "ref": {
+        "path": "db/migrations/0042_create_books.sql",
+        "line": 1
+      }
+    },
+    {
+      "kind": "manual",
+      "text": "Commit BookList.tsx and the LibraryPage.tsx change. They exist only on your machine.",
+      "ref": {
+        "path": "apps/web/src/pages/library/BookList.tsx"
+      }
+    },
+    {
+      "kind": "manual",
+      "text": "Add @vitest/coverage-v8 to apps/api devDependencies, or remove --coverage from CI. Otherwise CI fails.",
+      "ref": {
+        "path": ".github/workflows/ci.yml",
+        "line": 21
+      }
+    },
+    {
+      "kind": "env",
+      "text": "Optional: set BOOKS_MAX_PER_USER in production if 500 books per user is not the right limit.",
+      "ref": {
+        "path": ".env.example",
+        "line": 5
+      }
+    }
+  ],
+  "flows": [
+    {
+      "id": "add-book",
+      "title": "Add a book",
+      "trigger": "User types a title and ISBN on /library and clicks Save.",
+      "steps": [
+        {
+          "layer": "UI",
+          "symbol": "AddBookForm.onSubmit",
+          "ref": {
+            "path": "apps/web/src/pages/library/AddBookForm.tsx",
+            "line": 15
+          },
+          "status": "new",
+          "details": [
+            {
+              "kind": "note",
+              "text": "Save button is disabled while the request runs, so a double click sends one request."
+            }
+          ]
+        },
+        {
+          "layer": "Hook",
+          "symbol": "useCreateBook",
+          "ref": {
+            "path": "apps/web/src/hooks/useCreateBook.ts",
+            "line": 4
+          },
+          "status": "new",
+          "details": [
+            {
+              "kind": "effect",
+              "text": "After a save, refreshes the book list (react-query key \"books\")."
+            }
+          ]
+        },
+        {
+          "layer": "HTTP client",
+          "symbol": "createBook → POST /books",
+          "ref": {
+            "path": "apps/web/src/api/books.ts",
+            "line": 6
+          },
+          "status": "new"
+        },
+        {
+          "layer": "Route",
+          "symbol": "POST /books",
+          "ref": {
+            "path": "apps/api/src/routes.ts",
+            "line": 16
+          },
+          "status": "changed",
+          "details": [
+            {
+              "kind": "check",
+              "text": "authGuard: user must be logged in, else 401 not_logged_in."
+            }
+          ]
+        },
+        {
+          "layer": "Controller",
+          "symbol": "BooksController.create",
+          "ref": {
+            "path": "apps/api/src/books/books.controller.ts",
+            "line": 16
+          },
+          "status": "new",
+          "details": [
+            {
+              "kind": "check",
+              "text": "Body shape (zod), else 400 body_invalid:\n- **title**: 1 to 300 characters\n- **isbn**: 10 to 17 characters\n- **authorId**: optional UUID"
+            },
+            {
+              "kind": "effect",
+              "text": "Returns 201 with the saved book."
+            }
+          ]
+        },
+        {
+          "layer": "Service",
+          "symbol": "BookService.createBook",
+          "ref": {
+            "path": "apps/api/src/books/book.service.ts",
+            "line": 13
+          },
+          "status": "new",
+          "details": [
+            {
+              "kind": "check",
+              "text": "ISBN must be valid. Stored as 13 digits without dashes. Else 400 isbn_invalid."
+            },
+            {
+              "kind": "rule",
+              "text": "Same user already saved this ISBN → 409 book_already_saved."
+            },
+            {
+              "kind": "rule",
+              "text": "User already has 500 books (BOOKS_MAX_PER_USER) → 422 book_limit_reached."
+            },
+            {
+              "kind": "error",
+              "text": "Two requests at the same moment can both pass the ISBN check. The database then rejects one with a raw error → 500, not 409."
+            }
+          ]
+        },
+        {
+          "layer": "Repository",
+          "symbol": "BookRepository.insert",
+          "ref": {
+            "path": "apps/api/src/books/book.repository.ts",
+            "line": 5
+          },
+          "status": "new",
+          "details": [
+            {
+              "kind": "effect",
+              "text": "INSERT ... RETURNING *, then toBook() turns the row into a Book."
+            }
+          ]
+        },
+        {
+          "layer": "Database",
+          "symbol": "books",
+          "ref": {
+            "path": "db/migrations/0042_create_books.sql",
+            "line": 1
+          },
+          "status": "new",
+          "details": [
+            {
+              "kind": "rule",
+              "text": "Unique index on (owner_id, isbn)."
+            }
+          ]
+        },
+        {
+          "layer": "Errors",
+          "symbol": "errorHandler",
+          "ref": {
+            "path": "apps/api/src/shared/errorHandler.ts",
+            "line": 4
+          },
+          "status": "existing",
+          "details": [
+            {
+              "kind": "note",
+              "text": "Not changed. Turns any AppError into its status code and { error: code }."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "list-books",
+      "title": "See my books",
+      "trigger": "User opens /library. The book list loads.",
+      "steps": [
+        {
+          "layer": "UI",
+          "symbol": "BookList",
+          "ref": {
+            "path": "apps/web/src/pages/library/BookList.tsx",
+            "line": 4
+          },
+          "status": "new",
+          "details": [
+            {
+              "kind": "note",
+              "text": "Not committed yet."
+            }
+          ]
+        },
+        {
+          "layer": "HTTP client",
+          "symbol": "listBooks → GET /books",
+          "ref": {
+            "path": "apps/web/src/api/books.ts",
+            "line": 11
+          },
+          "status": "new"
+        },
+        {
+          "layer": "Route",
+          "symbol": "GET /books",
+          "ref": {
+            "path": "apps/api/src/routes.ts",
+            "line": 15
+          },
+          "status": "changed",
+          "details": [
+            {
+              "kind": "check",
+              "text": "authGuard: user must be logged in."
+            }
+          ]
+        },
+        {
+          "layer": "Controller",
+          "symbol": "BooksController.list",
+          "ref": {
+            "path": "apps/api/src/books/books.controller.ts",
+            "line": 25
+          },
+          "status": "new",
+          "details": [
+            {
+              "kind": "rule",
+              "text": "parsePagination: 20 per page by default, 100 at most."
+            }
+          ]
+        },
+        {
+          "layer": "Service",
+          "symbol": "BookService.listBooks",
+          "ref": {
+            "path": "apps/api/src/books/book.service.ts",
+            "line": 37
+          },
+          "status": "new"
+        },
+        {
+          "layer": "Repository",
+          "symbol": "BookRepository.listByOwner",
+          "ref": {
+            "path": "apps/api/src/books/book.repository.ts",
+            "line": 25
+          },
+          "status": "new",
+          "details": [
+            {
+              "kind": "effect",
+              "text": "Newest first. Uses index books_owner_created_idx."
+            }
+          ]
+        },
+        {
+          "layer": "Database",
+          "symbol": "books",
+          "ref": {
+            "path": "db/migrations/0042_create_books.sql",
+            "line": 11
+          },
+          "status": "new"
+        }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "kind": "database",
+      "review": "must",
+      "reason": "New table and indexes. Hard to change once real data is in it.",
+      "highlights": [
+        {
+          "kind": "behavior",
+          "text": "New table books. One user cannot save the same ISBN twice (unique index on owner_id + isbn).",
+          "ref": {
+            "path": "db/migrations/0042_create_books.sql",
+            "line": 10
+          }
+        },
+        {
+          "kind": "risk",
+          "text": "author_id has no foreign key. Deleting an author leaves books that point to nothing.",
+          "ref": {
+            "path": "db/migrations/0042_create_books.sql",
+            "line": 5
+          }
+        },
+        {
+          "kind": "contract",
+          "text": "Only adds a table. Safe to run before the new code ships. Undo with DROP TABLE books."
+        },
+        {
+          "kind": "decision",
+          "text": "isbn is char(13). The API converts 10-digit ISBNs to 13 digits before saving.",
+          "ref": {
+            "path": "db/migrations/0042_create_books.sql",
+            "line": 4
+          }
+        }
+      ],
+      "questions": [
+        "Should author_id reference authors(id) with ON DELETE SET NULL?"
+      ],
+      "files": [
+        {
+          "path": "db/migrations/0042_create_books.sql",
+          "note": "Creates the books table. Each book belongs to one user (owner_id), and deleting a user deletes their books.\n\nTwo indexes:\n- **books_owner_isbn_key** blocks duplicate ISBNs per user\n- **books_owner_created_idx** makes \"newest first\" lists fast",
+          "lineNotes": [
+            {
+              "line": 5,
+              "text": "No foreign key. A book can point to an author that does not exist or was deleted."
+            },
+            {
+              "line": 10,
+              "text": "Unique per user, not across all users. Two users can save the same book."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "infrastructure",
+      "review": "must",
+      "reason": "Includes a Postgres upgrade that breaks existing local databases.",
+      "highlights": [
+        {
+          "kind": "risk",
+          "text": "Local Postgres goes from 16 to 17. Existing pgdata volumes were made by 16 and will not start on 17 without a dump and restore.",
+          "ref": {
+            "path": "infra/docker-compose.yml",
+            "line": 3
+          }
+        },
+        {
+          "kind": "gap",
+          "text": "CI still uses postgres:16, so local and CI now run different versions.",
+          "ref": {
+            "path": ".github/workflows/ci.yml",
+            "line": 9
+          }
+        },
+        {
+          "kind": "behavior",
+          "text": "The API container gets BOOKS_MAX_PER_USER, default 500.",
+          "ref": {
+            "path": "infra/docker-compose.yml",
+            "line": 16
+          }
+        }
+      ],
+      "questions": [
+        "Did you mean to bump Postgres in this PR? Books do not need it."
+      ],
+      "files": [
+        {
+          "path": "infra/docker-compose.yml",
+          "note": "Local dev setup. Two changes:\n- **api**: gets the new BOOKS_MAX_PER_USER setting\n- **db**: moves from Postgres 16 to 17",
+          "lineNotes": [
+            {
+              "line": 3,
+              "text": "Postgres 17 cannot read a data folder made by Postgres 16. Existing local databases will fail to start."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "backend",
+      "review": "must",
+      "reason": "Two new API endpoints and the business rules behind them.",
+      "highlights": [
+        {
+          "kind": "behavior",
+          "text": "Two new endpoints, both for logged-in users only:\n- **POST /books** saves a book\n- **GET /books** lists the user's books, newest first, 20 per page",
+          "ref": {
+            "path": "apps/api/src/routes.ts",
+            "line": 15
+          }
+        },
+        {
+          "kind": "risk",
+          "text": "Two saves at the same moment both pass the duplicate check. The database rejects one, and that user gets 500 instead of 409.",
+          "ref": {
+            "path": "apps/api/src/books/book.service.ts",
+            "line": 19
+          }
+        },
+        {
+          "kind": "contract",
+          "text": "New API **POST /books** answers with:\n- **201** and the saved book\n- **400** body_invalid or isbn_invalid\n- **409** book_already_saved\n- **422** book_limit_reached",
+          "ref": {
+            "path": "apps/api/src/books/books.controller.ts",
+            "line": 22
+          }
+        },
+        {
+          "kind": "decision",
+          "text": "ISBNs are converted to 13 digits before the duplicate check, so 0441013597 and 978-0441013593 count as the same book.",
+          "ref": {
+            "path": "apps/api/src/books/book.service.ts",
+            "line": 14
+          }
+        },
+        {
+          "kind": "affected",
+          "text": "errorHandler.ts did not change, but it now also returns 409 and 422. Clients that treat every error as \"server down\" will show the wrong message."
+        }
+      ],
+      "questions": [
+        "Should the service catch the unique-index error (Postgres code 23505) and return 409?",
+        "Is 422 the right status for \"limit reached\", or should it be 403?"
+      ],
+      "files": [
+        {
+          "path": "apps/api/src/books/book.service.ts",
+          "note": "The rules for saving a book, in this order:\n1. **Check the ISBN.** It is always stored as 13 digits.\n2. **Block duplicates:** same user, same ISBN.\n3. **Block users over the limit:** 500 books by default.\n4. **Save** the book.",
+          "lineNotes": [
+            {
+              "line": 6,
+              "text": "Read once when the server starts. Changing the env var needs a restart."
+            },
+            {
+              "line": 19,
+              "text": "Check, then insert. Two requests at the same moment can both pass this line. The unique index stops the second one, but as a 500 error."
+            }
+          ]
+        },
+        {
+          "path": "apps/api/src/books/books.controller.ts",
+          "note": "Handles POST /books and GET /books. Checks the request body with zod, then calls BookService. Returns 201 with the saved book.",
+          "lineNotes": [
+            {
+              "line": 19,
+              "text": "Thrown errors go to errorHandler (not changed), which returns 400 body_invalid."
+            }
+          ]
+        },
+        {
+          "path": "apps/api/src/books/book.repository.ts",
+          "note": "All SQL for books. Every query filters by owner_id, so users only see their own books."
+        },
+        {
+          "path": "apps/api/src/books/book.model.ts",
+          "note": "The Book type, and toBook(), which turns a database row (snake_case) into a Book object (camelCase)."
+        },
+        {
+          "path": "apps/api/src/routes.ts",
+          "note": "Adds GET /books and POST /books. Both need a logged-in user (authGuard)."
+        },
+        {
+          "path": "apps/api/src/shared/errors.ts",
+          "note": "Two new error types:\n- **ConflictError** returns 409\n- **LimitError** returns 422\n\nerrorHandler already maps any AppError to its status code, so nothing else had to change."
+        }
+      ]
+    },
+    {
+      "kind": "cicd",
+      "review": "must",
+      "reason": "CI will most likely fail on the first run.",
+      "highlights": [
+        {
+          "kind": "risk",
+          "text": "Tests now run with --coverage, but @vitest/coverage-v8 is not in devDependencies. Vitest stops with a missing dependency error, so CI goes red.",
+          "ref": {
+            "path": ".github/workflows/ci.yml",
+            "line": 21
+          }
+        },
+        {
+          "kind": "behavior",
+          "text": "Migrations run against the CI database before tests.",
+          "ref": {
+            "path": ".github/workflows/ci.yml",
+            "line": 18
+          }
+        }
+      ],
+      "questions": [],
+      "files": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "note": "Two changes to the test job:\n- **migrate** step creates the database tables before tests\n- **test** step now runs with --coverage",
+          "lineNotes": [
+            {
+              "line": 21,
+              "text": "--coverage needs @vitest/coverage-v8, which is not installed. This step will fail."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "config",
+      "review": "skim",
+      "reason": "One optional setting with a safe default.",
+      "highlights": [
+        {
+          "kind": "behavior",
+          "text": "New optional env var BOOKS_MAX_PER_USER. The code uses 500 when it is missing.",
+          "ref": {
+            "path": ".env.example",
+            "line": 5
+          }
+        }
+      ],
+      "questions": [],
+      "files": [
+        {
+          "path": ".env.example",
+          "note": "Documents the new BOOKS_MAX_PER_USER setting. Nothing breaks if it is missing."
+        }
+      ]
+    },
+    {
+      "kind": "dependencies",
+      "review": "skim",
+      "reason": "Three well-known packages.",
+      "highlights": [
+        {
+          "kind": "behavior",
+          "text": "New packages:\n- **zod** (checks request bodies), used at runtime\n- **isbn3** (checks and converts ISBNs), used at runtime\n- **node-pg-migrate** (runs SQL migrations), dev and CI only",
+          "ref": {
+            "path": "apps/api/package.json",
+            "line": 12
+          }
+        },
+        {
+          "kind": "gap",
+          "text": "No coverage package added, but CI now asks for coverage. See CI/CD.",
+          "ref": {
+            "path": ".github/workflows/ci.yml",
+            "line": 21
+          }
+        }
+      ],
+      "questions": [],
+      "files": [
+        {
+          "path": "apps/api/package.json",
+          "note": "Two changes:\n- **dependencies**: adds zod, isbn3 and node-pg-migrate\n- **scripts.migrate**: new script that CI runs before tests",
+          "lineNotes": [
+            {
+              "line": 7,
+              "text": "New script. CI runs this before tests."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "frontend",
+      "review": "skim",
+      "reason": "Simple form and list. One paging gap.",
+      "highlights": [
+        {
+          "kind": "behavior",
+          "text": "/library now shows an Add book form and the user's book list.",
+          "ref": {
+            "path": "apps/web/src/pages/library/LibraryPage.tsx",
+            "line": 8
+          }
+        },
+        {
+          "kind": "gap",
+          "text": "BookList loads only the first 20 books and has no \"load more\". Users with more books cannot see them.",
+          "ref": {
+            "path": "apps/web/src/api/books.ts",
+            "line": 12
+          }
+        },
+        {
+          "kind": "gap",
+          "text": "BookList.tsx and the LibraryPage change are not committed yet.",
+          "ref": {
+            "path": "apps/web/src/pages/library/BookList.tsx"
+          }
+        }
+      ],
+      "questions": [
+        "Does BookList need paging before this ships?"
+      ],
+      "files": [
+        {
+          "path": "apps/web/src/pages/library/AddBookForm.tsx",
+          "note": "Form with title and ISBN. Shows a clear message for each API error code. The Save button is disabled while the request runs.",
+          "lineNotes": [
+            {
+              "line": 28,
+              "text": "Reads the error code from the Axios error. Unknown codes show a general message."
+            },
+            {
+              "line": 36,
+              "text": "Stops double submit from this form. The API race in BookService still exists for other clients."
+            }
+          ]
+        },
+        {
+          "path": "apps/web/src/pages/library/BookList.tsx",
+          "note": "Lists the user's books, with \"Loading\" and \"No books yet\" states. Not committed yet."
+        },
+        {
+          "path": "apps/web/src/pages/library/LibraryPage.tsx",
+          "note": "Adds the form and the book list above the authors list. Part of this change is not committed."
+        },
+        {
+          "path": "apps/web/src/api/books.ts",
+          "note": "Two API calls:\n- **createBook** sends POST /books\n- **listBooks** sends GET /books"
+        },
+        {
+          "path": "apps/web/src/hooks/useCreateBook.ts",
+          "note": "Wraps createBook in react-query. After a save, it reloads the book list."
+        }
+      ]
+    },
+    {
+      "kind": "tests",
+      "review": "skim",
+      "reason": "Unit tests for the service. The rest is untested.",
+      "highlights": [
+        {
+          "kind": "behavior",
+          "text": "Tests cover:\n- a valid save\n- an invalid ISBN\n- a duplicate ISBN"
+        },
+        {
+          "kind": "gap",
+          "text": "No test for the 500-book limit.",
+          "ref": {
+            "path": "apps/api/src/books/book.service.ts",
+            "line": 26
+          }
+        }
+      ],
+      "questions": [],
+      "files": [
+        {
+          "path": "apps/api/src/books/book.service.test.ts",
+          "note": "Unit tests for BookService with a fake repository, so no database is needed."
+        }
+      ]
+    },
+    {
+      "kind": "refactors",
+      "review": "skim",
+      "reason": "Code moved to a shared helper. Behavior is the same.",
+      "highlights": [
+        {
+          "kind": "behavior",
+          "text": "No behavior change. Same paging rules (default 20, max 100), now shared by authors and books."
+        },
+        {
+          "kind": "gap",
+          "text": "limit=abc still becomes NaN and reaches SQL, which returns 500. This was already true before the move.",
+          "ref": {
+            "path": "apps/api/src/shared/pagination.ts",
+            "line": 4
+          }
+        },
+        {
+          "kind": "affected",
+          "text": "GET /authors now uses the shared helper.",
+          "ref": {
+            "path": "apps/api/src/authors/authors.controller.ts",
+            "line": 9
+          }
+        }
+      ],
+      "questions": [],
+      "files": [
+        {
+          "path": "apps/api/src/shared/pagination.ts",
+          "note": "Moved out of AuthorsController so books can use the same rules:\n- **limit**: 20 by default, 100 at most\n- **offset**: never below 0"
+        },
+        {
+          "path": "apps/api/src/authors/authors.controller.ts",
+          "note": "Now calls parsePagination. Same behavior as before."
+        }
+      ]
+    },
+    {
+      "kind": "generated",
+      "review": "skip",
+      "reason": "Written by the package manager.",
+      "highlights": [],
+      "questions": [],
+      "files": [
+        {
+          "path": "pnpm-lock.yaml",
+          "note": "Lockfile update for the three new packages."
+        }
+      ]
+    }
+  ],
+  "testing": {
+    "gaps": [
+      "No test for the book limit. The LimitError line never runs in tests.",
+      "BooksController and BookRepository have no tests. Body checks and SQL are untested.",
+      "No test for two saves of the same ISBN at the same moment.",
+      "No frontend tests for AddBookForm error messages."
+    ]
+  }
+}

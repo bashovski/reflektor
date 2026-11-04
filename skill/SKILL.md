@@ -1,0 +1,166 @@
+---
+name: pr-report
+description: Builds a visual HTML review report for the current branch or PR against its base branch, with a plain-English title and summary, review order, highlights, request flows, GitHub-style diffs with notes, and test coverage of new lines. Use when the user asks for a PR report, a review report, a summary of branch changes for review, or wants to review changes before opening a PR. Works with any language or stack.
+argument-hint: "[base-branch] [--since last] [--session]"
+allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *)
+---
+
+# PR report
+
+You write the judgment in `report.json`: words, grouping, risks and flows. Scripts handle the facts: git data, diffs, coverage numbers and rendering. Never copy code into report.json. Point at files and lines instead.
+
+Scripts and reference files live in `${CLAUDE_SKILL_DIR}`. Needs git and Node.js 18 or newer. `gh` is optional.
+
+Arguments typed after `/pr-report` can be a base branch, `--since last` or `--session`.
+
+## 1. Pick the base branch and scope
+
+Base branch, first match wins:
+
+1. A branch the user passed as an argument, or named in this conversation as the PR target.
+2. Otherwise leave `--base` out. collect.mjs then tries the open PR for this branch (through `gh`), then `base` in `.pr-report.json`, then the remote's default branch.
+
+Scope:
+
+- **Default:** the whole branch since the merge base, plus uncommitted and untracked files. This matches what reviewers will see.
+- **`--since last`:** only changes since the previous report. Use it when the user asks what changed since the last report or review, or when you rebuild after fixing review comments.
+- **`--files a,b,c`:** only these files. Use it when the user asks for this session's changes (argument `--session`): pass the files you created or edited in this conversation. If the branch also holds large unrelated earlier work and the user asks about "recent" changes, ask whether they want the whole branch or only this session's files.
+- **`--no-uncommitted`:** committed work only, when the user asks for it.
+
+## 2. Find or make coverage
+
+Coverage is optional, but try to get it.
+
+1. `coverage.files` in `.pr-report.json`. collect.mjs reads these itself.
+2. A coverage file already in the repo: `lcov.info`, `coverage.xml`, `cobertura.xml`, `coverage.out`, `cover.out`, `jacoco.xml`, `clover.xml`, or a coverage.py `coverage.json`. Look in the repo root, `coverage/` folders and package folders. Skip `node_modules`, `vendor` and build output. collect.mjs prints which file it used and marks it STALE when it is older than the latest change; then try step 3 for a fresh one.
+3. Run the tests with coverage once. Use `coverage.command` from `.pr-report.json` if it is set. Otherwise use the project's own test command plus a coverage flag:
+
+| Stack | Command that writes a supported file |
+|---|---|
+| Vitest | `npx vitest run --coverage --coverage.reporter=lcov` |
+| Jest | `npx jest --coverage --coverageReporters=lcov` |
+| pytest | `pytest --cov --cov-report=xml` (needs pytest-cov) |
+| coverage.py | `coverage run -m pytest && coverage json` |
+| Go | `go test ./... -coverprofile=coverage.out` |
+| Rust | `cargo llvm-cov --lcov --output-path lcov.info` (needs cargo-llvm-cov) |
+| Gradle / Maven | `./gradlew test jacocoTestReport` / `mvn test jacoco:report` (when JaCoCo is set up) |
+| .NET | `dotnet test --collect:"XPlat Code Coverage"` (writes Cobertura XML) |
+| PHP | `vendor/bin/phpunit --coverage-clover clover.xml` |
+
+Rules:
+
+- Never install packages, add plugins or change project config to get coverage. If the tool is missing, skip coverage and say so in one line.
+- Ask first if the tests need services you would have to start (a database, Docker), or look like they take more than about 5 minutes.
+- In a monorepo, run only the packages that changed.
+- If tests fail but a coverage file was written, use it and add the failing tests to `beforeMerge`.
+- Pass each file with `--coverage <file>`.
+
+## 3. Collect
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs --repo . [--base <branch>] [--since last] [--files a,b] [--coverage <file>]...
+```
+
+It writes diff.json into the repo's git folder and prints:
+
+- **Diff file** and **Report file**: the paths to use in steps 5 and 6. Always use these printed paths. In a git worktree the git folder is not `.git/`.
+- the base branch, commits and patch coverage
+- the `git diff` command to read the changes
+- a table of changed files with their target (from `.pr-report.json`) and flags (generated, uncommitted, untracked)
+
+Exit code 3 means there are no changes: tell the user and stop.
+
+collect.mjs fetches the base branch first. If the fetch fails, it warns and uses the local copy; tell the user. Pass `--no-fetch` to skip fetching, for example when offline.
+
+Do not read diff.json. It holds full file contents. Read the changes with the printed `git diff` command, file by file, and read untracked files directly.
+
+## 4. Understand the change
+
+Before writing, find out:
+
+- **Why** the change was made: this conversation, commit messages, the PR title if there is one.
+- **What** each changed file does now, and what it did before.
+- **Who else is affected:** search the repo for changed functions, routes, types and tables. Callers outside the diff become `affected` highlights.
+- **What can break:** migrations, contract changes (API, database schema, public types, events), env vars, deploy order, concurrency, error handling, security (auth checks, input validation, secrets).
+- **What is not tested.**
+
+For large changes (more than about 60 files or 3000 changed lines), read must-review files fully and skim the rest. Say in the summary that the report focuses on the most important parts.
+
+## 5. Write report.json
+
+Write report.json to the **Report file** path that collect printed. Its shape is `Report` in `${CLAUDE_SKILL_DIR}/schema/types.ts`; read that file first. The allowed values for every field are the string unions in it. Write all text by `${CLAUDE_SKILL_DIR}/style-guide.md`; read it too.
+
+**Header**
+
+- `tag`: HOTFIX only when this conversation says it is urgent (outage, data loss, broken production). SECURITY when it fixes a vulnerability. FEATURE for a new capability, FIX for a bug, PERF for speed, REFACTOR when behavior does not change, CHORE for dependencies, config or docs only.
+- `title`: plain verb phrase plus a technical anchor in brackets, under 90 characters, without the tag. Example: `Stop double charges when users click Pay twice (idempotency key on POST /payments)`.
+- `summary`: at most two sentences: what users or callers get, and the main technical change.
+- `targets`: every area touched. Use the target column from collect when it is filled; otherwise judge by path and content. Lockfiles, generated files and root config files add no target on their own.
+- `reviewMinutes`: an honest estimate for reading the must-read files carefully and skimming the rest.
+
+**beforeMerge:** what must happen before or at merge: migrations, env vars, deploy order, feature flags, breaking changes, uncommitted files, anything that will fail CI. At most 6 items. When an item covers several files, name them in the text and point `ref` at the main one. Empty when there is nothing.
+
+**sections**
+
+- Default order: database, infrastructure, config, dependencies, backend, frontend, cicd, tests, refactors, generated, other. Move a section up when it carries more risk than its place suggests. Leave out empty sections.
+- Every changed file goes in exactly one section. Lockfiles and generated files go in `generated` with review `skip`.
+- Sections group files by kind of change, not by area, so a file's section can differ from its target. A package manifest goes in `dependencies` and an env example file goes in `config`, even when their target is backend.
+- `review`: `must` for anything that can break production, data, CI or everyone's local setup, `skim` for normal changes, `skip` for generated or trivial files. `reason`: one line.
+- `highlights`: at most 5 per section, most important first. Add a `ref` whenever a highlight is about specific code. Kinds:
+  - `behavior`: what works differently now, for users or callers
+  - `risk`: what can break, and where
+  - `contract`: a changed API, schema, public type or event payload
+  - `decision`: why this approach, only when it is not obvious
+  - `gap`: unhandled cases, missing pieces, leftover TODOs
+  - `affected`: unchanged code that this change affects
+- `questions`: decisions the author must make before opening the PR. Leave empty when there are none.
+- `files`: one entry per file. `note` is 1 to 4 short sentences or a short list: what changed and why. Add `lineNotes` (at most 3 per file) only for lines a reader could misread or that carry a risk. Generated files get a one-line note.
+
+**flows:** add a flow when the change adds or changes an entry point: an HTTP route, UI action, job, queue consumer, webhook or CLI command. Otherwise leave it empty.
+
+- `trigger`: what starts it, in plain words.
+- `steps`: in call order, from the trigger to storage or the final side effect. Include existing steps where the new code plugs in, with status `existing`.
+- `symbol`: the real function, component, table or route, like `BookService.createBook` or `POST /books`. The build looks for the last word of it (`createBook`, `/books`) anywhere in the referenced file and marks the step "unverified" when it is missing.
+- Include middleware or error handlers only when the change relies on them.
+- `details`: the checks (validation, auth), rules (business logic), effects (writes, events, cache) and errors (wrong status codes, races) at that step.
+
+**testing.gaps:** behavior no test checks, most important first, at most 5. When collect printed per-file coverage (tested lines and untested line numbers), use it.
+
+Line numbers refer to the new version of a file. Use `"side": "old"` only for deleted lines.
+
+## 6. Build and open
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/build.mjs --diff <diff file> --report <report file> --open
+```
+
+It writes `<branch>-<sha>.html` next to the report file, records the run for `--since last`, and opens the file. Fix every `warning:` line by editing report.json and building again, at most two rounds. Mention anything left. `note:` lines come from collect (for example a stale coverage file); they need no report change, but tell the user when they matter.
+
+Then tell the user, in a few lines: the file path, the title, how many files are must-read, and the top one or two risks. Do not paste the report into the chat.
+
+## Follow-ups
+
+- **Wording or grouping changes:** edit report.json and run build.mjs again. No need to collect again.
+- **After code changes:** run collect.mjs again (with `--since last` when the user wants only the new changes), update report.json, build.
+- **"Viewer not found" from build.mjs:** tell the user to run `install.sh` in the pr-report repo.
+
+## Repo config (optional)
+
+`.pr-report.json` in the repo root, read by collect.mjs:
+
+```json
+{
+  "base": "develop",
+  "targets": {
+    "backend": ["services/**", "packages/server/**"],
+    "frontend": ["apps/web/**"],
+    "database": ["**/migrations/**"],
+    "infrastructure": ["infra/**", "Dockerfile", "*.tf"],
+    "cicd": [".github/**", ".gitlab-ci.yml"]
+  },
+  "generated": ["**/__generated__/**"],
+  "coverage": { "command": "make test-coverage", "files": ["coverage/lcov.info"] }
+}
+```
+
+Globs follow .gitignore rules: a pattern without `/` matches at any depth. When the user asks for one, write it from the repo's real folder layout.

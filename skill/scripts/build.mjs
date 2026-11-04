@@ -1,0 +1,252 @@
+#!/usr/bin/env node
+// Checks report.json against diff.json, then writes one self-contained HTML file.
+// Problems that Claude should fix are printed as "warning:" lines; hard errors exit with code 1.
+//
+// Usage:
+//   node build.mjs --diff diff.json --report report.json [--out report.html] [--json-out bundle.json]
+//                  [--viewer viewer.html] [--open]
+
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+
+// Allowed values live only in schema/types.ts: every `export type X = "a" | "b";` union is read here.
+function readUnions(file) {
+  const unions = {};
+  for (const m of readFileSync(file, "utf8").matchAll(/export type (\w+) =([^;{]+);/g)) {
+    const members = m[2].split("|").map((s) => s.trim()).filter(Boolean);
+    if (members.length && members.every((s) => /^"[^"]*"$/.test(s))) unions[m[1]] = members.map((s) => s.slice(1, -1));
+  }
+  return unions;
+}
+const unions = readUnions(join(here, "../schema/types.ts"));
+const union = (name) => {
+  if (!unions[name]) throw new Error(`schema/types.ts has no string union named ${name}`);
+  return unions[name];
+};
+const TAGS = union("Tag");
+const TARGETS = union("Target");
+const SECTIONS = union("SectionKind");
+const REVIEW = union("ReviewLevel");
+const HIGHLIGHTS = union("HighlightKind");
+const BEFORE_MERGE = union("BeforeMergeKind");
+const STEP_STATUS = union("StepStatus");
+const DETAIL_KINDS = union("FlowDetailKind");
+
+function parseArgs(argv) {
+  const args = { open: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    const next = () => argv[++i];
+    if (a === "--diff") args.diff = next();
+    else if (a === "--report") args.report = next();
+    else if (a === "--out") args.out = next();
+    else if (a === "--json-out") args.jsonOut = next();
+    else if (a === "--viewer") args.viewer = next();
+    else if (a === "--open") args.open = true;
+    else throw new Error(`Unknown argument: ${a}`);
+  }
+  if (!args.diff || !args.report) throw new Error("--diff and --report are required");
+  return args;
+}
+
+const args = parseArgs(process.argv.slice(2));
+const diff = JSON.parse(readFileSync(args.diff, "utf8"));
+const report = JSON.parse(readFileSync(args.report, "utf8"));
+
+const errors = [];
+const warnings = [];
+// Warnings from collect.mjs (for example a stale coverage file) need no report change; they print as notes.
+const notes = [...(diff.warnings ?? [])];
+
+const filesByPath = new Map(diff.files.map((f) => [f.path, f]));
+const lineCount = (text) => (text == null ? 0 : text.split("\n").length - (text.endsWith("\n") ? 1 : 0));
+
+function readRepoFile(path) {
+  const full = join(diff.repo.root, path);
+  if (existsSync(full)) return readFileSync(full, "utf8");
+  try {
+    return execFileSync("git", ["show", `HEAD:${path}`], { cwd: diff.repo.root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  } catch {
+    return null;
+  }
+}
+
+function contentFor(path, side = "new") {
+  const f = filesByPath.get(path);
+  if (f) return side === "old" ? f.oldContent : f.newContent ?? f.oldContent;
+  return readRepoFile(path);
+}
+
+function oneOf(value, allowed, where) {
+  if (!allowed.includes(value)) errors.push(`${where}: "${value}" is not one of ${allowed.join(", ")}`);
+}
+
+function checkRef(ref, where, { mustBeInDiff = false } = {}) {
+  if (!ref) return ref;
+  if (typeof ref.path !== "string") {
+    warnings.push(`${where}: ref has no path, dropped`);
+    return undefined;
+  }
+  const inDiff = filesByPath.has(ref.path);
+  if (mustBeInDiff && !inDiff) {
+    warnings.push(`${where}: ${ref.path} is not in the diff, link dropped`);
+    return undefined;
+  }
+  const content = contentFor(ref.path, ref.side);
+  if (content == null) {
+    warnings.push(`${where}: ${ref.path} does not exist, link dropped`);
+    return undefined;
+  }
+  if (ref.line != null && (ref.line < 1 || ref.line > lineCount(content))) {
+    warnings.push(`${where}: line ${ref.line} is outside ${ref.path} (${lineCount(content)} lines), line dropped`);
+    return { ...ref, line: undefined };
+  }
+  return ref;
+}
+
+// ------------------------------------------------------------------ header
+
+oneOf(report.tag, TAGS, "tag");
+for (const t of report.targets ?? []) oneOf(t, TARGETS, "targets");
+if (!report.title) errors.push("title is empty");
+if (report.title?.length > 100) warnings.push(`title is ${report.title.length} characters; aim for under 90`);
+const sentences = (report.summary ?? "").split(/(?<=[.!?])\s+/).filter(Boolean);
+if (sentences.length > 2) warnings.push(`summary has ${sentences.length} sentences; the limit is 2`);
+
+report.beforeMerge = (report.beforeMerge ?? []).map((b, i) => {
+  oneOf(b.kind, BEFORE_MERGE, `beforeMerge[${i}].kind`);
+  return { ...b, ref: checkRef(b.ref, `beforeMerge[${i}]`) };
+});
+
+// ------------------------------------------------------------------ sections
+
+const assigned = new Map();
+report.sections = (report.sections ?? []).map((s, si) => {
+  const where = `sections[${si}] (${s.kind})`;
+  oneOf(s.kind, SECTIONS, `${where}.kind`);
+  oneOf(s.review, REVIEW, `${where}.review`);
+  const highlights = (s.highlights ?? []).map((h, hi) => {
+    oneOf(h.kind, HIGHLIGHTS, `${where}.highlights[${hi}].kind`);
+    return { ...h, ref: checkRef(h.ref, `${where}.highlights[${hi}]`) };
+  });
+  if (highlights.length > 5) warnings.push(`${where}: ${highlights.length} highlights; keep it to 5`);
+
+  const files = (s.files ?? []).filter((f) => {
+    if (!filesByPath.has(f.path)) {
+      warnings.push(`${where}: ${f.path} is not in the diff, removed`);
+      return false;
+    }
+    if (assigned.has(f.path)) {
+      warnings.push(`${where}: ${f.path} is already in section "${assigned.get(f.path)}", removed here`);
+      return false;
+    }
+    assigned.set(f.path, s.kind);
+    return true;
+  }).map((f) => {
+    const diffFile = filesByPath.get(f.path);
+    const lineNotes = (f.lineNotes ?? []).filter((n) => {
+      const content = n.side === "old" ? diffFile.oldContent : diffFile.newContent;
+      const ok = content != null && n.line >= 1 && n.line <= lineCount(content);
+      if (!ok) warnings.push(`${where}: line note at ${f.path}:${n.line} is outside the file, removed`);
+      return ok;
+    });
+    return { ...f, lineNotes };
+  });
+
+  return { ...s, highlights, questions: s.questions ?? [], files };
+});
+
+const unassigned = diff.files.filter((f) => !assigned.has(f.path));
+if (unassigned.length) {
+  warnings.push(`${unassigned.length} changed file(s) not in any section, added to "Other": ${unassigned.map((f) => f.path).join(", ")}`);
+  report.sections.push({
+    kind: "other",
+    review: "skim",
+    reason: "The report did not describe these files.",
+    highlights: [],
+    questions: [],
+    files: unassigned.map((f) => ({ path: f.path, note: "" })),
+  });
+}
+
+// ------------------------------------------------------------------ flows
+
+const contextFiles = {};
+const lastIdentifier = (symbol) => {
+  const tokens = symbol.match(/\/[\w/:{}.-]+|[A-Za-z_$][\w$-]*/g) ?? [];
+  return tokens.at(-1) ?? symbol;
+};
+
+report.flows = (report.flows ?? []).map((flow, fi) => ({
+  ...flow,
+  steps: (flow.steps ?? []).map((step, si) => {
+    const where = `flows[${fi}].steps[${si}] (${step.symbol})`;
+    oneOf(step.status, STEP_STATUS, `${where}.status`);
+    for (const d of step.details ?? []) oneOf(d.kind, DETAIL_KINDS, `${where}.details.kind`);
+    const ref = checkRef(step.ref, where);
+    let verified = false;
+    if (ref) {
+      const content = contentFor(ref.path);
+      verified = content != null && content.includes(lastIdentifier(step.symbol));
+      if (!filesByPath.has(ref.path) && content != null) contextFiles[ref.path] = content;
+      if (step.status !== "existing" && !filesByPath.has(ref.path)) {
+        warnings.push(`${where}: marked "${step.status}" but ${ref.path} did not change`);
+      }
+    }
+    if (!verified) warnings.push(`${where}: could not find "${lastIdentifier(step.symbol)}" in ${ref?.path ?? "(no file)"}; shown as unverified`);
+    return { ...step, ref, verified };
+  }),
+}));
+
+// ------------------------------------------------------------------ output
+
+if (errors.length) {
+  for (const e of errors) console.error(`error: ${e}`);
+  process.exit(1);
+}
+
+const bundle = { diff, report, contextFiles, warnings: [...notes, ...warnings], builtAt: new Date().toISOString() };
+const json = JSON.stringify(bundle).replace(/</g, "\\u003c");
+
+if (args.jsonOut) writeFileSync(args.jsonOut, JSON.stringify(bundle, null, 2));
+
+// Installed skill ships assets/viewer.html; the source checkout uses the Vite build output.
+const viewerPath = args.viewer ?? [join(here, "../assets/viewer.html"), join(here, "../../viewer/dist/index.html")].find(existsSync);
+if (!viewerPath) throw new Error("Viewer not found. Build it with `pnpm build` in viewer/ or pass --viewer.");
+const html = readFileSync(viewerPath, "utf8");
+if (!html.includes("__PR_REPORT_DATA__")) throw new Error(`${viewerPath} has no data placeholder`);
+
+const slug = diff.branch.head.replace(/[^\w.-]+/g, "-");
+const out = resolve(args.out ?? join(diff.repo.gitDir, "pr-report", `${slug}-${diff.branch.headSha.slice(0, 7)}.html`));
+mkdirSync(dirname(out), { recursive: true });
+writeFileSync(out, html.replace("__PR_REPORT_DATA__", () => json));
+
+const state = join(diff.repo.gitDir, "pr-report", "last.json");
+mkdirSync(dirname(state), { recursive: true });
+writeFileSync(state, JSON.stringify({ headSha: diff.branch.headSha, snapshot: diff.branch.snapshot, report: out, builtAt: bundle.builtAt }, null, 2));
+// Keeps the snapshot commit from being garbage-collected; the ref is invisible to branches and tags.
+if (diff.branch.snapshot) {
+  try {
+    execFileSync("git", ["update-ref", "refs/pr-report/last", diff.branch.snapshot], { cwd: diff.repo.root, stdio: "ignore" });
+  } catch {
+    warnings.push("Could not save refs/pr-report/last; --since last may fail after git garbage collection.");
+  }
+}
+
+const steps = report.flows.flatMap((f) => f.steps);
+console.log(`Wrote ${out}`);
+console.log(
+  `${report.sections.length} sections, ${diff.files.length} files, ${steps.filter((st) => st.verified).length}/${steps.length} flow steps verified, ${warnings.length} warnings`,
+);
+console.log("Saved this run for --since last (refs/pr-report/last)");
+for (const n of notes) console.log(`note: ${n}`);
+for (const w of warnings) console.log(`warning: ${w}`);
+
+if (args.open) {
+  const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
+  spawn(opener, [out], { detached: true, stdio: "ignore" }).unref();
+}

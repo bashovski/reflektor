@@ -1,0 +1,11 @@
+{
+  "name": "pr-report",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -C viewer dev",
+    "build": "pnpm -C viewer build && mkdir -p skill/assets && cp viewer/dist/index.html skill/assets/viewer.html",
+    "check": "pnpm -C viewer typecheck && node scripts/check.mjs",
+    "sample": "node scripts/check.mjs --open"
+  }
+}
