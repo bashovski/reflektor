@@ -23,6 +23,7 @@ else
 fi
 mkdir -p "$ROOT/skill/assets"
 cp "$ROOT/viewer/dist/index.html" "$ROOT/skill/assets/viewer.html"
+node "$ROOT/scripts/build-icons.mjs" >/dev/null
 
 mkdir -p "$SKILLS_DIR"
 if [ -L "$TARGET" ]; then

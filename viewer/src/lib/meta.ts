@@ -32,9 +32,11 @@ import {
 import type {
   BaseSource,
   BeforeMergeKind,
+  CommentKind,
   FlowDetailKind,
   FlowStep,
   HighlightKind,
+  ReplyStatus,
   ReviewLevel,
   SectionKind,
   Tag,
@@ -173,4 +175,19 @@ export const BASE_SOURCE: Record<BaseSource, string> = {
   config: "from .pr-report.json",
   "default-branch": "repo default branch",
   guess: "best guess",
+};
+
+export const COMMENT_KINDS: Record<CommentKind, { label: string; className: string }> = {
+  fix: { label: "Fix", className: "bg-blue-500/10 text-blue-700 ring-blue-500/30 dark:text-blue-300" },
+  question: { label: "Question", className: "bg-violet-500/10 text-violet-700 ring-violet-500/30 dark:text-violet-300" },
+  nit: { label: "Nit", className: "bg-zinc-500/10 text-zinc-600 ring-zinc-500/25 dark:text-zinc-400" },
+  accepted: { label: "It's fine", className: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300" },
+  decision: { label: "Answer", className: "bg-violet-500/10 text-violet-700 ring-violet-500/30 dark:text-violet-300" },
+};
+
+export const REPLY_STATUS: Record<ReplyStatus, { label: string; className: string }> = {
+  fixed: { label: "Fixed", className: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300" },
+  answered: { label: "Answered", className: "bg-blue-500/10 text-blue-700 ring-blue-500/30 dark:text-blue-300" },
+  wontfix: { label: "Won't fix", className: "bg-amber-500/10 text-amber-700 ring-amber-500/30 dark:text-amber-300" },
+  noted: { label: "Noted", className: "bg-zinc-500/10 text-zinc-600 ring-zinc-500/25 dark:text-zinc-400" },
 };

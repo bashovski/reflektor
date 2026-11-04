@@ -75,13 +75,13 @@ export const Sidebar = () => {
       {diff.coverage?.percent != null && (
         <a href="#coverage" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
           <FlaskConical className="size-3.5" />
-          Tests run {diff.coverage.percent}% of new lines
+          Tests run {diff.coverage.percent}% of new lines{diff.coverage.sources.some((s) => s.stale) && " (old coverage file)"}
         </a>
       )}
 
       <p className="px-2 text-xs leading-relaxed text-zinc-400">
         <kbd className="font-mono">j</kbd>/<kbd className="font-mono">k</kbd> next file, <kbd className="font-mono">v</kbd> viewed,{" "}
-        <kbd className="font-mono">f</kbd> full file, <kbd className="font-mono">?</kbd> help
+        <kbd className="font-mono">f</kbd> full file, <kbd className="font-mono">?</kbd> settings
       </p>
     </nav>
   );

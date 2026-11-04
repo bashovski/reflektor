@@ -201,8 +201,44 @@ if (args.since) {
 }
 if (args.files) mode = mode === "since" ? "since+files" : "files";
 
-const to = args.uncommitted ? null : "HEAD";
-const range = to ? [from, to] : [from];
+// ------------------------------------------------------------------ snapshot
+// Records exactly what this report shows, uncommitted and untracked files included, as a commit
+// under refs/pr-report/last. `--since last` diffs against it, so changes that were uncommitted
+// at the last report do not show up again once they are committed. Nothing in the working tree,
+// the real index or any branch changes.
+
+function snapshotWorkingTree() {
+  if (!args.uncommitted) return headSha;
+  const tmpIndex = join(gitDir, "pr-report", "snapshot.index");
+  mkdirSync(dirname(tmpIndex), { recursive: true });
+  const realIndex = join(gitDir, "index");
+  if (existsSync(realIndex)) copyFileSync(realIndex, tmpIndex);
+  const env = {
+    ...process.env,
+    GIT_INDEX_FILE: tmpIndex,
+    GIT_AUTHOR_NAME: "pr-report",
+    GIT_AUTHOR_EMAIL: "pr-report@localhost",
+    GIT_COMMITTER_NAME: "pr-report",
+    GIT_COMMITTER_EMAIL: "pr-report@localhost",
+  };
+  try {
+    run("git", ["add", "-A"], repoRoot, { env });
+    const tree = run("git", ["write-tree"], repoRoot, { env }).trim();
+    return run("git", ["commit-tree", tree, "-p", headSha, "-m", "pr-report snapshot"], repoRoot, { env }).trim();
+  } catch {
+    warnings.push("Could not snapshot uncommitted work, so this report covers committed changes only.");
+    return headSha;
+  } finally {
+    rmSync(tmpIndex, { force: true });
+  }
+}
+
+const snapshot = snapshotWorkingTree();
+
+// Compare commit to commit. The snapshot holds uncommitted and untracked files, so they are
+// compared like any other change, including by `--since last`.
+const to = args.uncommitted ? snapshot : "HEAD";
+const range = [from, to];
 
 // ------------------------------------------------------------------ changed files
 
@@ -269,16 +305,11 @@ const changedLines = parseChangedLines(git("diff", "-U0", "--no-color", "-M", ..
 const uncommittedSet = new Set();
 const untracked = [];
 if (args.uncommitted) {
-  for (const p of (tryGit("diff", "--name-only", "HEAD") ?? "").split("\n")) if (p.trim()) uncommittedSet.add(p.trim());
-  for (const p of git("ls-files", "--others", "--exclude-standard").split("\n")) {
-    if (!p.trim()) continue;
-    uncommittedSet.add(p.trim());
-    untracked.push(p.trim());
-  }
+  for (const p of (tryGit("diff", "--name-only", "HEAD", snapshot) ?? "").split("\n")) if (p.trim()) uncommittedSet.add(p.trim());
+  for (const p of git("ls-files", "--others", "--exclude-standard").split("\n")) if (p.trim()) untracked.push(p.trim());
 }
 
 let entries = nameStatus;
-for (const p of untracked) if (!entries.some((e) => e.path === p)) entries.push({ status: "added", oldPath: null, path: p });
 if (args.files) {
   const wanted = new Set(args.files);
   entries = entries.filter((e) => wanted.has(e.path) || wanted.has(e.oldPath));
@@ -294,9 +325,7 @@ function readOld(path) {
   return tryGit("show", `${from}:${path}`);
 }
 function readNew(path) {
-  if (to) return tryGit("show", `${to}:${path}`);
-  const full = join(repoRoot, path);
-  return existsSync(full) ? readFileSync(full, "utf8") : null;
+  return tryGit("show", `${to}:${path}`);
 }
 function looksBinary(text) {
   return text !== null && text.slice(0, 8000).includes("\u0000");
@@ -313,11 +342,6 @@ const files = entries.map((e) => {
   const large = tooLarge(oldContent) || tooLarge(newContent);
   const lines = changedLines.get(e.path) ?? { added: [], removed: [] };
 
-  if (untracked.includes(e.path) && newContent !== null) {
-    const count = newContent.split("\n").length - (newContent.endsWith("\n") ? 1 : 0);
-    stat.additions = count;
-    lines.added = Array.from({ length: count }, (_, i) => i + 1);
-  }
   if (binary || large) {
     oldContent = null;
     newContent = null;
@@ -348,39 +372,6 @@ if (!files.length) {
   process.exit(3);
 }
 
-// ------------------------------------------------------------------ snapshot
-// Records exactly what this report shows, uncommitted and untracked files included, as a commit
-// under refs/pr-report/last. `--since last` diffs against it, so changes that were uncommitted
-// at the last report do not show up again once they are committed. Nothing in the working tree,
-// the real index or any branch changes.
-
-function snapshotWorkingTree() {
-  if (!args.uncommitted) return headSha;
-  const tmpIndex = join(gitDir, "pr-report", "snapshot.index");
-  mkdirSync(dirname(tmpIndex), { recursive: true });
-  const realIndex = join(gitDir, "index");
-  if (existsSync(realIndex)) copyFileSync(realIndex, tmpIndex);
-  const env = {
-    ...process.env,
-    GIT_INDEX_FILE: tmpIndex,
-    GIT_AUTHOR_NAME: "pr-report",
-    GIT_AUTHOR_EMAIL: "pr-report@localhost",
-    GIT_COMMITTER_NAME: "pr-report",
-    GIT_COMMITTER_EMAIL: "pr-report@localhost",
-  };
-  try {
-    run("git", ["add", "-A"], repoRoot, { env });
-    const tree = run("git", ["write-tree"], repoRoot, { env }).trim();
-    return run("git", ["commit-tree", tree, "-p", headSha, "-m", "pr-report snapshot"], repoRoot, { env }).trim();
-  } catch {
-    warnings.push("Could not snapshot uncommitted work; --since last will compare with the last commit instead.");
-    return headSha;
-  } finally {
-    rmSync(tmpIndex, { force: true });
-  }
-}
-
-const snapshot = snapshotWorkingTree();
 
 // ------------------------------------------------------------------ commits
 
@@ -582,7 +573,7 @@ if (coverage) {
 }
 console.log(config ? "Config: .pr-report.json found" : "Config: no .pr-report.json");
 console.log("");
-console.log(`Read the changes with: git diff ${to ? `${from} ${to}` : from} -- <path>   (untracked files: read them directly)`);
+console.log(`Read the changes with: git diff ${from} ${to} -- <path>   (includes uncommitted and untracked files)`);
 console.log("Files (status, lines, target from config, flags):");
 const code = { added: "A", modified: "M", deleted: "D", renamed: "R" };
 for (const f of files) {

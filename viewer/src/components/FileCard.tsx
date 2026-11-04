@@ -1,14 +1,29 @@
 import type { FileContents } from "@pierre/diffs";
 import { type DiffLineAnnotation, type FileDiffOptions, MultiFileDiff, type SelectedLineRange } from "@pierre/diffs/react";
-import { ChevronRight, FlaskConical, Maximize2, MessageSquareText } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
-import type { DiffFile, SectionFile } from "../../../skill/schema/types";
+import { ChevronRight, FlaskConical, Maximize2, MessageSquarePlus, MessageSquareText } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import type { CommentTarget, DiffFile, SectionFile } from "../../../skill/schema/types";
 import { FILE_STATUS } from "../lib/meta";
+import { useReview } from "../lib/review";
 import { fileDomId, useReport } from "../lib/state";
+import { CommentItem, Composer, TargetComments } from "./Comments";
 import { RichText } from "./RichText";
-import { cx, DiffBar, IconButton, LocCount, Pill } from "./ui";
+import { cx, DiffBar, FileIcon, IconButton, LocCount, Pill } from "./ui";
 
-export type NoteMeta = { text: string };
+type LineTarget = Extract<CommentTarget, { type: "line" }>;
+
+// What a line annotation shows: Claude's note, a review comment, or the open comment box.
+export type AnnotationMeta = { type: "note"; text: string } | { type: "comment"; id: string } | { type: "composer"; target: LineTarget };
+
+const LineComment = ({ id }: { id: string }) => {
+  const { comments } = useReview();
+  const comment = comments.find((c) => c.id === id);
+  return comment ? (
+    <div className="mr-3 ml-12 max-w-2xl">
+      <CommentItem comment={comment} />
+    </div>
+  ) : null;
+};
 
 export const DIFF_THEME = { dark: "pierre-dark", light: "pierre-light" } as const;
 
@@ -74,15 +89,36 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
 
   const input = useMemo(() => toDiffInput(file), [file]);
 
-  const annotations = useMemo<DiffLineAnnotation<NoteMeta>[]>(
-    () =>
-      (sectionFile.lineNotes ?? []).map((n) => ({
-        side: n.side === "old" ? "deletions" : "additions",
-        lineNumber: n.line,
-        metadata: { text: n.text },
-      })),
-    [sectionFile],
-  );
+  const { comments, composer, openComposer, editable } = useReview();
+  const fileTarget = useMemo<CommentTarget>(() => ({ type: "file", path }), [path]);
+
+  const annotations = useMemo<DiffLineAnnotation<AnnotationMeta>[]>(() => {
+    const list: DiffLineAnnotation<AnnotationMeta>[] = (sectionFile.lineNotes ?? []).map((n) => ({
+      side: n.side === "old" ? "deletions" : "additions",
+      lineNumber: n.line,
+      metadata: { type: "note", text: n.text },
+    }));
+    for (const c of comments) {
+      if (c.target.type !== "line" || c.target.path !== path) continue;
+      list.push({ side: c.target.side === "old" ? "deletions" : "additions", lineNumber: c.target.end, metadata: { type: "comment", id: c.id } });
+    }
+    if (composer?.target.type === "line" && composer.target.path === path && !composer.editingId) {
+      const t = composer.target;
+      list.push({ side: t.side === "old" ? "deletions" : "additions", lineNumber: t.end, metadata: { type: "composer", target: t } });
+    }
+    return list;
+  }, [sectionFile, comments, composer, path]);
+
+  // A ref keeps the diff options stable while the click handler sees fresh state.
+  const onGutter = useRef<(range: SelectedLineRange) => void>(() => {});
+  onGutter.current = (range) => {
+    const side = range.side === "deletions" ? "old" : "new";
+    const start = Math.min(range.start, range.end);
+    const end = Math.max(range.start, range.end);
+    const content = (side === "old" ? file.oldContent : file.newContent) ?? "";
+    const code = content.split("\n").slice(start - 1, end).join("\n");
+    openComposer({ type: "line", path, side, start, end, code });
+  };
 
   const uncoveredCss = useMemo(() => {
     if (!coverage?.uncovered.length) return "";
@@ -90,7 +126,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
     return `${selectors} { box-shadow: inset -3px 0 0 rgb(239 68 68 / 0.85); }`;
   }, [coverage]);
 
-  const options = useMemo<FileDiffOptions<NoteMeta, undefined>>(
+  const options = useMemo<FileDiffOptions<AnnotationMeta, undefined>>(
     () => ({
       theme: DIFF_THEME,
       themeType: resolvedTheme,
@@ -100,8 +136,10 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
       expansionLineCount: 20,
       lineDiffType: "word-alt",
       unsafeCSS: uncoveredCss,
+      enableGutterUtility: editable,
+      onGutterUtilityClick: (range: SelectedLineRange) => onGutter.current(range),
     }),
-    [resolvedTheme, diffStyle, uncoveredCss],
+    [resolvedTheme, diffStyle, uncoveredCss, editable],
   );
 
   const focused = focus?.path === path && focus.line ? focus : null;
@@ -112,7 +150,16 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
     return { start: focused.line, end: focused.line, side };
   }, [focused, selected]);
 
-  const renderAnnotation = useCallback((a: DiffLineAnnotation<NoteMeta>) => <LineNoteBubble text={a.metadata.text} />, []);
+  const renderAnnotation = useCallback((a: DiffLineAnnotation<AnnotationMeta>) => {
+    const m = a.metadata;
+    if (m.type === "note") return <LineNoteBubble text={m.text} />;
+    if (m.type === "comment") return <LineComment id={m.id} />;
+    return (
+      <div className="mr-3 ml-12 max-w-2xl">
+        <Composer target={m.target} />
+      </div>
+    );
+  }, []);
 
   const slash = path.lastIndexOf("/");
   const dir = slash >= 0 ? path.slice(0, slash + 1) : "";
@@ -130,6 +177,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
           <ChevronRight className={cx("size-4 transition-transform", open && "rotate-90")} />
         </button>
         <span className={cx("w-14 shrink-0 text-[11px] font-medium", status.className)}>{status.label}</span>
+        <FileIcon path={path} />
         <button type="button" onClick={() => setFileOpen(path, !open)} className="flex min-w-0 text-left font-mono text-[12.5px]" title={path}>
           <span className="truncate text-zinc-500">{dir}</span>
           <span className="shrink-0 font-semibold">{name}</span>
@@ -148,6 +196,17 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
             <input type="checkbox" checked={viewed} onChange={() => toggleViewed(path)} className="size-3.5 accent-blue-600" />
             Viewed
           </label>
+          {editable && (
+            <IconButton
+              title="Comment on the whole file. For one line, hover a line number and click +."
+              onClick={() => {
+                setFileOpen(path, true);
+                openComposer(fileTarget);
+              }}
+            >
+              <MessageSquarePlus className="size-3.5" />
+            </IconButton>
+          )}
           <IconButton title="Show the full file (f)" onClick={() => openModal({ path })} disabled={!input}>
             <Maximize2 className="size-3.5" />
           </IconButton>
@@ -162,6 +221,9 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
               <RichText text={sectionFile.note} className="block max-w-3xl text-[13.5px] leading-relaxed text-zinc-700 dark:text-zinc-300" />
             </div>
           )}
+          <div className="px-3 empty:hidden [&>*]:mb-2">
+            <TargetComments target={fileTarget} placeholder="A comment about this whole file" />
+          </div>
           {coverage && coverage.uncovered.length > 0 && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[var(--border)] px-4 py-2 text-xs text-zinc-600 dark:text-zinc-400">
               <span className="inline-flex items-center gap-1.5 font-medium text-red-600 dark:text-red-400">
@@ -186,7 +248,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
           {!input ? (
             <p className="px-4 py-6 text-sm text-zinc-500">{file.binary ? "Binary file. Not shown." : "File is too large to show here."}</p>
           ) : (
-            <MultiFileDiff<NoteMeta>
+            <MultiFileDiff<AnnotationMeta>
               {...input}
               options={options}
               lineAnnotations={annotations}

@@ -1,8 +1,8 @@
 ---
 name: pr-report
-description: Builds a visual HTML review report for the current branch or PR against its base branch, with a plain-English title and summary, review order, highlights, request flows, GitHub-style diffs with notes, and test coverage of new lines. Use when the user asks for a PR report, a review report, a summary of branch changes for review, or wants to review changes before opening a PR. Works with any language or stack.
+description: Builds a visual HTML review report for the current branch or PR against its base branch, with a plain-English title and summary, review order, highlights, request flows, GitHub-style diffs with notes, and test coverage of new lines. The user can comment in the report and send the comments back for fixing. Use when the user asks for a PR report, a review report, a summary of branch changes for review, or wants to review changes before opening a PR. Works with any language or stack.
 argument-hint: "[base-branch] [--since last] [--session]"
-allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *)
+allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/serve.mjs *)
 ---
 
 # PR report
@@ -113,6 +113,7 @@ Write report.json to the **Report file** path that collect printed. Its shape is
   - `decision`: why this approach, only when it is not obvious
   - `gap`: unhandled cases, missing pieces, leftover TODOs
   - `affected`: unchanged code that this change affects
+- `fix`: give every `risk` and `gap` a suggested fix: the change you would make, in one sentence or a short list. The page shows it next to a "Fix this" button, so a click means "do exactly this".
 - `questions`: decisions the author must make before opening the PR. Leave empty when there are none.
 - `files`: one entry per file. `note` is 1 to 4 short sentences or a short list: what changed and why. Add `lineNotes` (at most 3 per file) only for lines a reader could misread or that carry a risk. Generated files get a one-line note.
 
@@ -122,26 +123,62 @@ Write report.json to the **Report file** path that collect printed. Its shape is
 - `steps`: in call order, from the trigger to storage or the final side effect. Include existing steps where the new code plugs in, with status `existing`.
 - `symbol`: the real function, component, table or route, like `BookService.createBook` or `POST /books`. The build looks for the last word of it (`createBook`, `/books`) anywhere in the referenced file and marks the step "unverified" when it is missing.
 - Include middleware or error handlers only when the change relies on them.
-- `details`: the checks (validation, auth), rules (business logic), effects (writes, events, cache) and errors (wrong status codes, races) at that step.
+- `details`: the checks (validation, auth), rules (business logic), effects (writes, events, cache) and errors (wrong status codes, races) at that step. Give every `error` detail a `fix`, like risks.
 
 **testing.gaps:** behavior no test checks, most important first, at most 5. When collect printed per-file coverage (tested lines and untested line numbers), use it.
 
 Line numbers refer to the new version of a file. Use `"side": "old"` only for deleted lines.
 
-## 6. Build and open
+## 6. Build
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/build.mjs --diff <diff file> --report <report file> --open
+node ${CLAUDE_SKILL_DIR}/scripts/build.mjs --diff <diff file> --report <report file>
 ```
 
-It writes `<branch>-<sha>.html` next to the report file, records the run for `--since last`, and opens the file. Fix every `warning:` line by editing report.json and building again, at most two rounds. Mention anything left. `note:` lines come from collect (for example a stale coverage file); they need no report change, but tell the user when they matter.
+It writes `<branch>-<sha>.html` next to the report file and records the run for `--since last`. Fix every `warning:` line by editing report.json and building again, at most two rounds. Mention anything left. `note:` lines come from collect (for example a stale coverage file); they need no report change, but tell the user when they matter.
 
-Then tell the user, in a few lines: the file path, the title, how many files are must-read, and the top one or two risks. Do not paste the report into the chat.
+## 7. Open it for review
+
+Start the review server as a background process. In Claude Code, use the Bash tool with `run_in_background`:
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/serve.mjs --report <html file> --open
+```
+
+It opens the report in the browser. Then tell the user, in a few lines:
+
+- the title, how many files are must-read, and the top one or two risks
+- that they can comment: hover a line number and click +, use "Fix this" or "It's fine" on problems, answer the questions, then click "Send to Claude"
+
+Do not paste the report into the chat. End your turn and do not poll: the process exits when the user sends the review, and that wakes you. Its output tells you what happened:
+
+- `Review submitted: <file>`: go to the fix loop with that file.
+- `No comments: the reviewer is happy with this round.`: tell the user the review is done and the branch is ready for a PR.
+- `No review was sent within ...`: do nothing unless the user asks.
+
+If you cannot run a background process, run build.mjs with `--open` instead. The page then shows "Copy for Claude", and the user pastes the comments into the chat.
+
+## 8. Fix loop
+
+1. **Read the review file.** Its shape is `Review` in schema/types.ts. Each comment's `target` says what it is about: a line range (with the code), a file, a highlight (with its suggested fix), a question, a flow problem, a before-merge item, or the whole report.
+2. **Work out the kind** of every comment that has none:
+   - `question`: asks why, what or whether, or starts with `q:`. Answer it; no code change.
+   - `fix`: asks for a change.
+   - `nit`: starts with `nit:`, or is optional or cosmetic. Fix it if it is cheap.
+   Split a comment that mixes kinds into separate plan items. Kinds set by buttons are final: `fix` with empty text means "do the suggested fix", `accepted` means the reviewer accepts the risk (no change, and do not flag it again in later reports), `decision` is the reviewer's answer to a report question (apply it).
+3. **Show a numbered plan:** where, the kind you read, and what you will do. Wait for the user's OK unless they already told you to go ahead. They may correct a kind or an item.
+4. **Make the changes.** If you think a requested fix is wrong, do not make it; explain why in the reply.
+5. **Rebuild for the next round:** run collect.mjs with `--since last`, then write a new report.json about these changes only. Add `review: { round, replies }`: `round` is the round you answered, and every comment gets one reply:
+   - `fixed`: what you changed, with a `ref` to the new code
+   - `answered`: the answer
+   - `wontfix`: the reason
+   - `noted`: for `accepted` comments and nits you skipped
+6. **Build and open it again** (steps 6 and 7). Repeat until the user sends a review with no comments.
 
 ## Follow-ups
 
 - **Wording or grouping changes:** edit report.json and run build.mjs again. No need to collect again.
-- **After code changes:** run collect.mjs again (with `--since last` when the user wants only the new changes), update report.json, build.
+- **After code changes:** run collect.mjs again (with `--since last` when the user wants only the new changes), update report.json, build, and open it for review again.
 - **"Viewer not found" from build.mjs:** tell the user to run `install.sh` in the pr-report repo.
 
 ## Repo config (optional)

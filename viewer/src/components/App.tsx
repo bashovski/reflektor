@@ -1,52 +1,22 @@
-import { TriangleAlert, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { TriangleAlert } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { Bundle } from "../../../skill/schema/types";
+import { ReviewProvider, useReview } from "../lib/review";
 import { ReportProvider, useReport } from "../lib/state";
 import { BeforeMerge } from "./BeforeMerge";
 import { Coverage } from "./Coverage";
 import { FileModal } from "./FileModal";
 import { Flows } from "./Flows";
 import { Hero, TopBar } from "./Header";
+import { PreviousReview } from "./PreviousReview";
+import { ReviewBar } from "./ReviewBar";
 import { Sections } from "./Sections";
+import { SettingsDialog } from "./Settings";
 import { Sidebar } from "./Sidebar";
-
-const SHORTCUTS = [
-  ["j", "Next file"],
-  ["k", "Previous file"],
-  ["v", "Mark the current file as viewed"],
-  ["o", "Open or close the current file"],
-  ["f", "Show the current file in full"],
-  ["?", "Show this help"],
-] as const;
-
-const HelpDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    if (open && !ref.current?.open) ref.current?.showModal();
-    if (!open && ref.current?.open) ref.current.close();
-  }, [open]);
-  return (
-    <dialog ref={ref} onClose={onClose} className="surface m-auto w-[min(380px,92vw)] rounded-xl border p-5 text-[var(--text)] shadow-2xl">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-semibold">Keyboard shortcuts</h2>
-        <button type="button" onClick={onClose} className="rounded p-1 text-zinc-500 hover:bg-zinc-500/10">
-          <X className="size-4" />
-        </button>
-      </div>
-      <ul className="space-y-2 text-sm">
-        {SHORTCUTS.map(([key, label]) => (
-          <li key={key} className="flex items-center gap-3">
-            <kbd className="inline-flex min-w-6 justify-center rounded border border-[var(--border)] bg-zinc-500/10 px-1.5 font-mono text-xs">{key}</kbd>
-            {label}
-          </li>
-        ))}
-      </ul>
-    </dialog>
-  );
-};
 
 const useShortcuts = (onHelp: () => void) => {
   const { orderedFiles, current, setCurrent, toggleViewed, isFileOpen, setFileOpen, jumpTo, openModal, modal } = useReport();
+  const { openComposer, editable } = useReview();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -67,13 +37,17 @@ const useShortcuts = (onHelp: () => void) => {
         go(index + 1);
       } else if (e.key === "o" && current) setFileOpen(current, !isFileOpen(current));
       else if (e.key === "f" && current) openModal({ path: current });
+      else if (e.key === "c" && current && editable) {
+        setFileOpen(current, true);
+        openComposer({ type: "file", path: current });
+      }
       else if (e.key === "?") onHelp();
       else return;
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [orderedFiles, current, setCurrent, toggleViewed, isFileOpen, setFileOpen, jumpTo, openModal, modal, onHelp]);
+  }, [orderedFiles, current, setCurrent, toggleViewed, isFileOpen, setFileOpen, jumpTo, openModal, modal, onHelp, openComposer, editable]);
 };
 
 const Warnings = () => {
@@ -95,8 +69,8 @@ const Warnings = () => {
 };
 
 const Layout = () => {
-  const [help, setHelp] = useState(false);
-  useShortcuts(() => setHelp(true));
+  const [settings, setSettings] = useState(false);
+  useShortcuts(() => setSettings(true));
   const { bundle } = useReport();
 
   useEffect(() => {
@@ -105,32 +79,36 @@ const Layout = () => {
 
   return (
     <>
-      <TopBar onHelp={() => setHelp(true)} />
+      <TopBar onSettings={() => setSettings(true)} />
       <div className="mx-auto grid max-w-[1440px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="hidden lg:block">
           <Sidebar />
         </aside>
         <main className="min-w-0 space-y-10">
           <Hero />
+          <PreviousReview />
           <BeforeMerge />
           <Flows />
           <Sections />
           <Coverage />
           <Warnings />
-          <footer className="pb-10 text-xs text-zinc-400">
+          <footer className="pb-24 text-xs text-zinc-400">
             Code comes straight from git. Notes, highlights and flows were written by Claude and may be wrong. Built{" "}
             {new Date(bundle.builtAt).toLocaleString()}.
           </footer>
         </main>
       </div>
+      <ReviewBar />
       <FileModal />
-      <HelpDialog open={help} onClose={() => setHelp(false)} />
+      <SettingsDialog open={settings} onClose={() => setSettings(false)} />
     </>
   );
 };
 
 export const App = ({ bundle }: { bundle: Bundle }) => (
   <ReportProvider bundle={bundle}>
-    <Layout />
+    <ReviewProvider bundle={bundle}>
+      <Layout />
+    </ReviewProvider>
   </ReportProvider>
 );

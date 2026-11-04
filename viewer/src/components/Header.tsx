@@ -1,38 +1,10 @@
-import { Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Keyboard, Monitor, Moon, Sun } from "lucide-react";
-import type { ReactNode } from "react";
+import { Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Settings } from "lucide-react";
 import { BASE_SOURCE, REVIEW, TAGS, TARGETS } from "../lib/meta";
-import { type DiffStyle, type ThemeChoice, useReport } from "../lib/state";
+import { useReport } from "../lib/state";
 import { cx, Dot, LocCount, Pill } from "./ui";
 
-const Segmented = <T extends string>({
-  value,
-  onChange,
-  options,
-}: {
-  value: T;
-  onChange: (v: T) => void;
-  options: { value: T; label: ReactNode; title: string }[];
-}) => (
-  <div className="inline-flex rounded-lg bg-zinc-500/10 p-0.5">
-    {options.map((o) => (
-      <button
-        key={o.value}
-        type="button"
-        title={o.title}
-        onClick={() => onChange(o.value)}
-        className={cx(
-          "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium",
-          value === o.value ? "surface text-zinc-900 shadow-sm dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200",
-        )}
-      >
-        {o.label}
-      </button>
-    ))}
-  </div>
-);
-
-export const TopBar = ({ onHelp }: { onHelp: () => void }) => {
-  const { bundle, theme, setTheme, diffStyle, setDiffStyle } = useReport();
+export const TopBar = ({ onSettings }: { onSettings: () => void }) => {
+  const { bundle } = useReport();
   const { repo, branch } = bundle.diff;
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg)]/85 backdrop-blur">
@@ -48,33 +20,14 @@ export const TopBar = ({ onHelp }: { onHelp: () => void }) => {
           <span className="text-zinc-400">→</span>
           {branch.base}
         </span>
-        <div className="ml-auto flex items-center gap-2">
-          <Segmented<DiffStyle>
-            value={diffStyle}
-            onChange={setDiffStyle}
-            options={[
-              { value: "unified", label: "Unified", title: "One column" },
-              { value: "split", label: "Split", title: "Old and new side by side" },
-            ]}
-          />
-          <Segmented<ThemeChoice>
-            value={theme}
-            onChange={setTheme}
-            options={[
-              { value: "system", label: <Monitor className="size-3.5" />, title: "Follow system" },
-              { value: "light", label: <Sun className="size-3.5" />, title: "Light" },
-              { value: "dark", label: <Moon className="size-3.5" />, title: "Dark" },
-            ]}
-          />
-          <button
-            type="button"
-            onClick={onHelp}
-            title="Keyboard shortcuts (?)"
-            className="hidden rounded-md p-1.5 text-zinc-500 hover:bg-zinc-500/10 sm:inline-flex"
-          >
-            <Keyboard className="size-4" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onSettings}
+          title="Settings and keyboard shortcuts (?)"
+          className="ml-auto inline-flex rounded-md p-2 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100"
+        >
+          <Settings className="size-4" />
+        </button>
       </div>
     </header>
   );
@@ -171,6 +124,7 @@ export const Hero = () => {
           <a href="#coverage" className="inline-flex items-center gap-1.5 hover:underline">
             <FlaskConical className="size-4 text-zinc-400" />
             Tests run {coverage.percent}% of new lines
+            {coverage.sources.some((s) => s.stale) && <span className="text-xs text-amber-600 dark:text-amber-400">(coverage file is older than the changes)</span>}
           </a>
         )}
         <span className="ml-auto text-xs text-zinc-500">

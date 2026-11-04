@@ -1,4 +1,5 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { FileText } from "lucide-react";
+import { type ButtonHTMLAttributes, type ReactNode, useMemo } from "react";
 import type { Ref } from "../../../skill/schema/types";
 import { useReport } from "../lib/state";
 
@@ -36,6 +37,15 @@ export const DiffBar = ({ additions, deletions }: { additions: number; deletions
       ))}
     </span>
   );
+};
+
+// File type icon from the report's embedded icon set. Loaded as an <img>, so the SVG cannot run anything.
+export const FileIcon = ({ path, className }: { path: string; className?: string }) => {
+  const { bundle } = useReport();
+  const svg = bundle.fileIcons ? bundle.fileIcons.icons[bundle.fileIcons.byPath[path]] : undefined;
+  const src = useMemo(() => (svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` : null), [svg]);
+  if (!src) return <FileText className={cx("size-4 shrink-0 text-zinc-400", className)} aria-hidden />;
+  return <img src={src} alt="" aria-hidden className={cx("size-4 shrink-0", className)} />;
 };
 
 export const shortPath = (path: string, keep = 2) => {

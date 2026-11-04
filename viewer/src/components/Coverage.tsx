@@ -1,7 +1,7 @@
 import { CircleDashed, FlaskConical } from "lucide-react";
 import { useReport } from "../lib/state";
 import { RichText } from "./RichText";
-import { Card, cx, SectionTitle, shortPath } from "./ui";
+import { Card, cx, FileIcon, SectionTitle, shortPath } from "./ui";
 
 const tone = (pct: number) => (pct === 100 ? "bg-emerald-500" : pct >= 60 ? "bg-amber-500" : "bg-red-500");
 
@@ -41,8 +41,9 @@ export const Coverage = () => {
                     onClick={() => jumpTo({ path: r.path, line: r.first })}
                     className="grid w-full grid-cols-[minmax(0,1fr)_80px_44px] items-center gap-3 rounded-md px-1.5 py-1 text-left hover:bg-zinc-500/10"
                   >
-                    <span className="truncate font-mono text-xs" title={r.path}>
-                      {shortPath(r.path, 3)}
+                    <span className="flex min-w-0 items-center gap-2" title={r.path}>
+                      <FileIcon path={r.path} className="size-3.5" />
+                      <span className="truncate font-mono text-xs">{shortPath(r.path, 3)}</span>
                     </span>
                     <span className="h-1.5 overflow-hidden rounded-full bg-zinc-500/15">
                       <span className={cx("block h-full rounded-full", tone(r.pct))} style={{ width: `${r.pct}%` }} />

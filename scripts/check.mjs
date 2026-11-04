@@ -39,6 +39,10 @@ try {
   ]);
   for (const line of built.split("\n").filter((l) => l.startsWith("warning:"))) fail(line);
 
+  const bundle = JSON.parse(readFileSync(join(root, "samples/bundle.json"), "utf8"));
+  const missingIcons = bundle.diff.files.filter((f) => !bundle.fileIcons?.byPath[f.path]);
+  if (missingIcons.length) fail(`no file icon for ${missingIcons.length} files (run node scripts/build-icons.mjs)`);
+
   const page = readFileSync(html, "utf8");
   if (page.includes("__PR_REPORT_DATA__")) fail("report data was not injected into the viewer");
   if (statSync(html).size < 1_000_000) fail("the report is too small; build.mjs probably used the unbuilt viewer");

@@ -8,4 +8,5 @@ skill/assets/
 # Made by scripts/check.mjs
 samples/bundle.json
 samples/*.html
+samples/review-*.json
 fixtures/.books-repo/

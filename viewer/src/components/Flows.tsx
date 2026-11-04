@@ -1,6 +1,7 @@
 import { ChevronRight, CircleHelp, Route } from "lucide-react";
 import { useState } from "react";
-import type { Bundle } from "../../../skill/schema/types";
+import type { Bundle, CommentTarget } from "../../../skill/schema/types";
+import { QuickActions, SuggestedFix, TargetComments } from "./Comments";
 import { FLOW_DETAILS, STEP_STATUS } from "../lib/meta";
 import { useReport } from "../lib/state";
 import { RichText } from "./RichText";
@@ -8,8 +9,8 @@ import { Card, cx, Pill, RefLink, SectionTitle } from "./ui";
 
 type FlowData = Bundle["report"]["flows"][number];
 
-const FlowTrace = ({ flow, defaultOpen }: { flow: FlowData; defaultOpen: boolean }) => {
-  const [open, setOpen] = useState(defaultOpen);
+const FlowTrace = ({ flow }: { flow: FlowData }) => {
+  const [open, setOpen] = useState(false);
   const newCount = flow.steps.filter((s) => s.status !== "existing").length;
 
   return (
@@ -55,10 +56,16 @@ const FlowTrace = ({ flow, defaultOpen }: { flow: FlowData; defaultOpen: boolean
                       {step.details.map((d, di) => {
                         const meta = FLOW_DETAILS[d.kind];
                         const Icon = meta.icon;
+                        const target: CommentTarget = { type: "flow-detail", flow: flow.id, step: i, detail: di, symbol: step.symbol, text: d.text, fix: d.fix };
                         return (
-                          <li key={di} className="flex items-start gap-2 text-[13px] leading-snug">
+                          <li key={di} className="group/row flex items-start gap-2 text-[13px] leading-snug">
                             <Icon className={cx("mt-[2px] size-3.5 shrink-0", meta.className)} />
-                            <RichText text={d.text} className={cx("block min-w-0", d.kind === "error" ? "text-red-700 dark:text-red-300" : "text-zinc-600 dark:text-zinc-400")} />
+                            <div className="min-w-0 flex-1">
+                              <RichText text={d.text} className={cx("block", d.kind === "error" ? "text-red-700 dark:text-red-300" : "text-zinc-600 dark:text-zinc-400")} />
+                              {d.fix && <SuggestedFix text={d.fix} className="mt-1" />}
+                              <QuickActions target={target} variant={d.kind === "error" ? "problem" : "info"} />
+                              <TargetComments target={target} />
+                            </div>
                           </li>
                         );
                       })}
@@ -98,8 +105,8 @@ export const Flows = () => {
         </span>
       </SectionTitle>
       <div className="space-y-3">
-        {flows.map((flow, i) => (
-          <FlowTrace key={flow.id} flow={flow} defaultOpen={i === 0} />
+        {flows.map((flow) => (
+          <FlowTrace key={flow.id} flow={flow} />
         ))}
       </div>
     </div>

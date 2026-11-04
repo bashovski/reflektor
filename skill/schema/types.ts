@@ -103,7 +103,14 @@ export type HighlightKind = "behavior" | "risk" | "contract" | "decision" | "gap
 // Points at a line. `side: "old"` means the line number is in the old version of the file.
 export type Ref = { path: string; line?: number; side?: "new" | "old" };
 
-export type Highlight = { kind: HighlightKind; text: string; ref?: Ref };
+export type Highlight = {
+  kind: HighlightKind;
+  text: string;
+  ref?: Ref;
+  // Suggested fix, one sentence or a short list. Give one for every risk and gap.
+  // The page shows it with a "Fix this" button, so a click means "do exactly this".
+  fix?: string;
+};
 
 export type LineNote = { line: number; side?: "new" | "old"; text: string };
 
@@ -140,7 +147,8 @@ export type FlowStep = {
   symbol: string;
   ref?: Ref;
   status: StepStatus;
-  details?: { kind: FlowDetailKind; text: string }[];
+  // `fix` works like Highlight.fix; give one for every "error" detail.
+  details?: { kind: FlowDetailKind; text: string; fix?: string }[];
 };
 
 export type Flow = {
@@ -162,7 +170,48 @@ export type Report = {
   flows: Flow[];
   sections: Section[];
   testing?: { gaps: string[] };
+  // Answers to the previous review round. Add one reply per comment in that round's review file.
+  review?: { round: number; replies: Reply[] };
 };
+
+// ------------------------------------------------------------------ review (comments from the report page)
+// The page saves comments as you type. "Send to Claude" writes review-<round>.json next to report.json.
+
+export type CommentKind = "fix" | "question" | "nit" | "accepted" | "decision";
+
+export type CommentTarget =
+  | { type: "line"; path: string; side: "new" | "old"; start: number; end: number; code: string }
+  | { type: "file"; path: string }
+  | { type: "highlight"; section: SectionKind; index: number; kind: HighlightKind; text: string; fix?: string }
+  | { type: "question"; section: SectionKind; index: number; text: string }
+  | { type: "flow-detail"; flow: string; step: number; detail: number; symbol: string; text: string; fix?: string }
+  | { type: "before-merge"; index: number; text: string }
+  | { type: "report" };
+
+export type ReviewComment = {
+  id: string;
+  target: CommentTarget;
+  // What the reviewer typed. Empty for a one-click "Fix this" (do the suggested fix) or "It's fine".
+  text: string;
+  // Set when a button decided it ("Fix this", "It's fine", an answer to a question). Otherwise Claude infers it.
+  kind?: CommentKind;
+  createdAt: string;
+};
+
+export type Review = {
+  version: 1;
+  round: number;
+  branch: string;
+  headSha: string;
+  snapshot: string;
+  submittedAt: string;
+  comments: ReviewComment[];
+};
+
+export type ReplyStatus = "fixed" | "answered" | "wontfix" | "noted";
+
+// Claude's answer to one comment, shown at the top of the next report.
+export type Reply = { commentId: string; status: ReplyStatus; text: string; ref?: Ref };
 
 // ------------------------------------------------------------------ bundle (viewer input)
 
@@ -173,6 +222,12 @@ export type Bundle = {
   report: Omit<Report, "flows"> & { flows: (Omit<Flow, "steps"> & { steps: FlowStepChecked[] })[] };
   // Contents of files referenced by flows that did not change (for "open file").
   contextFiles: Record<string, string>;
+  // The review round that report.review answers, so the page can show each comment next to its reply.
+  previousReview: Review | null;
+  // Next review round number; the page stamps it on the comments it saves.
+  round: number;
+  // File type icons (from atom-material-icons): SVG per icon key, and the key for each file path. Null when not installed.
+  fileIcons: { icons: Record<string, string>; byPath: Record<string, string> } | null;
   warnings: string[];
   builtAt: string;
 };

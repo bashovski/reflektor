@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useReport } from "../lib/state";
 import { DIFF_THEME, toDiffInput } from "./FileCard";
-import { cx, LocCount } from "./ui";
+import { cx, FileIcon, LocCount } from "./ui";
 
 type Mode = "changes" | "file";
 
@@ -53,6 +53,7 @@ export const FileModal = () => {
       {modal && (
         <div className="flex h-full flex-col">
           <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-2.5">
+            <FileIcon path={modal.path} />
             <span className="min-w-0 truncate font-mono text-sm font-medium">{modal.path}</span>
             {diffFile && <LocCount additions={diffFile.additions} deletions={diffFile.deletions} />}
             {!diffFile && <span className="text-xs text-zinc-500">Not changed in this branch</span>}

@@ -1,10 +1,28 @@
-import { ChevronRight, CircleHelp, Layers } from "lucide-react";
-import type { Section } from "../../../skill/schema/types";
+import { ChevronRight, CircleHelp, Layers, MessageSquareReply } from "lucide-react";
+import type { CommentTarget, Section } from "../../../skill/schema/types";
 import { HIGHLIGHTS, REVIEW, SECTIONS } from "../lib/meta";
+import { targetKey, useReview } from "../lib/review";
 import { sectionDomId, useReport } from "../lib/state";
+import { commentButtonClass, QuickActions, SuggestedFix, TargetComments } from "./Comments";
 import { FileCard } from "./FileCard";
 import { RichText } from "./RichText";
 import { cx, LocCount, Pill, RefLink, SectionTitle } from "./ui";
+
+const QuestionItem = ({ target, id }: { target: Extract<CommentTarget, { type: "question" }>; id: string }) => {
+  const { editable, commentsFor, openComposer, composer } = useReview();
+  const answered = commentsFor(target).length > 0 || composer?.key === targetKey(target);
+  return (
+    <li id={id}>
+      <RichText text={target.text} />
+      {editable && !answered && (
+        <button type="button" className={cx(commentButtonClass, "ml-1")} onClick={() => openComposer(target, { kind: "decision" })}>
+          <MessageSquareReply className="size-3.5" /> Answer
+        </button>
+      )}
+      <TargetComments target={target} placeholder="Your answer. Claude applies it as a decision." />
+    </li>
+  );
+};
 
 const SectionCard = ({ section, index }: { section: Section; index: number }) => {
   const { filesByPath, isSectionOpen, setSectionOpen, isViewed } = useReport();
@@ -50,13 +68,19 @@ const SectionCard = ({ section, index }: { section: Section; index: number }) =>
               {section.highlights.map((h, i) => {
                 const hm = HIGHLIGHTS[h.kind];
                 const HIcon = hm.icon;
+                const target: CommentTarget = { type: "highlight", section: section.kind, index: i, kind: h.kind, text: h.text, fix: h.fix };
                 return (
-                  <li key={i} className="flex items-start gap-3 rounded-lg px-2 py-1.5 hover:bg-zinc-500/[0.04]">
+                  <li key={i} id={`hl-${index}-${i}`} className="group/row flex items-start gap-3 rounded-lg px-2 py-1.5 hover:bg-zinc-500/[0.04]">
                     <span className={cx("mt-[1px] inline-flex w-[86px] shrink-0 items-center gap-1.5 text-xs font-medium", hm.className)}>
                       <HIcon className="size-3.5" />
                       {hm.label}
                     </span>
-                    <RichText text={h.text} className="block min-w-0 flex-1 text-sm leading-relaxed" />
+                    <div className="min-w-0 flex-1">
+                      <RichText text={h.text} className="block text-sm leading-relaxed" />
+                      {h.fix && <SuggestedFix text={h.fix} className="mt-1" />}
+                      <QuickActions target={target} variant={h.kind === "risk" || h.kind === "gap" ? "problem" : "info"} />
+                      <TargetComments target={target} />
+                    </div>
                     {h.ref && <RefLink refTo={h.ref} />}
                   </li>
                 );
@@ -70,11 +94,9 @@ const SectionCard = ({ section, index }: { section: Section; index: number }) =>
                 <CircleHelp className="size-3.5" />
                 Answer before you open the PR
               </p>
-              <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed marker:text-violet-400">
+              <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed marker:text-violet-400">
                 {section.questions.map((q, i) => (
-                  <li key={i}>
-                    <RichText text={q} />
-                  </li>
+                  <QuestionItem key={i} id={`q-${index}-${i}`} target={{ type: "question", section: section.kind, index: i, text: q }} />
                 ))}
               </ul>
             </div>

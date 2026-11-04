@@ -146,7 +146,8 @@
             },
             {
               "kind": "error",
-              "text": "Two requests at the same moment can both pass the ISBN check. The database then rejects one with a raw error → 500, not 409."
+              "text": "Two requests at the same moment can both pass the ISBN check. The database then rejects one with a raw error → 500, not 409.",
+              "fix": "Catch Postgres error `23505` in `createBook` and throw `ConflictError` (409)."
             }
           ]
         },
@@ -312,7 +313,8 @@
           "ref": {
             "path": "db/migrations/0042_create_books.sql",
             "line": 5
-          }
+          },
+          "fix": "Add `REFERENCES authors(id) ON DELETE SET NULL` to `author_id`."
         },
         {
           "kind": "contract",
@@ -358,7 +360,8 @@
           "ref": {
             "path": "infra/docker-compose.yml",
             "line": 3
-          }
+          },
+          "fix": "Keep `postgres:16` here. Move the upgrade to its own PR, with steps to dump and restore local data."
         },
         {
           "kind": "gap",
@@ -366,7 +369,8 @@
           "ref": {
             "path": ".github/workflows/ci.yml",
             "line": 9
-          }
+          },
+          "fix": "Use the same Postgres version in `docker-compose.yml` and `ci.yml`."
         },
         {
           "kind": "behavior",
@@ -412,7 +416,8 @@
           "ref": {
             "path": "apps/api/src/books/book.service.ts",
             "line": 19
-          }
+          },
+          "fix": "In `createBook`, catch Postgres error `23505` from the insert and throw `ConflictError`, so the second save also gets 409."
         },
         {
           "kind": "contract",
@@ -493,7 +498,8 @@
           "ref": {
             "path": ".github/workflows/ci.yml",
             "line": 21
-          }
+          },
+          "fix": "Add `@vitest/coverage-v8` to the devDependencies of apps/api."
         },
         {
           "kind": "behavior",
@@ -559,7 +565,8 @@
           "ref": {
             "path": ".github/workflows/ci.yml",
             "line": 21
-          }
+          },
+          "fix": "Add `@vitest/coverage-v8` (same fix as in CI/CD)."
         }
       ],
       "questions": [],
@@ -595,14 +602,16 @@
           "ref": {
             "path": "apps/web/src/api/books.ts",
             "line": 12
-          }
+          },
+          "fix": "Add a \"Load more\" button that calls `GET /books` with the next offset."
         },
         {
           "kind": "gap",
           "text": "BookList.tsx and the LibraryPage change are not committed yet.",
           "ref": {
             "path": "apps/web/src/pages/library/BookList.tsx"
-          }
+          },
+          "fix": "Commit `BookList.tsx` and `LibraryPage.tsx`."
         }
       ],
       "questions": [
@@ -656,7 +665,8 @@
           "ref": {
             "path": "apps/api/src/books/book.service.ts",
             "line": 26
-          }
+          },
+          "fix": "Add a test where `countByOwner` returns 500 and `createBook` throws `LimitError`."
         }
       ],
       "questions": [],
@@ -682,7 +692,8 @@
           "ref": {
             "path": "apps/api/src/shared/pagination.ts",
             "line": 4
-          }
+          },
+          "fix": "In `parsePagination`, use the default when the number is not valid."
         },
         {
           "kind": "affected",

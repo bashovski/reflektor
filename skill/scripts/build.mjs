@@ -7,8 +7,8 @@
 //                  [--viewer viewer.html] [--open]
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -35,6 +35,7 @@ const HIGHLIGHTS = union("HighlightKind");
 const BEFORE_MERGE = union("BeforeMergeKind");
 const STEP_STATUS = union("StepStatus");
 const DETAIL_KINDS = union("FlowDetailKind");
+const REPLY_STATUS = union("ReplyStatus");
 
 function parseArgs(argv) {
   const args = { open: false };
@@ -131,6 +132,7 @@ report.sections = (report.sections ?? []).map((s, si) => {
   oneOf(s.review, REVIEW, `${where}.review`);
   const highlights = (s.highlights ?? []).map((h, hi) => {
     oneOf(h.kind, HIGHLIGHTS, `${where}.highlights[${hi}].kind`);
+    if ((h.kind === "risk" || h.kind === "gap") && !h.fix) warnings.push(`${where}.highlights[${hi}]: ${h.kind} has no suggested fix`);
     return { ...h, ref: checkRef(h.ref, `${where}.highlights[${hi}]`) };
   });
   if (highlights.length > 5) warnings.push(`${where}: ${highlights.length} highlights; keep it to 5`);
@@ -186,7 +188,10 @@ report.flows = (report.flows ?? []).map((flow, fi) => ({
   steps: (flow.steps ?? []).map((step, si) => {
     const where = `flows[${fi}].steps[${si}] (${step.symbol})`;
     oneOf(step.status, STEP_STATUS, `${where}.status`);
-    for (const d of step.details ?? []) oneOf(d.kind, DETAIL_KINDS, `${where}.details.kind`);
+    for (const d of step.details ?? []) {
+      oneOf(d.kind, DETAIL_KINDS, `${where}.details.kind`);
+      if (d.kind === "error" && !d.fix) warnings.push(`${where}: error detail has no suggested fix`);
+    }
     const ref = checkRef(step.ref, where);
     let verified = false;
     if (ref) {
@@ -209,7 +214,71 @@ if (errors.length) {
   process.exit(1);
 }
 
-const bundle = { diff, report, contextFiles, warnings: [...notes, ...warnings], builtAt: new Date().toISOString() };
+// ------------------------------------------------------------------ file icons
+// assets/file-icons.json comes from atom-material-icons (MIT). Only the icons this report's files use are embedded.
+
+function pickFileIcons(paths) {
+  const file = join(here, "../assets/file-icons.json");
+  if (!existsSync(file)) return null;
+  const set = JSON.parse(readFileSync(file, "utf8"));
+  // Angular naming rules (*.service.ts, *.component.ts) would mislabel files in other projects.
+  const angular = existsSync(join(diff.repo.root, "angular.json"));
+  const rules = set.rules.filter(([, icon]) => angular || !icon.startsWith("angular")).map(([pattern, icon, color]) => [new RegExp(pattern), icon, color]);
+  const result = { icons: {}, byPath: {} };
+  for (const path of paths) {
+    const [, icon, color] = rules.find(([re]) => re.test(basename(path))) ?? [null, "default", null];
+    const key = color ? `${icon}-${color}` : icon;
+    if (!result.icons[key]) {
+      let svg = set.icons[icon] ?? set.icons.default;
+      // Icons without a fill of their own take the rule's color, as in the editor theme.
+      if (color && !/^<svg[^>]*\sfill=/.test(svg)) svg = svg.replace(/^<svg/, `<svg fill="#${color}"`);
+      result.icons[key] = svg;
+    }
+    result.byPath[path] = key;
+  }
+  return result;
+}
+
+const fileIcons = pickFileIcons([...diff.files.map((f) => f.path), ...Object.keys(contextFiles)]);
+
+const slug = diff.branch.head.replace(/[^\w.-]+/g, "-");
+const out = resolve(args.out ?? join(diff.repo.gitDir, "pr-report", `${slug}-${diff.branch.headSha.slice(0, 7)}.html`));
+
+// ------------------------------------------------------------------ review rounds
+// serve.mjs writes review-<round>.json next to the report. report.review answers one of them.
+
+const reviewDir = dirname(out);
+const rounds = existsSync(reviewDir)
+  ? readdirSync(reviewDir)
+      .map((f) => f.match(/^review-(\d+)\.json$/)?.[1])
+      .filter(Boolean)
+      .map(Number)
+  : [];
+const round = rounds.length ? Math.max(...rounds) + 1 : 1;
+
+let previousReview = null;
+if (report.review) {
+  const file = join(reviewDir, `review-${report.review.round}.json`);
+  if (!existsSync(file)) {
+    warnings.push(`review: ${file} does not exist, so the replies cannot be shown`);
+  } else {
+    previousReview = JSON.parse(readFileSync(file, "utf8"));
+    const ids = new Set(previousReview.comments.map((c) => c.id));
+    report.review.replies = (report.review.replies ?? []).filter((r, i) => {
+      oneOf(r.status, REPLY_STATUS, `review.replies[${i}].status`);
+      if (!ids.has(r.commentId)) warnings.push(`review.replies[${i}]: no comment with id ${r.commentId} in round ${report.review.round}, removed`);
+      return ids.has(r.commentId);
+    }).map((r, i) => ({ ...r, ref: checkRef(r.ref, `review.replies[${i}]`) }));
+    const answered = new Set(report.review.replies.map((r) => r.commentId));
+    for (const c of previousReview.comments) if (!answered.has(c.id)) warnings.push(`review: comment ${c.id} from round ${report.review.round} has no reply`);
+  }
+}
+if (errors.length) {
+  for (const e of errors) console.error(`error: ${e}`);
+  process.exit(1);
+}
+
+const bundle = { diff, report, contextFiles, previousReview, round, fileIcons, warnings: [...notes, ...warnings], builtAt: new Date().toISOString() };
 const json = JSON.stringify(bundle).replace(/</g, "\\u003c");
 
 if (args.jsonOut) writeFileSync(args.jsonOut, JSON.stringify(bundle, null, 2));
@@ -220,8 +289,6 @@ if (!viewerPath) throw new Error("Viewer not found. Build it with `pnpm build` i
 const html = readFileSync(viewerPath, "utf8");
 if (!html.includes("__PR_REPORT_DATA__")) throw new Error(`${viewerPath} has no data placeholder`);
 
-const slug = diff.branch.head.replace(/[^\w.-]+/g, "-");
-const out = resolve(args.out ?? join(diff.repo.gitDir, "pr-report", `${slug}-${diff.branch.headSha.slice(0, 7)}.html`));
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, html.replace("__PR_REPORT_DATA__", () => json));
 

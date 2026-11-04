@@ -35,6 +35,13 @@ The report is written to `<git folder>/pr-report/<branch>-<sha>.html` (usually `
 1. **`skill/scripts/collect.mjs`** reads git and writes `diff.json`: changed files, full old and new contents, commits, and coverage of new lines.
 2. **Claude** reads the changes and writes `report.json`: title, summary, sections, highlights, notes and flows. It points at lines and never copies code.
 3. **`skill/scripts/build.mjs`** checks `report.json` against the git facts, drops anything that points at code that doesn't exist, and puts both files into the prebuilt viewer as one offline HTML file.
+4. **`skill/scripts/serve.mjs`** serves the report on `127.0.0.1` so you can review it:
+   - comment on lines (hover a line number and click +)
+   - comment on files or on the whole change
+   - use "Fix this" or "It's fine" on problems, and answer Claude's questions
+   - click "Send to Claude"
+
+   That writes `review-<round>.json` and stops the server, which wakes Claude. Claude shows a plan, fixes after your OK, and opens a new report with only the new changes and a reply to each comment.
 
 ## Layout
 
@@ -44,11 +51,12 @@ The report is written to `<git folder>/pr-report/<branch>-<sha>.html` (usually `
 | `skill/SKILL.md` | The steps Claude follows |
 | `skill/style-guide.md` | How report text is written |
 | `skill/schema/types.ts` | The data contract, and the only list of allowed values |
-| `skill/scripts/` | `collect.mjs` and `build.mjs`. No dependencies. |
+| `skill/scripts/` | `collect.mjs`, `build.mjs` and `serve.mjs`. No dependencies. |
 | `viewer/` | React source of the report page |
 | `fixtures/make-books-repo.sh` | Builds a fake repo with a "books" feature branch |
 | `samples/report.json` | A hand-written report for that fake repo |
 | `scripts/check.mjs` | End-to-end test on the fake repo |
+| `scripts/build-icons.mjs` | Builds `skill/assets/file-icons.json` from the icon package |
 
 ## Changing it
 
@@ -77,6 +85,10 @@ node skill/scripts/build.mjs --diff .git/pr-report/diff.json --report .git/pr-re
 ## Per-repo settings
 
 An optional `.pr-report.json` in a repo's root sets the base branch, which paths belong to which target, extra generated files, and where coverage files are. See the end of `skill/SKILL.md` for an example.
+
+## Credits
+
+File type icons come from [atom-material-icons](https://www.npmjs.com/package/atom-material-icons) by Elior Boukhobza "Mallowigi", MIT License. Product logos in the icons belong to their owners.
 
 ## Known issues
 

@@ -1,0 +1,175 @@
+import { Check, MessageSquarePlus, Pencil, Trash2, Undo2, Wrench } from "lucide-react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import type { CommentKind, CommentTarget, ReviewComment } from "../../../skill/schema/types";
+import { COMMENT_KINDS } from "../lib/meta";
+import { describeTarget, targetKey, useReview } from "../lib/review";
+import { RichText } from "./RichText";
+import { cx, Pill } from "./ui";
+
+const button =
+  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40";
+const ghost = `${button} text-zinc-600 hover:bg-zinc-500/10 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100`;
+const primary = `${button} bg-blue-600 text-white hover:bg-blue-700`;
+
+export const SuggestedFix = ({ text, className }: { text: string; className?: string }) => (
+  <div className={cx("flex items-start gap-1.5 text-[13px] text-zinc-500", className)}>
+    <Wrench className="mt-[3px] size-3 shrink-0" />
+    <span className="min-w-0">
+      <span className="font-medium text-zinc-600 dark:text-zinc-400">Suggested fix: </span>
+      <RichText text={text} />
+    </span>
+  </div>
+);
+
+export const Composer = ({ target, placeholder }: { target: CommentTarget; placeholder?: string }) => {
+  const { composer, comments, add, update, closeComposer } = useReview();
+  const editing = composer?.editingId ? comments.find((c) => c.id === composer.editingId) : undefined;
+  const [text, setText] = useState(editing?.text ?? "");
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
+
+  const save = () => {
+    const clean = text.trim();
+    if (editing) update(editing.id, { text: clean });
+    else if (clean) add(target, { text: clean, kind: composer?.kind });
+    closeComposer();
+  };
+
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
+    if (e.key === "Escape") closeComposer();
+  };
+
+  return (
+    <div className="my-1.5 rounded-lg border border-blue-500/40 bg-[var(--surface)] p-2.5 font-sans shadow-sm" onClick={(e) => e.stopPropagation()}>
+      <p className="mb-1.5 text-[11px] text-zinc-500">{describeTarget(target)}</p>
+      <textarea
+        ref={ref}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={onKey}
+        rows={3}
+        placeholder={placeholder ?? "What should change, or what do you want to know?"}
+        className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-[13px] leading-relaxed outline-none placeholder:text-zinc-400 focus:border-blue-500"
+      />
+      <div className="mt-1.5 flex items-center gap-2">
+        <span className="hidden text-[11px] text-zinc-400 sm:inline">
+          Start with <code>nit:</code> or <code>q:</code> to mark it, or let Claude decide. ⌘↵ saves.
+        </span>
+        <span className="ml-auto" />
+        <button type="button" onClick={closeComposer} className={ghost}>
+          Cancel
+        </button>
+        <button type="button" onClick={save} className={primary} disabled={!editing && !text.trim()}>
+          {editing ? "Save" : "Add comment"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const kindLabel = (c: ReviewComment) => {
+  if (c.kind === "fix" && !c.text) return "Fix as suggested";
+  if (c.kind === "accepted") return "It's fine";
+  return c.kind ? COMMENT_KINDS[c.kind].label : "Claude decides the kind";
+};
+
+export const CommentItem = ({ comment, compact }: { comment: ReviewComment; compact?: boolean }) => {
+  const { editable, openComposer, remove, composer } = useReview();
+  if (composer?.editingId === comment.id) return <Composer target={comment.target} />;
+  const tone = comment.kind ? COMMENT_KINDS[comment.kind].className : "bg-zinc-500/10 text-zinc-500 ring-zinc-500/25";
+
+  return (
+    <div className={cx("group/comment flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] font-sans", compact ? "px-2 py-1.5" : "my-1.5 px-3 py-2")}>
+      <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", tone)}>{kindLabel(comment)}</Pill>
+      <div className="min-w-0 flex-1 text-[13px] leading-snug">{comment.text ? <RichText text={comment.text} /> : null}</div>
+      {editable && (
+        <span className="flex shrink-0 gap-0.5 opacity-60 group-hover/comment:opacity-100">
+          <button type="button" title="Edit" onClick={() => openComposer(comment.target, { editingId: comment.id })} className="rounded p-1 hover:bg-zinc-500/10">
+            <Pencil className="size-3" />
+          </button>
+          <button type="button" title="Delete" onClick={() => remove(comment.id)} className="rounded p-1 hover:bg-zinc-500/10">
+            <Trash2 className="size-3" />
+          </button>
+        </span>
+      )}
+    </div>
+  );
+};
+
+// Saved comments and the open composer for one target.
+export const TargetComments = ({ target, placeholder }: { target: CommentTarget; placeholder?: string }) => {
+  const { commentsFor, composer } = useReview();
+  // One-click decisions without a note are shown by QuickActions, not as a comment.
+  const list = commentsFor(target).filter((c) => c.text || composer?.editingId === c.id || (c.kind !== "fix" && c.kind !== "accepted"));
+  const composing = composer?.key === targetKey(target) && !composer.editingId;
+  if (!list.length && !composing) return null;
+  return (
+    <div className="mt-1.5 space-y-1.5">
+      {list.map((c) => (
+        <CommentItem key={c.id} comment={c} compact />
+      ))}
+      {composing && <Composer target={target} placeholder={placeholder} />}
+    </div>
+  );
+};
+
+// Buttons on rows that describe a problem (risk, gap, flow error) or a to-do (before merge).
+export const QuickActions = ({ target, variant }: { target: CommentTarget; variant: "problem" | "todo" | "info" }) => {
+  const { editable, commentsFor, add, remove, openComposer } = useReview();
+  if (!editable) return null;
+  const existing = commentsFor(target);
+  const decided = existing.find((c) => c.kind === "fix" || c.kind === "accepted");
+
+  if (decided) {
+    return (
+      <div className="mt-1 flex flex-wrap items-center gap-1">
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+          <Check className="size-3.5" />
+          {decided.kind === "accepted" ? "Marked as fine" : variant === "todo" ? "Queued for Claude" : "Queued: fix as suggested"}
+        </span>
+        {!decided.text && (
+          <button type="button" className={ghost} onClick={() => openComposer(target, { editingId: decided.id })}>
+            <MessageSquarePlus className="size-3.5" /> Add a note
+          </button>
+        )}
+        <button type="button" className={ghost} onClick={() => remove(decided.id)}>
+          <Undo2 className="size-3.5" /> Undo
+        </button>
+      </div>
+    );
+  }
+
+  const comment = (kind?: CommentKind) => () => openComposer(target, { kind });
+
+  if (variant === "info") {
+    return (
+      <div className="mt-1 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
+        <button type="button" className={ghost} onClick={comment()}>
+          <MessageSquarePlus className="size-3.5" /> Comment
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1">
+      <button type="button" className={cx(button, "bg-blue-600/10 text-blue-700 hover:bg-blue-600/20 dark:text-blue-300")} onClick={() => add(target, { kind: "fix" })}>
+        <Wrench className="size-3.5" /> {variant === "todo" ? "Do this" : "Fix this"}
+      </button>
+      {variant === "problem" && (
+        <button type="button" className={ghost} onClick={() => add(target, { kind: "accepted" })}>
+          <Check className="size-3.5" /> It's fine
+        </button>
+      )}
+      <button type="button" className={ghost} onClick={comment()}>
+        <MessageSquarePlus className="size-3.5" /> Comment
+      </button>
+    </div>
+  );
+};
+
+export const commentButtonClass = ghost;
