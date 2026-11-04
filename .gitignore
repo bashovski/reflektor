@@ -12,3 +12,4 @@ samples/review-*.json
 fixtures/.books-repo/
 samples/questions-*.json
 samples/review-session.json
+samples/pr-description.md
