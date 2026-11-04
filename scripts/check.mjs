@@ -6,7 +6,7 @@
 // Usage: node scripts/check.mjs [--open]
 
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,22 +28,33 @@ const fail = (message) => {
 try {
   run("bash", [join(root, "fixtures", "make-books-repo.sh"), repo]);
 
-  const collected = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"]);
+  // A private home, so avatars come only from what this check puts in its cache.
+  const home = { PR_REPORT_HOME: join(tmp, "collect-home") };
+  const collected = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"], home);
   if (!collected.includes("Patch coverage: 51%")) fail("collect.mjs did not read coverage from .pr-report.json");
   if (!collected.includes("(config)")) fail("collect.mjs did not take the base branch from .pr-report.json");
   if (!collected.includes("Safety checks: 1 high, 0 medium, 1 low")) fail("collect.mjs safety checks did not find the slug migration problems");
+  const books = JSON.parse(readFileSync(join(repo, ".git/pr-report/diff.json"), "utf8"));
+  if (books.repo.avatar?.initials !== "AL" || books.repo.avatar.image !== null) fail(`acme-labs without a cached avatar should get initials AL: ${JSON.stringify(books.repo.avatar)}`);
 
   // Edge cases in a second repo. The key-shaped value is built at runtime, so no literal secret is stored here.
   const edgeRepo = join(tmp, "edge");
-  run("bash", ["-c", `mkdir -p "${edgeRepo}/gen" && cd "${edgeRepo}" && git init -q -b main && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m base && git checkout -qb feat`]);
+  run("bash", ["-c", `mkdir -p "${edgeRepo}/gen" && cd "${edgeRepo}" && git init -q -b main && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m base && git checkout -qb feat && git remote add origin https://gitlab.com/edge-group/sub/edge.git`]);
+  // An avatar downloaded earlier: --no-fetch must still use it. A GitLab subgroup is one cache file.
+  const cachedAvatar = join(home.PR_REPORT_HOME, "cache/avatars/gitlab.com/edge-group_sub");
+  mkdirSync(dirname(cachedAvatar), { recursive: true });
+  writeFileSync(cachedAvatar, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64"));
   writeFileSync(join(edgeRepo, "config.js"), `export const key = "${"AKIA" + "Q".repeat(16)}";\n`);
   writeFileSync(join(edgeRepo, ".gitattributes"), "gen/*.js linguist-generated\n");
   writeFileSync(join(edgeRepo, "gen", "api.js"), "export const api = 1;\n");
   writeFileSync(join(edgeRepo, "big.txt"), "x".repeat(600 * 1024));
   writeFileSync(join(edgeRepo, "naïve name.ts"), "export const ok = true;\n");
-  const edgeOut = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", edgeRepo, "--no-fetch", "--base", "main", "--out", join(tmp, "edge.json")]);
+  const edgeOut = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", edgeRepo, "--no-fetch", "--base", "main", "--out", join(tmp, "edge.json")], home);
   if (!edgeOut.includes("AWS access key [AKIA…(20 characters)]")) fail("collect.mjs did not flag or mask a fake AWS key");
-  const edge = Object.fromEntries(JSON.parse(readFileSync(join(tmp, "edge.json"), "utf8")).files.map((f) => [f.path, f]));
+  const edgeData = JSON.parse(readFileSync(join(tmp, "edge.json"), "utf8"));
+  if (!edgeData.repo.avatar?.image?.startsWith("data:image/png;base64,") || edgeData.repo.avatar.initials !== "EG")
+    fail(`a cached avatar was not used: ${JSON.stringify(edgeData.repo.avatar).slice(0, 120)}`);
+  const edge = Object.fromEntries(edgeData.files.map((f) => [f.path, f]));
   if (!edge["gen/api.js"]?.generated) fail("collect.mjs did not mark a linguist-generated file as generated");
   if (!edge["big.txt"]?.tooLarge || edge["big.txt"].newContent !== null) fail("collect.mjs did not leave out a file over the size limit");
   if (edge["naïve name.ts"]?.newContent !== "export const ok = true;\n") fail("collect.mjs did not read a file with a space and accent in its name");
@@ -134,6 +145,7 @@ async function daemonFlow() {
     const inbox = await (await fetch(`${base}/`)).text();
     const shown = JSON.parse(inbox.match(/const shown=(\{.*?\});/)?.[1] ?? "{}");
     if (shown[id] !== (await state()).updatedAt) fail("the inbox would reload on the stream's first state event (reload loop)");
+    if (!/<span class="av" style="background:#[0-9a-f]{6}">AL<\/span>/.test(inbox)) fail("the inbox does not show the owner's initials");
 
     const round1 = await (await fetch(`${base}${config.api}/bundle?round=1`, { headers: { "x-review-token": config.token } })).json();
     if (!round1?.report?.title) fail("the daemon did not return round 1's report data as an object");

@@ -97,6 +97,7 @@ function loadReview(entry) {
     dir: entry.dir,
     title: entry.title,
     tag: entry.tag,
+    avatar: entry.avatar ?? null,
     repo: entry.repo,
     branch: entry.branch,
     rounds: saved.rounds ?? [],
@@ -119,7 +120,7 @@ for (const entry of registry) {
 const saveRegistry = () =>
   writeJson(
     registryFile,
-    [...reviews.values()].map(({ id, dir, title, tag, repo, branch }) => ({ id, dir, title, tag, repo, branch })),
+    [...reviews.values()].map(({ id, dir, title, tag, repo, branch, avatar }) => ({ id, dir, title, tag, repo, branch, avatar })),
   );
 
 function save(r) {
@@ -280,6 +281,14 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(
 
 // ------------------------------------------------------------------ pages
 
+// The repo owner's picture from the report data, or its initials. Checked before it goes into HTML.
+function avatarHtml(avatar) {
+  if (!avatar) return "";
+  if (/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(avatar.image ?? "")) return `<img class="av" src="${avatar.image}" alt="">`;
+  const color = /^#[0-9a-f]{6}$/i.test(avatar.color ?? "") ? avatar.color : "#71717a";
+  return `<span class="av" style="background:${color}">${escapeHtml(String(avatar.initials ?? "").slice(0, 2))}</span>`;
+}
+
 const PHASES = {
   reviewing: ["Waiting on you", "#b45309"],
   sent: ["Sent to Claude", "#2563eb"],
@@ -297,7 +306,7 @@ function inboxPage() {
       return `<a class="row" href="/r/${encodeURIComponent(r.id)}">
         <span class="tag">${escapeHtml(r.tag ?? "")}</span>
         <span class="main"><span class="title">${escapeHtml(r.title ?? r.branch)}</span>
-        <span class="meta">${escapeHtml(r.repo)} · ${escapeHtml(r.branch)} · round ${r.round}${waiting ? ` · ${waiting} question${waiting === 1 ? "" : "s"} waiting` : ""}</span></span>
+        <span class="meta">${avatarHtml(r.avatar)}<span>${escapeHtml(r.repo)} · ${escapeHtml(r.branch)} · round ${r.round}${waiting ? ` · ${waiting} question${waiting === 1 ? "" : "s"} waiting` : ""}</span></span></span>
         <span class="phase" style="color:${color}">${label}</span>
         <time data-at="${r.updatedAt}"></time></a>`;
     })
@@ -313,7 +322,8 @@ main{max-width:900px;margin:0 auto;padding:40px 16px}h1{font-size:20px;margin:0 
 .row:first-child{border-top:0}.row:hover{background:color-mix(in srgb,var(--text) 4%,transparent)}
 .tag{font:600 11px ui-monospace,monospace;padding:2px 6px;border-radius:6px;background:color-mix(in srgb,var(--text) 8%,transparent);min-width:64px;text-align:center}
 .main{flex:1;min-width:0;display:flex;flex-direction:column}.title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.meta,time{color:var(--muted);font-size:12px}.phase{font-size:12px;font-weight:600;white-space:nowrap}time{min-width:64px;text-align:right}
+.meta,time{color:var(--muted);font-size:12px}.meta{display:flex;align-items:center;gap:6px;min-width:0}
+.av{width:16px;height:16px;flex:none;border-radius:4px;object-fit:cover;display:inline-grid;place-items:center;color:#fff;font:600 8px/1 ui-sans-serif,system-ui,sans-serif}.phase{font-size:12px;font-weight:600;white-space:nowrap}time{min-width:64px;text-align:right}
 .empty{padding:32px;text-align:center;color:var(--muted)}</style></head><body><main>
 <h1>PR reports</h1><p>Every review on this machine. Open one to comment, ask questions and send it to Claude.</p>
 <div class="list">${rows || '<div class="empty">No reviews yet. Run /pr-report in a repo.</div>'}</div></main>
@@ -430,6 +440,7 @@ async function handle(req, res, port) {
     }
     r.title = bundle.report.title;
     r.tag = bundle.report.tag;
+    r.avatar = bundle.diff.repo.avatar ?? null;
     const round = bundle.round ?? r.round;
     // Publishing a round again (a rebuild, or an agent reconnecting) only swaps its data file.
     // Comments, plan and progress belong to the round and stay.

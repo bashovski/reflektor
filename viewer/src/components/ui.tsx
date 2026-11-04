@@ -1,6 +1,6 @@
 import { FileText } from "lucide-react";
 import { type ButtonHTMLAttributes, type ReactNode, useMemo } from "react";
-import type { Ref } from "../../../skill/schema/types";
+import type { Ref, RepoAvatar } from "../../../skill/schema/types";
 import { useReport } from "../lib/state";
 
 export const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(" ");
@@ -46,6 +46,21 @@ export const FileIcon = ({ path, className }: { path: string; className?: string
   const src = useMemo(() => (svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` : null), [svg]);
   if (!src) return <FileText className={cx("size-4 shrink-0 text-zinc-400", className)} aria-hidden />;
   return <img src={src} alt="" aria-hidden className={cx("size-4 shrink-0", className)} />;
+};
+
+// The repo owner's picture, or its initials on a color. Square with slightly rounded corners.
+export const OwnerAvatar = ({ avatar, className }: { avatar?: RepoAvatar; className?: string }) => {
+  if (!avatar) return null;
+  if (avatar.image) return <img src={avatar.image} alt="" aria-hidden className={cx("shrink-0 rounded-md object-cover", className)} />;
+  return (
+    <span
+      aria-hidden
+      className={cx("grid shrink-0 place-items-center rounded-md font-semibold leading-none text-white", className)}
+      style={{ backgroundColor: avatar.color }}
+    >
+      {avatar.initials}
+    </span>
+  );
 };
 
 export const shortPath = (path: string, keep = 2) => {

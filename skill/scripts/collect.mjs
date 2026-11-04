@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Collects everything git knows about a branch into one JSON file (diff.json).
-// Works with any language or stack: it only talks to git, and to `gh` when present.
+// Works with any language or stack: it only talks to git, to `gh` when present, and once per repo
+// owner to github.com or gitlab.com for the owner's avatar.
 //
 // Usage:
 //   node collect.mjs [--repo .] [--base <branch>] [--since <sha|last>] [--files a,b,c]
@@ -9,6 +10,7 @@
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
+import { ownerAvatar } from "./avatar.mjs";
 
 const MAX_BYTES = 512 * 1024;
 const MAX_LINES = 8000;
@@ -666,7 +668,8 @@ if (coverageFiles.length) {
 const data = {
   version: 1,
   generatedAt: new Date().toISOString(),
-  repo: { ...identity, root: repoRoot, gitDir },
+  // --no-fetch stays offline: an avatar downloaded before is still used.
+  repo: { ...identity, root: repoRoot, gitDir, avatar: await ownerAvatar(identity, { allowDownload: args.fetch }) },
   branch: { head, headSha, snapshot, base, baseRef, baseSource, mergeBase, pr: pr ? { number: pr.number, url: pr.url, title: pr.title } : null },
   scope: { mode, from, includesUncommitted: args.uncommitted, files: args.files ?? null },
   commits,

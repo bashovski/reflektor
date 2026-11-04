@@ -9,6 +9,7 @@
 - Schema diagram for database changes
 - Live questions while reviewing
 - Review daemon: one address for every review, an inbox, live plan, live progress per comment, new rounds as a banner
+- Owner avatars in the header and the inbox (github.com and gitlab.com, downloaded once; initials elsewhere)
 - Speed: diffs render only near the screen, code colored with WebAssembly lexers, the daemon serves the viewer as cached files and each report is only its data (44-file change: 2.4 s frozen and 161 MB before, under 0.3 s and 37 MB after)
 
 ## Later (remind)

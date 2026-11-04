@@ -54,10 +54,14 @@ export type CheckStatus = "passed" | "failed" | "timeout";
 // One project check run by checks.mjs. outputTail holds the last lines of stdout and stderr.
 export type ProjectCheck = { name: string; command: string; status: CheckStatus; exitCode: number | null; durationMs: number; outputTail: string };
 
+// The repo owner's picture: a data URL from github.com or gitlab.com, else initials on a color.
+export type RepoAvatar = { image: string | null; initials: string; color: string };
+
 export type DiffData = {
   version: 1;
   generatedAt: string;
-  repo: { host: string | null; owner: string | null; name: string; root: string; gitDir: string };
+  // avatar is missing in reports collected before avatars existed.
+  repo: { host: string | null; owner: string | null; name: string; root: string; gitDir: string; avatar?: RepoAvatar };
   branch: {
     head: string;
     headSha: string;
