@@ -194,7 +194,7 @@ if (command === "open") {
   const { data } = await api(info, "GET", "/api/reviews");
   if (!data.reviews.length) console.log("No reviews yet.");
   for (const r of data.reviews) console.log(`${r.id.padEnd(36)} round ${String(r.round).padEnd(3)} ${r.phase.padEnd(10)} ${r.url}`);
-  console.log(`\nInbox: http://localhost:${info.port}/`);
+  console.log(`\nInbox: http://127.0.0.1:${info.port}/`);
 } else if (command === "stop") {
   const info = readJson(daemonFile);
   if (!info || !existsSync(daemonFile)) console.log("The daemon is not running.");

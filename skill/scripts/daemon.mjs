@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// One local server for every review: http://localhost:4317 (or the next free port).
+// One local server for every review: http://127.0.0.1:7337 (or the next free port).
 // Pages talk to it to save comments, ask questions and send reviews; agents talk to it through
 // review.mjs to answer, post plans, report progress and publish new rounds. It streams each
 // review's live state to open pages with Server-Sent Events.
@@ -12,12 +12,13 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { connect } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
-const FIRST_PORT = Number(process.env.PR_REPORT_PORT ?? 4317);
+const FIRST_PORT = Number(process.env.PR_REPORT_PORT ?? 7337);
 const IDLE_MS = Number(process.env.PR_REPORT_IDLE_MINUTES ?? 240) * 60_000;
 const LONG_POLL_MS = 25_000;
 const REDELIVER_MS = 120_000;
@@ -356,7 +357,7 @@ async function handle(req, res, port) {
 
   if (parts[1] === "reviews" && req.method === "GET") {
     if (!admin) return send(res, 401, { error: "bad token" });
-    return send(res, 200, { reviews: [...reviews.values()].map((r) => ({ ...liveState(r), dir: r.dir, url: `http://localhost:${port}/r/${r.id}` })) });
+    return send(res, 200, { reviews: [...reviews.values()].map((r) => ({ ...liveState(r), dir: r.dir, url: `http://127.0.0.1:${port}/r/${r.id}` })) });
   }
 
   // Register a report, or publish a new round of an existing review.
@@ -391,7 +392,7 @@ async function handle(req, res, port) {
     r.lastAgentActivity = now();
     saveRegistry();
     save(r);
-    return send(res, 200, { id: r.id, round: r.round, url: `http://localhost:${port}/r/${r.id}`, tabs: openTabs(r), dir });
+    return send(res, 200, { id: r.id, round: r.round, url: `http://127.0.0.1:${port}/r/${r.id}`, tabs: openTabs(r), dir });
   }
 
   // ---------- per review
@@ -529,14 +530,42 @@ async function handle(req, res, port) {
 
 // ------------------------------------------------------------------ start
 
-function listen(port, attempt = 0) {
+// True when something already accepts connections on the port, over IPv4 or IPv6.
+// Binding 127.0.0.1 can succeed even when another program listens on all addresses
+// (Docker and OrbStack do), and the browser may then reach that program over IPv6.
+const answers = (host, port) =>
+  new Promise((resolveAnswer) => {
+    const socket = connect({ host, port });
+    const done = (result) => {
+      socket.destroy();
+      resolveAnswer(result);
+    };
+    socket.setTimeout(300, () => done(false));
+    // Close politely, so the other program sees a normal disconnect.
+    socket.once("connect", () => {
+      socket.end();
+      resolveAnswer(true);
+    });
+    socket.once("error", () => done(false));
+  });
+const portTaken = async (port) => (await answers("127.0.0.1", port)) || (await answers("::1", port));
+
+async function listen(port, attempt = 0) {
+  if (attempt > 20) {
+    console.error(`No free port between ${FIRST_PORT} and ${port}.`);
+    process.exit(1);
+  }
+  if (await portTaken(port)) {
+    console.log(`Port ${port} is in use by another program, trying ${port + 1}.`);
+    return listen(port + 1, attempt + 1);
+  }
   const server = createServer((req, res) =>
     handle(req, res, port).catch((e) => {
       if (!res.headersSent) send(res, 400, { error: e.message });
     }),
   );
   server.on("error", (e) => {
-    if (e.code === "EADDRINUSE" && attempt < 20) listen(port + 1, attempt + 1);
+    if (e.code === "EADDRINUSE") void listen(port + 1, attempt + 1);
     else {
       console.error(e.message);
       process.exit(1);
@@ -544,7 +573,7 @@ function listen(port, attempt = 0) {
   });
   server.listen(port, "127.0.0.1", () => {
     writeJson(daemonFile, { port, pid: process.pid, version: VERSION, adminToken, startedAt: now() }, 0o600);
-    console.log(`pr-report daemon ${VERSION} on http://localhost:${port}/ (pid ${process.pid})`);
+    console.log(`pr-report daemon ${VERSION} on http://127.0.0.1:${port}/ (pid ${process.pid})`);
   });
 }
 
@@ -563,5 +592,5 @@ setInterval(() => {
   }
 }, 60_000).unref();
 
-listen(FIRST_PORT);
+void listen(FIRST_PORT);
 console.log(`Reviews known: ${reviews.size}. Home: ${HOME}`);

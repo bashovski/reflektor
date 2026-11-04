@@ -169,7 +169,7 @@ It writes `<branch>-<sha>.html` next to the report file and records the run for 
 
 ## 7. Open it for review
 
-Publish the report to the pr-report daemon. It is one local server for every review on this machine (`http://localhost:4317`, with an inbox of all reviews at `/`), and `review.mjs` starts it when it is not running:
+Publish the report to the pr-report daemon. It is one local server for every review on this machine (`http://127.0.0.1:7337`, with an inbox of all reviews at `/`), and `review.mjs` starts it when it is not running:
 
 ```bash
 node ${CLAUDE_SKILL_DIR}/scripts/review.mjs open --report <html file> --open

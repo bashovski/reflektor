@@ -35,7 +35,7 @@ The report is written to `<git folder>/pr-report/<branch>-<sha>.html` (usually `
 1. **`skill/scripts/collect.mjs`** reads git and writes `diff.json`: changed files, full old and new contents, commits, and coverage of new lines.
 2. **Claude** reads the changes and writes `report.json`: title, summary, sections, highlights, notes and flows. It points at lines and never copies code.
 3. **`skill/scripts/build.mjs`** checks `report.json` against the git facts, drops anything that points at code that doesn't exist, and puts both files into the prebuilt viewer as one offline HTML file.
-4. **`skill/scripts/review.mjs open`** publishes the report to the **pr-report daemon**, one local server for every review on this machine: `http://localhost:4317`, with an inbox of all reviews at `/`. It starts the daemon when needed, and the daemon stops after 4 idle hours. In the report you can:
+4. **`skill/scripts/review.mjs open`** publishes the report to the **pr-report daemon**, one local server for every review on this machine: `http://127.0.0.1:7337`, with an inbox of all reviews at `/`. It starts the daemon when needed, and the daemon stops after 4 idle hours. In the report you can:
    - comment on lines (hover a line number and click +), files or the whole change
    - use "Fix this" or "It's fine" on problems, and answer Claude's questions
    - ask Claude live with "Ask Claude now"
