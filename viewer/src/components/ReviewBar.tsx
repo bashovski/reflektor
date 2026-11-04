@@ -95,7 +95,7 @@ export const ReviewBar = () => {
         ? `This is round ${round}. Round ${review.latestRound} is newer.`
         : review.phase === "done"
           ? total
-            ? `Round ${round} is finished.`
+            ? `Review finished. Claude handled all ${total} ${total === 1 ? "comment" : "comments"} without changing code, so there is no new round. Claude can open the PR now.`
             : "Review finished. Claude can open the PR now."
           : review.phase === "sent"
             ? `Sent round ${round} with ${total} ${total === 1 ? "comment" : "comments"}. Claude is reading them and will post a plan here.`

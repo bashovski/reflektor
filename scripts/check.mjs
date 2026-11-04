@@ -17,6 +17,7 @@ const repo = join(tmp, "books");
 const html = join(root, "samples", "books-report.html");
 
 const run = (cmd, args, env) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...env } });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let failed = false;
 const fail = (message) => {
@@ -137,7 +138,9 @@ async function daemonFlow() {
     const round1 = await (await fetch(`${base}${config.api}/bundle?round=1`, { headers: { "x-review-token": config.token } })).json();
     if (!round1?.report?.title) fail("the daemon did not return round 1's report data as an object");
     await post("presence", { tab: "t1" });
-    if (!review("open", "--report", join(reviewDir, "round1.json")).includes("Already open in 1 tab")) fail("an open tab was not counted");
+    const again = review("open", "--report", join(reviewDir, "round1.json"));
+    if (!again.includes("Open in 1 tab")) fail("an open tab was not counted");
+    if (!again.includes("already published")) fail("publishing round 1 again did not say it was already published");
 
     await post("questions", { id: "q_1", target: { type: "report" }, text: "Why two migrations?" });
     if (!review("wait", "--id", id).includes("Live question q_1")) fail("wait did not return the live question");
@@ -155,16 +158,57 @@ async function daemonFlow() {
     if (!review("wait", "--id", id).includes("approved the plan")) fail("wait did not report the approved plan");
 
     review("status", "--id", id, "--comment", "c_1", "--status", "fixed", "--text", "Renamed");
-    if ((await state()).statuses.c_1?.status !== "fixed") fail("the status did not reach the page state");
+    const afterFix = await state();
+    if (afterFix.statuses.c_1?.status !== "fixed") fail("the status did not reach the page state");
+    if (afterFix.phase !== "working") fail("a fixed comment ended the round before the next round was published");
 
     build(join(reviewDir, "round2.json"));
     if (!review("open", "--report", join(reviewDir, "round2.json")).includes("round 2")) fail("publishing the next build did not start round 2");
     const round2 = await state();
     if (round2.round !== 2 || round2.phase !== "reviewing") fail(`round 2 is not open for review: ${JSON.stringify({ round: round2.round, phase: round2.phase })}`);
 
+    // Only an accepted risk: no code changes, so the last status ends the review without a new round.
+    await post("submit", { comments: [{ id: "c_2", kind: "accepted", target: { type: "report" }, text: "", createdAt: new Date().toISOString() }] });
+    review("wait", "--id", id);
+    if (!review("status", "--id", id, "--comment", "c_2", "--status", "noted", "--text", "Accepted").includes("round 2 is finished")) fail("status did not say the round is finished");
+    if ((await state()).phase !== "done") fail("a round with every comment handled and no code change did not finish");
+    if (!review("wait", "--id", id).includes("Round 2 of")) fail("wait did not report the finished round");
+    // An agent may publish the same round again, for example after losing the daemon. That must not reopen it.
+    review("open", "--report", join(reviewDir, "round2.json"));
+    const republished = await state();
+    if (republished.phase !== "done" || republished.statuses.c_2?.status !== "noted") fail("publishing a finished round again reset it");
+
+    // A waiter keeps waiting while the daemon restarts, as it does when the skill is updated.
+    const waiter = spawn("node", [join(root, "skill/scripts/review.mjs"), "wait", "--id", id], { env: { ...process.env, ...env } });
+    let waited = "";
+    waiter.stdout.on("data", (d) => (waited += d));
+    const waiterExit = new Promise((resolveExit) => waiter.on("exit", resolveExit));
+    await sleep(500);
+    const daemonPid = () => JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")).pid;
+    const oldPid = daemonPid();
+    review("stop");
+    // The waiter starts a new daemon; wait for it, not for the old one in its last moments.
+    for (let i = 0; i < 100; i++) {
+      await sleep(100);
+      const restarted = (() => {
+        try {
+          return daemonPid() !== oldPid;
+        } catch {
+          return false;
+        }
+      })();
+      if (restarted && (await fetch(`${base}/`).then((r) => r.ok, () => false))) break;
+    }
+    await post("questions", { id: "q_2", target: { type: "report" }, text: "Still there?" });
+    await Promise.race([waiterExit, sleep(15_000)]);
+    waiter.kill();
+    if (!waited.includes("Live question q_2")) fail(`a waiter did not survive a daemon restart:\n${waited}`);
+
+    build(join(reviewDir, "round3.json"));
+    review("open", "--report", join(reviewDir, "round3.json"));
     await post("submit", { comments: [] });
     if (!review("wait", "--id", id).includes("The review is done")) fail("an empty review did not end the review");
-    console.log("daemon flow: question, sent review, plan, status, round 2 and finish all worked");
+    console.log("daemon flow: question, sent review, plan, status, round 2 finished without code changes, publishing again, waiting through a restart, empty round 3 all worked");
   } finally {
     try {
       review("stop");

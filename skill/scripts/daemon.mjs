@@ -149,6 +149,20 @@ function roundText(file) {
 
 const submittedComments = (r) => (r.phase === "reviewing" ? [] : (readJson(reviewFile(r, r.round), {}).comments ?? []));
 
+// A round that changed no code is finished once every comment has a final status: no new round will
+// come to end it. Comments in plan steps the reviewer skipped need no status. A `fixed` comment means
+// new code, so that round ends when the agent publishes the next one.
+function finishIfSettled(r) {
+  if (r.phase !== "working") return false;
+  const comments = submittedComments(r);
+  const skipped = new Set((r.plan?.steps ?? []).flatMap((s, i) => ((r.plan.decision?.kinds?.[i] ?? s.kind) === "skip" ? s.comments : [])));
+  const statuses = comments.filter((c) => !skipped.has(c.id)).map((c) => r.statuses[c.id]?.status);
+  if (!comments.length || statuses.some((s) => !s || s === "working" || s === "fixed")) return false;
+  r.phase = "done";
+  pushEvent(r, "round-finished", { round: r.round, count: comments.length });
+  return true;
+}
+
 // What an open page needs to know, sent on every change.
 const liveState = (r) => ({
   id: r.id,
@@ -417,8 +431,11 @@ async function handle(req, res, port) {
     r.title = bundle.report.title;
     r.tag = bundle.report.tag;
     const round = bundle.round ?? r.round;
+    // Publishing a round again (a rebuild, or an agent reconnecting) only swaps its data file.
+    // Comments, plan and progress belong to the round and stay.
+    const republished = r.rounds.some((x) => x.round === round);
     r.rounds = [...r.rounds.filter((x) => x.round !== round), { round, file, publishedAt: now() }].sort((a, b) => a.round - b.round);
-    if (round !== r.round || r.phase !== "reviewing") {
+    if (!republished && round !== r.round) {
       r.round = round;
       r.phase = "reviewing";
       r.statuses = {};
@@ -429,7 +446,7 @@ async function handle(req, res, port) {
     r.lastAgentActivity = now();
     saveRegistry();
     save(r);
-    return send(res, 200, { id: r.id, round: r.round, url: `http://127.0.0.1:${port}/r/${r.id}`, tabs: openTabs(r), dir });
+    return send(res, 200, { id: r.id, round, republished, url: `http://127.0.0.1:${port}/r/${r.id}`, tabs: openTabs(r), dir });
   }
 
   // ---------- per review
@@ -482,8 +499,9 @@ async function handle(req, res, port) {
       if (typeof body.commentId !== "string" || typeof body.status !== "string") return send(res, 400, { error: "commentId and status are required" });
       r.statuses[body.commentId] = { status: body.status, text: body.text ?? null, ref: body.ref ?? undefined, at: now() };
       if (r.phase === "sent" || r.phase === "planning") r.phase = "working";
+      const finished = finishIfSettled(r);
       save(r);
-      return send(res, 200, { ok: true });
+      return send(res, 200, { ok: true, finished, round: r.round });
     }
     return send(res, 404, { error: "not found" });
   }
@@ -628,6 +646,9 @@ setInterval(() => {
     process.exit(0);
   }
 }, 60_000).unref();
+
+// Reviews that finished their last comment before the daemon knew to end the round.
+for (const r of reviews.values()) if (finishIfSettled(r)) save(r);
 
 void listen(FIRST_PORT);
 console.log(`Reviews known: ${reviews.size}. Home: ${HOME}`);

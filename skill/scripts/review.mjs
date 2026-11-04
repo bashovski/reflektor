@@ -118,24 +118,36 @@ if (command === "open") {
   const { data } = await api(info, "POST", "/api/reviews", { report: resolve(args.report) });
   console.log(`Review: ${data.url}`);
   console.log(`Review id: ${data.id} (round ${data.round})`);
+  if (data.republished) console.log(`Round ${data.round} was already published. It now uses this build; comments, plan and progress are kept.`);
   if (args.open && data.tabs === 0) {
     const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
     spawn(opener, [data.url], { detached: true, stdio: "ignore" }).unref();
     console.log("Opened it in the browser.");
   } else if (data.tabs > 0) {
-    console.log(`Already open in ${data.tabs} tab(s); they show a banner for the new round.`);
+    console.log(
+      data.republished
+        ? `Open in ${data.tabs} tab(s); a reload shows this build.`
+        : `Already open in ${data.tabs} tab(s); they show a banner for the new round.`,
+    );
   }
   console.log(`Next: run in the background: ${self} wait --id ${data.id}`);
 } else if (command === "wait") {
   need("id");
-  const info = await ensureDaemon();
-  for (;;) {
+  let info = await ensureDaemon();
+  for (let failures = 0; ; ) {
     let result;
     try {
       result = await api(info, "GET", `/api/r/${encodeURIComponent(args.id)}/next-event`);
+      failures = 0;
     } catch (e) {
-      console.log(`The review daemon is not reachable (${e.message}). Run "open" again to restart it.`);
-      process.exit(0);
+      // The daemon restarts when the skill is updated. Start it again and keep waiting.
+      if (++failures > 3) {
+        console.log(`The review daemon is not reachable (${e.message}). Run wait again in the background.`);
+        process.exit(0);
+      }
+      await sleep(1000);
+      info = await ensureDaemon().catch(() => info);
+      continue;
     }
     if (result.status === 204) continue;
     const { event, review } = result.data;
@@ -162,6 +174,9 @@ if (command === "open") {
       if (event.decision.note) console.log(`Note: ${event.decision.note}`);
       console.log(`\nNext: make the changes. Report each comment as you go: ${self} status --id ${review.id} --comment <id> --status working|fixed|answered|wontfix|noted --text "<short>"`);
       console.log(`Then collect --since last, write report.json with review.replies, build, and publish: ${self} open --report <new json>`);
+    } else if (event.type === "round-finished") {
+      console.log(`Round ${event.round} of ${review.id} is finished: all ${event.count} comments are handled and no code changed. The review is done.`);
+      console.log("Offer to open the PR (ask first).");
     } else if (event.type === "plan-decision") {
       console.log(`The reviewer wants a different plan for ${review.id}.`);
       if (event.decision.note) console.log(`Note: ${event.decision.note}`);
@@ -187,8 +202,17 @@ if (command === "open") {
 } else if (command === "status") {
   need("id", "comment", "status");
   const info = await ensureDaemon();
-  await api(info, "POST", `/api/r/${encodeURIComponent(args.id)}/status`, { commentId: args.comment, status: args.status, text: textArg(), ref: parseRef(args.ref) });
+  const { data } = await api(info, "POST", `/api/r/${encodeURIComponent(args.id)}/status`, {
+    commentId: args.comment,
+    status: args.status,
+    text: textArg(),
+    ref: parseRef(args.ref),
+  });
   console.log(`${args.comment}: ${args.status}`);
+  if (data?.finished) {
+    console.log(`\nEvery comment is handled and none changed code, so round ${data.round} is finished. The page shows the review as done.`);
+    console.log("Skip the rebuild. Tell the user, and offer to open the PR (ask first).");
+  }
 } else if (command === "list") {
   const info = await ensureDaemon();
   const { data } = await api(info, "GET", "/api/reviews");

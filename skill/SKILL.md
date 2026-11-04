@@ -215,6 +215,8 @@ The reviewer follows along in the page: your plan and your progress on each comm
    ```
 
    The file: `{ "steps": [{ "comments": ["<comment id>"], "where": "book.service.ts:19", "kind": "fix" | "question" | "nit", "action": "<what you will do>" }], "note": "<optional>" }`. Every comment belongs to at least one step. Start the waiter again. The reviewer approves in the page (and can change a step's kind or skip it) or asks for a new plan. If the user approves in the chat instead, go ahead.
+
+   When no comment needs a code change (every comment is `accepted`, or a question you can answer), skip the plan and go straight to step 4.
 4. **Make the changes,** reporting each comment as you go:
 
    ```bash
@@ -222,6 +224,8 @@ The reviewer follows along in the page: your plan and your progress on each comm
    ```
 
    Mark a comment `working` when you start it and give the final status when done. If you think a requested fix is wrong, do not make it; use `wontfix` and say why.
+
+   When every comment has a final status and none is `fixed`, no code changed: the daemon ends the review, and the last `status` call says so. A running waiter exits with the same news. Skip steps 5 and 6 and offer to open the PR (step 9).
 5. **Rebuild for the next round:** run collect.mjs with `--since last`, then write a new report.json about these changes only. Add `review: { round, replies }`: `round` is the round you answered, and every comment gets one reply with the same status and text as above (`fixed` with a `ref` to the new code, `answered`, `wontfix` with the reason, `noted` for `accepted` comments and nits you skipped).
 6. **Build and publish** with `review.mjs open` (steps 6 and 7) and start the waiter again. Open tabs show "Round N is ready". Repeat until the reviewer sends a round with no comments.
 

@@ -98,10 +98,13 @@ const Layout = () => {
   const [settings, setSettings] = useState(false);
   useShortcuts(() => setSettings(true));
   const { bundle } = useReport();
+  const { phase, latestRound, round } = useReview();
 
+  // A finished review gets a check mark in the tab title, for when this tab is in the background.
+  const finished = phase === "done" && latestRound === round;
   useEffect(() => {
-    document.title = `${bundle.report.tag} ${bundle.report.title}`;
-  }, [bundle]);
+    document.title = `${finished ? "✓ " : ""}${bundle.report.tag} ${bundle.report.title}`;
+  }, [bundle, finished]);
 
   return (
     <>
