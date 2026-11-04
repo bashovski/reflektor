@@ -3,7 +3,7 @@ import { File as CodeFile, type FileDiffOptions, type FileOptions, MultiFileDiff
 import { X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useReport } from "../lib/state";
-import { DIFF_THEME, toDiffInput } from "./FileCard";
+import { DIFF_THEME, HIGHLIGHTER, toDiffInput } from "./FileCard";
 import { cx, FileIcon, LocCount } from "./ui";
 
 type Mode = "changes" | "file";
@@ -32,11 +32,11 @@ export const FileModal = () => {
   }, [modal, contextText, contents]);
 
   const diffOptions = useMemo<FileDiffOptions<undefined, undefined>>(
-    () => ({ theme: DIFF_THEME, themeType: resolvedTheme, diffStyle, disableFileHeader: true, expandUnchanged: true }),
+    () => ({ theme: DIFF_THEME, themeType: resolvedTheme, preferredHighlighter: HIGHLIGHTER, diffStyle, disableFileHeader: true, expandUnchanged: true }),
     [resolvedTheme, diffStyle],
   );
   const fileOptions = useMemo<FileOptions<undefined, undefined>>(
-    () => ({ theme: DIFF_THEME, themeType: resolvedTheme, disableFileHeader: true }),
+    () => ({ theme: DIFF_THEME, themeType: resolvedTheme, preferredHighlighter: HIGHLIGHTER, disableFileHeader: true }),
     [resolvedTheme],
   );
 

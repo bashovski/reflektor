@@ -1,4 +1,4 @@
-import type { FileContents } from "@pierre/diffs";
+import { canUseWASM, type FileContents } from "@pierre/diffs";
 import { type DiffLineAnnotation, type FileDiffOptions, MultiFileDiff, type SelectedLineRange } from "@pierre/diffs/react";
 import { ChevronRight, FlaskConical, Maximize2, MessageSquarePlus, MessageSquareText, ShieldAlert } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -41,6 +41,8 @@ const LineComment = ({ id }: { id: string }) => {
 };
 
 export const DIFF_THEME = { dark: "pierre-dark", light: "pierre-light" } as const;
+// Highlights colors code with WebAssembly lexers, several times faster than Shiki's regex engine.
+export const HIGHLIGHTER = canUseWASM() ? "highlights" : "shiki-js";
 
 export type DiffInput =
   | { oldFile: FileContents; newFile: FileContents }
@@ -162,6 +164,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
     () => ({
       theme: DIFF_THEME,
       themeType: resolvedTheme,
+      preferredHighlighter: HIGHLIGHTER,
       diffStyle,
       disableFileHeader: true,
       hunkSeparators: "line-info",

@@ -1,5 +1,7 @@
+import { Virtualizer } from "@pierre/diffs";
+import { VirtualizerContext } from "@pierre/diffs/react";
 import { TriangleAlert } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { Bundle } from "../../../skill/schema/types";
 import { ReviewProvider, useReview } from "../lib/review";
 import { ReportProvider, useReport } from "../lib/state";
@@ -72,6 +74,26 @@ const Warnings = () => {
   );
 };
 
+// Diffs render only the lines near the screen. Pierre's virtualizer follows the page's own scroll,
+// so long reports keep the normal scrollbar, find-in-page for what is rendered, and sticky headers.
+const WindowVirtualizer = ({ children }: { children: ReactNode }) => {
+  const [virtualizer] = useState(() => new Virtualizer());
+  const ref = useCallback(
+    (node: HTMLElement | null) => {
+      if (node) virtualizer.setup(document);
+      else virtualizer.cleanUp();
+    },
+    [virtualizer],
+  );
+  return (
+    <VirtualizerContext.Provider value={virtualizer}>
+      <main ref={ref} className="min-w-0 space-y-10">
+        {children}
+      </main>
+    </VirtualizerContext.Provider>
+  );
+};
+
 const Layout = () => {
   const [settings, setSettings] = useState(false);
   useShortcuts(() => setSettings(true));
@@ -89,7 +111,7 @@ const Layout = () => {
         <aside className="hidden lg:block">
           <Sidebar />
         </aside>
-        <main className="min-w-0 space-y-10">
+        <WindowVirtualizer>
           <Hero />
           <PreviousReview />
           <PlanCheck />
@@ -104,7 +126,7 @@ const Layout = () => {
             Code comes straight from git. Notes, highlights and flows were written by Claude and may be wrong. Built{" "}
             {new Date(bundle.builtAt).toLocaleString()}.
           </footer>
-        </main>
+        </WindowVirtualizer>
       </div>
       <ReviewBar />
       <FileModal />
