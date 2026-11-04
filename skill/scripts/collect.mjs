@@ -64,6 +64,9 @@ const tryGit = (...argv) => {
   }
 };
 const refExists = (ref) => tryGit("rev-parse", "--verify", "--quiet", `${ref}^{commit}`) !== null;
+// One git process for many lookups, fed through stdin. Returns raw bytes.
+const gitStdin = (input, ...argv) =>
+  run("git", ["-c", "core.quotePath=false", ...argv], repoRoot, { input: Buffer.from(input), encoding: "buffer", stdio: ["pipe", "pipe", "pipe"] });
 
 function hasCommand(cmd) {
   try {
@@ -315,29 +318,74 @@ if (args.files) {
   entries = entries.filter((e) => wanted.has(e.path) || wanted.has(e.oldPath));
 }
 
-function isGenerated(path) {
-  if (LOCKFILES.has(basename(path)) || GENERATED.some((re) => re.test(path)) || generatedGlobs.some((re) => re.test(path))) return true;
-  const attr = tryGit("check-attr", "linguist-generated", "--", path) ?? "";
-  return /: (set|true)$/.test(attr.trim());
+// Files marked `linguist-generated` in .gitattributes, asked for all paths at once.
+function generatedByAttribute(paths) {
+  if (!paths.length) return new Set();
+  try {
+    const out = gitStdin(paths.join("\0") + "\0", "check-attr", "-z", "--stdin", "linguist-generated").toString("utf8").split("\0");
+    const set = new Set();
+    for (let i = 0; i + 2 < out.length; i += 3) if (out[i + 2] === "set" || out[i + 2] === "true") set.add(out[i]);
+    return set;
+  } catch {
+    return new Set();
+  }
 }
 
-function readOld(path) {
-  return tryGit("show", `${from}:${path}`);
+const TOO_LARGE = Symbol("too large");
+
+// Reads every "<rev>:<path>" with two git processes instead of one per file: --batch-check for the
+// sizes, then --batch for the contents of files small enough to show.
+// Each value is the text, TOO_LARGE, or null when git has no such file.
+function readBlobs(specs) {
+  const result = new Map(specs.map((s) => [s, null]));
+  // The batch protocol is line based; the rare path with a newline in it is read on its own.
+  for (const spec of specs.filter((s) => s.includes("\n"))) result.set(spec, tryGit("show", spec));
+  const batchable = specs.filter((s) => !s.includes("\n"));
+  if (!batchable.length) return result;
+
+  const checks = gitStdin(batchable.join("\n") + "\n", "cat-file", "--batch-check").toString("utf8").split("\n");
+  const wanted = [];
+  batchable.forEach((spec, i) => {
+    const [, type, size] = checks[i].split(" ");
+    if (type !== "blob") return;
+    if (Number(size) > MAX_BYTES) result.set(spec, TOO_LARGE);
+    else wanted.push(spec);
+  });
+  if (!wanted.length) return result;
+
+  // Each answer is "<sha> blob <size>\n", then <size> bytes, then "\n".
+  const out = gitStdin(wanted.join("\n") + "\n", "cat-file", "--batch");
+  let at = 0;
+  for (const spec of wanted) {
+    const eol = out.indexOf(10, at);
+    const size = Number(out.subarray(at, eol).toString("latin1").split(" ")[2]);
+    result.set(spec, out.subarray(eol + 1, eol + 1 + size).toString("utf8"));
+    at = eol + 1 + size + 1;
+  }
+  return result;
 }
-function readNew(path) {
-  return tryGit("show", `${to}:${path}`);
-}
+
 function looksBinary(text) {
-  return text !== null && text.slice(0, 8000).includes("\u0000");
+  return typeof text === "string" && text.slice(0, 8000).includes("\u0000");
 }
 function tooLarge(text) {
-  return text !== null && (text.length > MAX_BYTES || text.split("\n").length > MAX_LINES);
+  return text === TOO_LARGE || (typeof text === "string" && (text.length > MAX_BYTES || text.split("\n").length > MAX_LINES));
 }
+
+const oldSpec = (e) => `${from}:${e.oldPath ?? e.path}`;
+const newSpec = (e) => `${to}:${e.path}`;
+const blobs = readBlobs([
+  ...entries.filter((e) => e.status !== "added").map(oldSpec),
+  ...entries.filter((e) => e.status !== "deleted").map(newSpec),
+]);
+const attributeGenerated = generatedByAttribute(entries.map((e) => e.path));
+const isGenerated = (path) =>
+  LOCKFILES.has(basename(path)) || GENERATED.some((re) => re.test(path)) || generatedGlobs.some((re) => re.test(path)) || attributeGenerated.has(path);
 
 const files = entries.map((e) => {
   const stat = numstat.get(e.path) ?? { additions: 0, deletions: 0, binary: false };
-  let oldContent = e.status === "added" ? null : readOld(e.oldPath ?? e.path);
-  let newContent = e.status === "deleted" ? null : readNew(e.path);
+  let oldContent = e.status === "added" ? null : blobs.get(oldSpec(e));
+  let newContent = e.status === "deleted" ? null : blobs.get(newSpec(e));
   const binary = stat.binary || looksBinary(oldContent) || looksBinary(newContent);
   const large = tooLarge(oldContent) || tooLarge(newContent);
   const lines = changedLines.get(e.path) ?? { added: [], removed: [] };

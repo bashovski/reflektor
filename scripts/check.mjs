@@ -32,12 +32,20 @@ try {
   if (!collected.includes("(config)")) fail("collect.mjs did not take the base branch from .pr-report.json");
   if (!collected.includes("Safety checks: 1 high, 0 medium, 1 low")) fail("collect.mjs safety checks did not find the slug migration problems");
 
-  // A key-shaped value built at runtime, so no literal secret is stored in this repo.
-  const secretRepo = join(tmp, "secret");
-  run("bash", ["-c", `mkdir -p "${secretRepo}" && cd "${secretRepo}" && git init -q -b main && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m base && git checkout -qb feat`]);
-  writeFileSync(join(secretRepo, "config.js"), `export const key = "${"AKIA" + "Q".repeat(16)}";\n`);
-  const secretOut = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", secretRepo, "--no-fetch", "--base", "main", "--out", join(tmp, "secret.json")]);
-  if (!secretOut.includes("AWS access key [AKIA…(20 characters)]")) fail("collect.mjs did not flag or mask a fake AWS key");
+  // Edge cases in a second repo. The key-shaped value is built at runtime, so no literal secret is stored here.
+  const edgeRepo = join(tmp, "edge");
+  run("bash", ["-c", `mkdir -p "${edgeRepo}/gen" && cd "${edgeRepo}" && git init -q -b main && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m base && git checkout -qb feat`]);
+  writeFileSync(join(edgeRepo, "config.js"), `export const key = "${"AKIA" + "Q".repeat(16)}";\n`);
+  writeFileSync(join(edgeRepo, ".gitattributes"), "gen/*.js linguist-generated\n");
+  writeFileSync(join(edgeRepo, "gen", "api.js"), "export const api = 1;\n");
+  writeFileSync(join(edgeRepo, "big.txt"), "x".repeat(600 * 1024));
+  writeFileSync(join(edgeRepo, "naïve name.ts"), "export const ok = true;\n");
+  const edgeOut = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", edgeRepo, "--no-fetch", "--base", "main", "--out", join(tmp, "edge.json")]);
+  if (!edgeOut.includes("AWS access key [AKIA…(20 characters)]")) fail("collect.mjs did not flag or mask a fake AWS key");
+  const edge = Object.fromEntries(JSON.parse(readFileSync(join(tmp, "edge.json"), "utf8")).files.map((f) => [f.path, f]));
+  if (!edge["gen/api.js"]?.generated) fail("collect.mjs did not mark a linguist-generated file as generated");
+  if (!edge["big.txt"]?.tooLarge || edge["big.txt"].newContent !== null) fail("collect.mjs did not leave out a file over the size limit");
+  if (edge["naïve name.ts"]?.newContent !== "export const ok = true;\n") fail("collect.mjs did not read a file with a space and accent in its name");
 
   const checked = run("node", [
     join(root, "skill/scripts/checks.mjs"), "--repo", repo,
