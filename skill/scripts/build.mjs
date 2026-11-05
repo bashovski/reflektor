@@ -325,6 +325,20 @@ function loadProjectChecks() {
   const file = args.checks ?? join(dirname(resolve(args.diff)), "checks.json");
   if (!existsSync(file)) return null;
   const data = JSON.parse(readFileSync(file, "utf8"));
+  if (data.status === "running") {
+    let alive = true;
+    try {
+      process.kill(data.pid, 0);
+    } catch {
+      alive = false;
+    }
+    if (alive) {
+      console.log(`Project checks are still running. Wait for them, then build again:\n  node ${join(here, "checks.mjs")} --repo ${diff.repo.root} --wait`);
+      process.exit(1);
+    }
+    notes.push("Project checks stopped before they finished; the report shows the ones that did.");
+    data.ranAt = data.startedAt;
+  }
   const ranAt = Date.parse(data.ranAt);
   // Stale when a commit or an uncommitted file is newer than the run.
   const newestCommit = Math.max(0, ...diff.commits.map((c) => Date.parse(c.date)));

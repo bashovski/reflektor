@@ -86,6 +86,27 @@ try {
   if (!/<title>feat\/books · library( · round \d+)?<\/title>/.test(page)) fail("the standalone page does not carry the branch · repo title");
   if (statSync(html).size < 1_000_000) fail("the standalone page is too small; build.mjs probably used the unbuilt viewer");
 
+  // Checks started in the background: build refuses until they finish, --wait returns their results.
+  const bgChecks = join(tmp, "bg-checks.json");
+  spawn("node", [join(root, "skill/scripts/checks.mjs"), "--repo", repo, "--out", bgChecks, "--run", "slow=sleep 2"], { stdio: "ignore" });
+  const started = () => {
+    try {
+      return readFileSync(bgChecks, "utf8").includes('"running"');
+    } catch {
+      return false;
+    }
+  };
+  for (let i = 0; i < 50 && !started(); i++) await sleep(50);
+  let refused = "";
+  try {
+    run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/diff.json"), "--report", join(root, "samples/report.json"), "--checks", bgChecks, "--out", join(tmp, "bg.json")]);
+  } catch (e) {
+    refused = e.stdout ?? "";
+  }
+  if (!refused.includes("still running")) fail("build.mjs did not refuse to build while the checks were running");
+  const waited = run("node", [join(root, "skill/scripts/checks.mjs"), "--repo", repo, "--out", bgChecks, "--wait"]);
+  if (!waited.includes("Project checks: 1 passed")) fail(`checks.mjs --wait did not print the finished results:\n${waited}`);
+
   await daemonFlow();
 } catch (e) {
   fail(e.stderr?.toString() || e.message);

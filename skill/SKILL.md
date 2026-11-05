@@ -33,7 +33,7 @@ Coverage is optional, but try to get it.
 
 1. `coverage.files` in `.pr-report.json`. collect.mjs reads these itself.
 2. A coverage file already in the repo: `lcov.info`, `coverage.xml`, `cobertura.xml`, `coverage.out`, `cover.out`, `jacoco.xml`, `clover.xml`, or a coverage.py `coverage.json`. Look in the repo root, `coverage/` folders and package folders. Skip `node_modules`, `vendor` and build output. collect.mjs prints which file it used and marks it STALE when it is older than the latest change; then try step 3 for a fresh one.
-3. Run the tests with coverage once. Use `coverage.command` from `.pr-report.json` if it is set. Otherwise use the project's own test command plus a coverage flag:
+3. Get a fresh one from the test run in step 2b. Use `coverage.command` from `.pr-report.json` as the test command if it is set. Otherwise add a coverage flag to the project's own test command:
 
 | Stack | Command that writes a supported file |
 |---|---|
@@ -55,9 +55,9 @@ Rules:
 - If tests fail but a coverage file was written, use it and add the failing tests to `beforeMerge`.
 - Pass each file with `--coverage <file>`.
 
-## 2b. Run the project's checks
+## 2b. Start the project's checks in the background
 
-Run the project's own lint, typecheck and test commands once, so the report shows what passes:
+Start the project's own lint, typecheck and test commands now, so the report shows what passes. They run while you collect and read the change; do not wait for them here. In Claude Code, use the Bash tool with `run_in_background`:
 
 ```bash
 node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo . --run "lint=<command>" --run "typecheck=<command>" --run "tests=<command>"
@@ -65,9 +65,10 @@ node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo . --run "lint=<command>" --ru
 
 - Use `checks` from `.pr-report.json` when it is set (then leave out `--run`).
 - Otherwise pick the project's own commands: scripts in package.json, Makefile targets, `go vet ./...` and `go test ./...`, `cargo clippy` and `cargo test`, `ruff check`, `mypy` and `pytest`, and so on. In a monorepo, run only the packages that changed.
-- Run the tests through checks.mjs with the coverage flags from step 2, so one run gives both the result and the coverage file.
+- Run the tests with the coverage flags from step 2, so one run gives both the result and the coverage file.
 - The same rules as coverage apply: never install anything, and ask first if a command needs services or looks slow.
-- It writes `checks.json` next to diff.json, and build.mjs picks it up. A failing check is not an error: add a `beforeMerge` item that names the check and the first error.
+- It writes `checks.json` next to diff.json as it goes. Step 4b waits for it.
+- If you cannot run a background process, run it in the foreground and wait.
 
 ## 3. Collect
 
@@ -86,6 +87,8 @@ It also prints **Safety checks**: fixed rules that flag likely secrets (key form
 
 Exit code 3 means there are no changes: tell the user and stop.
 
+While the tests from step 2b run, their coverage file may be missing or STALE. That is expected: step 4b collects again once they are done.
+
 collect.mjs fetches the base branch first. If the fetch fails, it warns and uses the local copy; tell the user. Pass `--no-fetch` to skip fetching, for example when offline.
 
 Do not read diff.json. It holds full file contents. Read the changes with the printed `git diff` command, file by file, and read untracked files directly.
@@ -102,6 +105,20 @@ Before writing, find out:
 - **The safety checks:** every high or medium finding must appear in the report as a `risk` highlight with a `ref` to its line and a `fix`. A secret also gets a `beforeMerge` item: remove it, rotate it, and load it from the environment. A false positive still gets a highlight that says why it is safe. Never copy a secret value into report text.
 
 For large changes (more than about 60 files or 3000 changed lines), read must-review files fully and skim the rest. Say in the summary that the report focuses on the most important parts.
+
+## 4b. Wait for the checks
+
+Before writing report.json, get the results of the checks from step 2b:
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo . --wait
+```
+
+It returns at once when they are done and prints the results; otherwise it waits. Give the command a 10-minute timeout; after 9 minutes it says the checks are still running, and you run it again.
+
+- If the tests wrote a coverage file, run collect.mjs again with the same arguments. It takes a moment and puts the fresh coverage into diff.json; use its printed coverage for the "not tested" part of the report.
+- A failing check is not an error: add a `beforeMerge` item that names the check and the first error.
+- build.mjs refuses to build while the checks still run.
 
 ## 5. Write report.json
 
