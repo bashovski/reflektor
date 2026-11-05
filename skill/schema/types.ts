@@ -194,6 +194,32 @@ export type SchemaColumn = {
 // A table touched by the change, or an existing table that a new relation points to (only the columns involved).
 export type SchemaTable = { name: string; status: SchemaStatus; columns: SchemaColumn[]; ref?: Ref };
 
+export type ContractKind = "type" | "interface" | "enum" | "constant";
+
+export type ContractStatus = "new" | "changed" | "removed";
+
+export type MemberChange = "added" | "removed" | "changed";
+
+// A field of a type or interface, a value of an enum, or a member of a union type.
+// `type` is as written in the code; `was` is the old type of a changed member.
+export type ContractMember = { name: string; change: MemberChange; type?: string; was?: string };
+
+// A type, interface, enum or exported constant that the change adds, changes or removes.
+// `ref` points at its definition in the new code, or in the old code when removed.
+// `members` lists what changed (all of them for a new one). `value` and `was` are a constant's new and old values.
+// `generated` is set by the build when the file is generated (OpenAPI, GraphQL or ORM output).
+export type Contract = {
+  name: string;
+  kind: ContractKind;
+  status: ContractStatus;
+  ref: Ref;
+  note?: string;
+  members?: ContractMember[];
+  value?: string;
+  was?: string;
+  generated?: boolean;
+};
+
 export type PlanStatus = "done" | "partial" | "missing" | "extra";
 
 // One item of the session's plan, checked against the diff. "extra" = a change the plan did not ask for.
@@ -212,6 +238,8 @@ export type Report = {
   testing?: { gaps: string[] };
   // Tables changed by this PR, drawn as a diagram. Leave out when the database is not touched.
   schema?: { tables: SchemaTable[] };
+  // Types, interfaces, enums and exported constants the change adds, changes or removes.
+  contracts?: Contract[];
   // Did the change do what this session planned? Leave out when there was no plan.
   plan?: { source: string; items: PlanItem[] };
   // Answers to the previous review round. Add one reply per comment in that round's review file.

@@ -39,7 +39,10 @@ try {
 
   // Edge cases in a second repo. The key-shaped value is built at runtime, so no literal secret is stored here.
   const edgeRepo = join(tmp, "edge");
-  run("bash", ["-c", `mkdir -p "${edgeRepo}/gen" && cd "${edgeRepo}" && git init -q -b main && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m base && git checkout -qb feat && git remote add origin https://gitlab.com/edge-group/sub/edge.git`]);
+  mkdirSync(join(edgeRepo, "gen"), { recursive: true });
+  writeFileSync(join(edgeRepo, "status.ts"), "export enum Status { Draft, Archived }\nexport const LIMIT = 5;\n");
+  run("bash", ["-c", `cd "${edgeRepo}" && git init -q -b main && git add status.ts && git -c user.name=t -c user.email=t@t commit -q -m base && git checkout -qb feat && git remote add origin https://gitlab.com/edge-group/sub/edge.git`]);
+  writeFileSync(join(edgeRepo, "status.ts"), "export enum Status { Draft, Published }\nexport const LIMIT = 10;\n");
   // An avatar downloaded earlier: --no-fetch must still use it. A GitLab subgroup is one cache file.
   const cachedAvatar = join(home.PR_REPORT_HOME, "cache/avatars/gitlab.com/edge-group_sub");
   mkdirSync(dirname(cachedAvatar), { recursive: true });
@@ -58,6 +61,26 @@ try {
   if (!edge["gen/api.js"]?.generated) fail("collect.mjs did not mark a linguist-generated file as generated");
   if (!edge["big.txt"]?.tooLarge || edge["big.txt"].newContent !== null) fail("collect.mjs did not leave out a file over the size limit");
   if (edge["naïve name.ts"]?.newContent !== "export const ok = true;\n") fail("collect.mjs did not read a file with a space and accent in its name");
+
+  // Contracts: names are looked up in the new file, removed members in the old one; made-up names are dropped.
+  writeFileSync(
+    join(tmp, "edge-report.json"),
+    JSON.stringify({
+      version: 1, tag: "FEATURE", title: "Edge", summary: "Edge cases.", targets: ["misc"], reviewMinutes: 1, beforeMerge: [], flows: [], sections: [],
+      contracts: [
+        { name: "Status", kind: "enum", status: "changed", ref: { path: "status.ts", line: 1 }, members: [{ name: "Published", change: "added" }, { name: "Archived", change: "removed" }] },
+        { name: "LIMIT", kind: "constant", status: "changed", ref: { path: "status.ts", line: 2 }, value: "10", was: "5" },
+        { name: "api", kind: "constant", status: "new", ref: { path: "gen/api.js", line: 1 } },
+        { name: "Nope", kind: "type", status: "new", ref: { path: "status.ts", line: 1 } },
+      ],
+    }),
+  );
+  const edgeBuilt = run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(tmp, "edge.json"), "--report", join(tmp, "edge-report.json"), "--out", join(tmp, "edge-out", "edge-r1.json")]);
+  const edgeContracts = JSON.parse(readFileSync(join(tmp, "edge-out", "edge-r1.json"), "utf8")).report.contracts;
+  if (!edgeBuilt.includes('could not find "Nope"')) fail("build.mjs did not drop a made-up contract name");
+  if (edgeBuilt.includes('member "')) fail(`build.mjs rejected a real contract member:\n${edgeBuilt}`);
+  if (edgeContracts.map((c) => c.name).join() !== "Status,LIMIT,api") fail(`unexpected contracts after the build: ${edgeContracts.map((c) => c.name).join()}`);
+  if (!edgeContracts.find((c) => c.name === "api")?.generated) fail("a contract in a generated file was not marked generated");
 
   const checked = run("node", [
     join(root, "skill/scripts/checks.mjs"), "--repo", repo,

@@ -6,6 +6,7 @@ A Claude Code skill that turns a branch into a review report in your browser. Th
 - the files to review, in order of risk
 - highlights for each area
 - the request flow from UI to database
+- the types, interfaces, enums and constants it adds, changes or removes
 - GitHub-style diffs with notes
 - test coverage of the new lines
 

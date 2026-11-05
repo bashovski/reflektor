@@ -39,6 +39,9 @@ const DETAIL_KINDS = union("FlowDetailKind");
 const REPLY_STATUS = union("ReplyStatus");
 const PLAN_STATUS = union("PlanStatus");
 const SCHEMA_STATUS = union("SchemaStatus");
+const CONTRACT_KINDS = union("ContractKind");
+const CONTRACT_STATUS = union("ContractStatus");
+const MEMBER_CHANGES = union("MemberChange");
 
 function parseArgs(argv) {
   const args = { open: false };
@@ -249,6 +252,35 @@ report.flows = (report.flows ?? []).map((flow, fi) => ({
   }),
 }));
 
+// ------------------------------------------------------------------ types and contracts
+// Every name must be in the changed file its ref points at: the new version, or the old one for
+// anything removed. A misspelled or made-up name is dropped with a warning.
+
+const hasWord = (text, word) =>
+  text != null && word !== "" && new RegExp(`(^|[^\\w$])${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\w$])`).test(text);
+
+report.contracts = (report.contracts ?? []).flatMap((c, ci) => {
+  const where = `contracts[${ci}] (${c.name})`;
+  oneOf(c.kind, CONTRACT_KINDS, `${where}.kind`);
+  oneOf(c.status, CONTRACT_STATUS, `${where}.status`);
+  const side = c.status === "removed" ? "old" : "new";
+  const ref = c.ref && checkRef({ ...c.ref, side }, where, { mustBeInDiff: true });
+  const name = lastIdentifier(c.name ?? "");
+  if (!ref || !hasWord(contentFor(ref.path, side), name)) {
+    warnings.push(`${where}: could not find "${name}" in ${ref?.path ?? "(no file)"}, removed`);
+    return [];
+  }
+  const members = (c.members ?? []).filter((m) => {
+    oneOf(m.change, MEMBER_CHANGES, `${where}.members.${m.name}.change`);
+    const found = hasWord(contentFor(ref.path, m.change === "removed" ? "old" : "new"), lastIdentifier(m.name ?? ""));
+    if (!found) warnings.push(`${where}: member "${m.name}" is not in ${ref.path}, removed`);
+    return found;
+  });
+  if (members.length > 20) warnings.push(`${where}: ${members.length} members; list the 20 that matter most`);
+  return [{ ...c, ref, members, generated: Boolean(c.generated || filesByPath.get(ref.path)?.generated) }];
+});
+if (report.contracts.length > 25) warnings.push(`contracts: ${report.contracts.length}; list the 25 that matter most`);
+
 // ------------------------------------------------------------------ output
 
 if (errors.length) {
@@ -402,6 +434,16 @@ function prDescription() {
   if (risks.length) {
     lines.push("## Risks", "");
     for (const r of [...new Set(risks)].slice(0, 5)) lines.push(`- ${r}`);
+    lines.push("");
+  }
+
+  if (report.contracts.length) {
+    lines.push("## Types and contracts", "");
+    for (const c of report.contracts) {
+      const value =
+        c.kind !== "constant" ? "" : c.was && c.value ? `: \`${c.was}\` → \`${c.value}\`` : c.value ? `: \`${c.value}\`` : c.was ? `: was \`${c.was}\`` : "";
+      lines.push(`- **${c.name}** (${c.kind}, ${c.status}${c.generated ? ", generated" : ""})${value}${c.note ? `. ${oneLine(c.note)}` : ""}${refText(c.ref)}`);
+    }
     lines.push("");
   }
 

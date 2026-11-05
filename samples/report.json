@@ -923,5 +923,166 @@
         ]
       }
     ]
-  }
+  },
+  "contracts": [
+    {
+      "name": "Book",
+      "kind": "type",
+      "status": "new",
+      "ref": {
+        "path": "apps/api/src/books/book.model.ts",
+        "line": 1
+      },
+      "note": "A saved book in the API.",
+      "members": [
+        {
+          "name": "id",
+          "change": "added",
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "change": "added",
+          "type": "string"
+        },
+        {
+          "name": "isbn",
+          "change": "added",
+          "type": "string"
+        },
+        {
+          "name": "authorId",
+          "change": "added",
+          "type": "string | null"
+        },
+        {
+          "name": "ownerId",
+          "change": "added",
+          "type": "string"
+        },
+        {
+          "name": "createdAt",
+          "change": "added",
+          "type": "Date"
+        }
+      ]
+    },
+    {
+      "name": "Book",
+      "kind": "type",
+      "status": "new",
+      "ref": {
+        "path": "apps/web/src/api/books.ts",
+        "line": 3
+      },
+      "note": "The web app's own copy of `Book`. It has no `ownerId`, and `createdAt` is a string because it arrives as JSON. Nothing keeps the two in sync.",
+      "members": [
+        {
+          "name": "id",
+          "change": "added",
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "change": "added",
+          "type": "string"
+        },
+        {
+          "name": "isbn",
+          "change": "added",
+          "type": "string"
+        },
+        {
+          "name": "authorId",
+          "change": "added",
+          "type": "string | null"
+        },
+        {
+          "name": "createdAt",
+          "change": "added",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "CreateBookInput",
+      "kind": "type",
+      "status": "new",
+      "ref": {
+        "path": "apps/api/src/books/book.service.ts",
+        "line": 8
+      },
+      "note": "What `POST /books` accepts. The web app declares the same type in `apps/web/src/api/books.ts`.",
+      "members": [
+        {
+          "name": "title",
+          "change": "added",
+          "type": "string"
+        },
+        {
+          "name": "isbn",
+          "change": "added",
+          "type": "string"
+        },
+        {
+          "name": "authorId?",
+          "change": "added",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Pagination",
+      "kind": "type",
+      "status": "new",
+      "ref": {
+        "path": "apps/api/src/shared/pagination.ts",
+        "line": 1
+      },
+      "note": "`limit` defaults to 20 and is capped at 100; `offset` defaults to 0.",
+      "members": [
+        {
+          "name": "limit",
+          "change": "added",
+          "type": "number"
+        },
+        {
+          "name": "offset",
+          "change": "added",
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "name": "ConflictError",
+      "kind": "type",
+      "status": "new",
+      "ref": {
+        "path": "apps/api/src/shared/errors.ts",
+        "line": 19
+      },
+      "note": "Answers 409. Thrown when the user already saved a book with that ISBN."
+    },
+    {
+      "name": "LimitError",
+      "kind": "type",
+      "status": "new",
+      "ref": {
+        "path": "apps/api/src/shared/errors.ts",
+        "line": 25
+      },
+      "note": "Answers 422. Thrown when the user reaches `MAX_BOOKS`."
+    },
+    {
+      "name": "MAX_BOOKS",
+      "kind": "constant",
+      "status": "new",
+      "ref": {
+        "path": "apps/api/src/books/book.service.ts",
+        "line": 6
+      },
+      "value": "500",
+      "note": "Books per user. `BOOKS_MAX_PER_USER` overrides it."
+    }
+  ]
 }

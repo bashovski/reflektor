@@ -1,4 +1,4 @@
-import { Check, FlaskConical, Route } from "lucide-react";
+import { Braces, Check, FlaskConical, Route } from "lucide-react";
 import { REVIEW, SECTIONS } from "../lib/meta";
 import { sectionDomId, useReport } from "../lib/state";
 import { cx } from "./ui";
@@ -70,6 +70,13 @@ export const Sidebar = () => {
             </a>
           ))}
         </div>
+      )}
+
+      {!!report.contracts?.length && (
+        <a href="#contracts" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
+          <Braces className="size-3.5" />
+          {report.contracts.length} {report.contracts.length === 1 ? "type or constant" : "types and constants"}
+        </a>
       )}
 
       {diff.coverage?.percent != null && (

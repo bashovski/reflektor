@@ -7,6 +7,7 @@ import { ReviewProvider, useReview } from "../lib/review";
 import { ReportProvider, useReport } from "../lib/state";
 import { useTab } from "../lib/tab";
 import { BeforeMerge } from "./BeforeMerge";
+import { Contracts } from "./Contracts";
 import { Coverage } from "./Coverage";
 import { FileModal } from "./FileModal";
 import { Findings } from "./Findings";
@@ -117,6 +118,7 @@ const Layout = () => {
           <ProjectChecks />
           <Findings />
           <Flows />
+          <Contracts />
           <Sections />
           <Coverage />
           <Warnings />

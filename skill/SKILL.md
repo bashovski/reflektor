@@ -166,6 +166,16 @@ Write report.json to the **Report file** path that collect printed. Its shape is
 - `references: "table.column"` on columns that point to another table. Add `enforced: false` when there is no real foreign key in the database.
 - Keep `note` to a few words, like "NOT NULL, no default".
 
+**contracts:** the types, interfaces, enums and constants that the change adds, changes or removes, so the reviewer sees the shapes other code depends on in one place. Leave it out when there are none.
+
+- Include exported ones and any that other files, the API, the database or the UI depend on. Leave out local helper types.
+- `kind`: `type` for type aliases, structs, classes and records; `interface`; `enum` (including union types of fixed values); `constant` for exported constants and limits that change behavior.
+- `name` exactly as in the code; `ref` points at its definition (the old line when removed). The build drops any name it cannot find in that file.
+- `members`: for a new one, every field or value; for a changed one, only what changed (`added`, `removed`, or `changed` with the old type in `was`). Give `type` as written in the code.
+- Constants: `value`, and `was` when it changed.
+- `note`: one sentence on what it is for or what breaks, such as two copies of the same type that can drift apart, or a removed field that callers still read.
+- Generated files are marked by the build. A change there usually comes from a schema or spec; say which one in `note`.
+
 **plan:** when this conversation had a plan, check the diff against it. A plan is an approved plan-mode plan, a task list you kept, a numbered list the user gave or agreed to, or a ticket the user pasted. Without one, leave `plan` out.
 
 - `source`: one line on where the plan came from, like "Plan approved in this session".
