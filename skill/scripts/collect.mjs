@@ -11,6 +11,7 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { ownerAvatar } from "./avatar.mjs";
+import { globToRegExp, parseRemote } from "./repo.mjs";
 
 const MAX_BYTES = 512 * 1024;
 const MAX_LINES = 8000;
@@ -81,25 +82,6 @@ function hasCommand(cmd) {
 
 // ------------------------------------------------------------------ repo config (.pr-report.json)
 
-// .gitignore-style globs: "*" stays within a folder, "**" crosses folders, a pattern without "/" matches at any depth.
-function globToRegExp(glob) {
-  const pattern = glob.includes("/") ? glob.replace(/^\//, "") : `**/${glob}`;
-  let re = "";
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i];
-    if (c === "*" && pattern[i + 1] === "*") {
-      i++;
-      if (pattern[i + 1] === "/") {
-        i++;
-        re += "(?:.*/)?";
-      } else re += ".*";
-    } else if (c === "*") re += "[^/]*";
-    else if (c === "?") re += "[^/]";
-    else re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  }
-  return new RegExp(`^${re}(?:/.*)?$`);
-}
-
 function loadConfig() {
   const file = join(repoRoot, ".pr-report.json");
   if (!existsSync(file)) return null;
@@ -117,16 +99,6 @@ const generatedGlobs = (config?.generated ?? []).map(globToRegExp);
 const targetFor = (path) => targetGlobs.find(([, re]) => re.test(path))?.[0] ?? null;
 
 // ------------------------------------------------------------------ repo identity
-
-function parseRemote(url) {
-  if (!url) return null;
-  const cleaned = url.trim().replace(/\.git$/, "");
-  const m = cleaned.match(/^(?:[\w+.-]+:\/\/)?(?:[^@/]+@)?([^:/]+)(?::\d+)?[:/](.+)$/);
-  if (!m) return null;
-  const parts = m[2].split("/").filter(Boolean);
-  if (parts.length < 2) return null;
-  return { host: m[1], owner: parts.slice(0, -1).join("/"), name: parts.at(-1) };
-}
 
 const remoteName = (tryGit("remote") ?? "").split("\n").map((s) => s.trim()).filter(Boolean);
 const remote = remoteName.includes("origin") ? "origin" : remoteName[0];

@@ -1,23 +1,34 @@
 #!/usr/bin/env node
 // Runs the project's own checks (lint, typecheck, tests...) and writes checks.json for the report.
-// Commands come from --run, or from "checks" in .pr-report.json. A failing check is a fact for the
-// report, not an error, so this script exits 0 unless it cannot run at all.
+// A failing check is a fact for the report, not an error, so this script exits 0 unless it cannot
+// run at all.
 //
-// The skill starts it in the background and reads the diff meanwhile. checks.json says "running"
+// The commands come from, in order: --run; "checks" in .pr-report.json (shared with the team); the
+// checks saved for this repo in ~/.pr-report/repos/ (yours only). With none, the agent works them out
+// once from the repo and saves them with --save, so later reports skip that step.
+//
+// The skill starts a run in the background and reads the diff meanwhile. checks.json says "running"
 // until the last check ends, and --wait blocks until then and prints the results.
 //
-// Usage: node checks.mjs --repo . [--run "name=command"]... [--timeout <seconds>] [--out checks.json]
+// Usage: node checks.mjs --repo . [--run "name=command"]... [--base <ref>] [--timeout <seconds>] [--out checks.json]
+//        node checks.mjs --repo . --plan          which checks would run, and from where
+//        node checks.mjs --repo . --save --run "name=command"... [--when "name=glob,glob"]... --source "<where from>" --from <file>...
+//        node checks.mjs --repo . --share         copy the saved checks into .pr-report.json
+//        node checks.mjs --repo . --forget        delete the saved checks
 //        node checks.mjs --repo . --wait [--out checks.json]
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { globToRegExp, parseRemote, repoKey } from "./repo.mjs";
 
 const MAX_OUTPUT = 400 * 1024;
 const TAIL_LINES = 80;
 
 function parseArgs(argv) {
-  const args = { repo: ".", runs: [], timeout: 600, out: null, wait: false };
+  const args = { repo: ".", runs: [], when: {}, from: [], source: null, base: null, timeout: 600, out: null, mode: "run" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -27,9 +38,17 @@ function parseArgs(argv) {
       const eq = spec.indexOf("=");
       if (eq < 1) throw new Error(`--run needs "name=command", got: ${spec}`);
       args.runs.push({ name: spec.slice(0, eq).trim(), command: spec.slice(eq + 1).trim() });
-    } else if (a === "--timeout") args.timeout = Number(next());
+    } else if (a === "--when") {
+      const spec = next();
+      const eq = spec.indexOf("=");
+      if (eq < 1) throw new Error(`--when needs "name=glob,glob", got: ${spec}`);
+      args.when[spec.slice(0, eq).trim()] = spec.slice(eq + 1).split(",").map((g) => g.trim()).filter(Boolean);
+    } else if (a === "--from") args.from.push(next());
+    else if (a === "--source") args.source = next();
+    else if (a === "--base") args.base = next();
+    else if (a === "--timeout") args.timeout = Number(next());
     else if (a === "--out") args.out = next();
-    else if (a === "--wait") args.wait = true;
+    else if (["--wait", "--plan", "--save", "--share", "--forget"].includes(a)) args.mode = a.slice(2);
     else throw new Error(`Unknown argument: ${a}`);
   }
   return args;
@@ -71,7 +90,7 @@ function printResults(results) {
 // Under the 10-minute limit agents put on one command; past it, the agent runs --wait again.
 const WAIT_LIMIT_MS = 9 * 60_000;
 
-if (args.wait) {
+if (args.mode === "wait") {
   let run = readRun();
   const started = Date.now();
   if (running(run)) console.log(`Waiting for: ${run.checks.filter((name) => !run.results.some((r) => r.name === name)).join(", ")}`);
@@ -92,21 +111,138 @@ if (args.wait) {
   process.exit(0);
 }
 
+
+// ------------------------------------------------------------------ where the commands come from
+
+const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
+const quietGit = (...argv) => {
+  try {
+    return execFileSync("git", argv, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return null;
+  }
+};
+const remotes = (quietGit("remote") ?? "").split("\n").filter(Boolean);
+const remote = remotes.includes("origin") ? "origin" : remotes[0];
+const savedFile = join(HOME, "repos", ...repoKey(parseRemote(remote ? quietGit("remote", "get-url", remote) : null), root), "checks.json");
+const configFile = join(root, ".pr-report.json");
+const readJson = (file) => {
+  try {
+    return JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+};
+const writeJson = (file, value) => {
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+};
+// Fingerprint of a file the saved commands came from; null when it is gone.
+const hashOf = (file) => {
+  try {
+    return createHash("sha1").update(readFileSync(join(root, file))).digest("hex");
+  } catch {
+    return null;
+  }
+};
+const withWhen = (c) => (args.when[c.name] ? { ...c, when: args.when[c.name] } : c);
+
+function pickChecks() {
+  if (args.runs.length) return { source: "--run", checks: args.runs.map(withWhen) };
+  const config = readJson(configFile);
+  if (config?.checks?.length) return { source: ".pr-report.json", checks: config.checks };
+  const saved = readJson(savedFile);
+  if (saved?.checks?.length) {
+    const changed = Object.entries(saved.from ?? {}).filter(([file, hash]) => hashOf(file) !== hash).map(([file]) => file);
+    return { source: `saved for this repo on ${new Date(saved.savedAt).toLocaleDateString("en-CA")}${saved.source ? `, ${saved.source}` : ""}`, checks: saved.checks, saved, changed };
+  }
+  return { source: null, checks: [] };
+}
+
+// Files this branch changes, for checks limited to some paths with "when". Compared with --base or
+// the remote's default branch; when no base is found, every check runs.
+function changedFiles() {
+  for (const ref of [args.base, "origin/HEAD", "origin/main", "origin/master", "main", "master"].filter(Boolean)) {
+    const base = quietGit("merge-base", "HEAD", ref);
+    if (!base) continue;
+    return [...(quietGit("diff", "--name-only", base) ?? "").split("\n"), ...(quietGit("ls-files", "--others", "--exclude-standard") ?? "").split("\n")].filter(Boolean);
+  }
+  return null;
+}
+
+function select(checks) {
+  const changed = checks.some((c) => c.when?.length) ? changedFiles() : null;
+  const applies = (c) => !c.when?.length || !changed || changed.some((file) => c.when.some((glob) => globToRegExp(glob).test(file)));
+  return { run: checks.filter(applies), skipped: checks.filter((c) => !applies(c)) };
+}
+
+const plural = (n) => `${n} ${n === 1 ? "check" : "checks"}`;
+const describe = (c) => `${c.name}: ${c.command}${c.when?.length ? `  (only when ${c.when.join(", ")} changed)` : ""}`;
+
+if (args.mode === "save") {
+  if (!args.runs.length) throw new Error('--save needs at least one --run "name=command"');
+  const from = Object.fromEntries(args.from.map((file) => [file, hashOf(file)]));
+  for (const [file, hash] of Object.entries(from)) if (!hash) console.log(`warning: ${file} is not in the repo; the saved checks will count as out of date`);
+  const checks = args.runs.map(withWhen);
+  writeJson(savedFile, { version: 1, savedAt: new Date().toISOString(), source: args.source, from, checks });
+  console.log(`Saved ${plural(checks.length)} for this repo in ${savedFile}:`);
+  for (const c of checks) console.log(`  ${describe(c)}`);
+  console.log("They run for every report of this repo from now on. --forget deletes them; --share copies them into .pr-report.json for the team.");
+  process.exit(0);
+}
+
+if (args.mode === "forget") {
+  console.log(existsSync(savedFile) ? `Deleted the saved checks: ${savedFile}` : "No checks are saved for this repo.");
+  rmSync(savedFile, { force: true });
+  process.exit(0);
+}
+
+if (args.mode === "share") {
+  const saved = readJson(savedFile);
+  if (!saved?.checks?.length) {
+    console.log("No checks are saved for this repo.");
+    process.exit(0);
+  }
+  writeJson(configFile, { ...(readJson(configFile) ?? {}), checks: saved.checks });
+  console.log(`Copied ${plural(saved.checks.length)} into ${configFile}. Commit it to share them; it now comes before the saved ones.`);
+  process.exit(0);
+}
+
+const picked = pickChecks();
+
+if (args.mode === "plan") {
+  if (!picked.source) {
+    console.log("No checks for this repo yet. Work them out once (the CI config first, then the project's own files), then save them:");
+    console.log(`  node ${process.argv[1]} --repo ${root} --save --source "<where they came from>" --from <file>... --run "name=command"... [--when "name=glob,glob"]`);
+    process.exit(0);
+  }
+  const { run, skipped } = select(picked.checks);
+  console.log(`Checks come from: ${picked.source}`);
+  for (const c of run) console.log(`  ${describe(c)}`);
+  for (const c of skipped) console.log(`  skipped, nothing it covers changed: ${describe(c)}`);
+  if (picked.changed?.length) {
+    console.log(`\nOut of date: ${picked.changed.join(", ")} changed since these were saved. Work them out again and save them with --save (it replaces them).`);
+  } else if (picked.saved?.broken) {
+    console.log(`\nLast run, ${picked.saved.broken.check} could not run (${picked.saved.broken.reason}). Work them out again and save them with --save.`);
+  } else if (run.length) {
+    console.log(`\nStart them in the background: node ${process.argv[1]} --repo ${root}`);
+  }
+  process.exit(0);
+}
+
 if (running(readRun())) {
   console.log(`Checks are already running for this repo (pid ${readRun().pid}). Wait for them with --wait.`);
   process.exit(0);
 }
 
-let checks = args.runs;
+const { run: checks, skipped } = select(picked.checks);
 if (!checks.length) {
-  const configFile = join(root, ".pr-report.json");
-  const config = existsSync(configFile) ? JSON.parse(readFileSync(configFile, "utf8")) : {};
-  checks = (config.checks ?? []).map((c) => ({ name: c.name, command: c.command, timeout: c.timeout }));
-}
-if (!checks.length) {
-  console.log('No checks to run. Pass --run "name=command" or add "checks" to .pr-report.json.');
+  console.log(picked.source ? "Nothing to run: no check covers the changed files." : "No checks for this repo yet. See --plan.");
   process.exit(0);
 }
+console.log(`Checks from ${picked.source}`);
+for (const c of skipped) console.log(`Skipping ${c.name}: nothing it covers changed`);
+if (picked.changed?.length) console.log(`warning: ${picked.changed.join(", ")} changed since these checks were saved; they may be out of date`);
 
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
 
@@ -176,3 +312,15 @@ for (const check of checks) {
 
 save("done");
 printResults(results);
+
+// A saved command that no longer exists (a renamed script, an uninstalled tool) marks the saved checks
+// broken, so the next --plan asks for them to be worked out again.
+if (picked.saved) {
+  const missing = /command not found|missing script|not recognized as an internal or external command|unknown command/i;
+  const broken = results.find((r) => r.exitCode === 127 || missing.test(r.outputTail));
+  if (broken) {
+    const reason = broken.outputTail.split("\n").find((line) => missing.test(line))?.trim() ?? `exit code ${broken.exitCode}`;
+    writeJson(savedFile, { ...picked.saved, broken: { check: broken.name, reason, at: new Date().toISOString() } });
+    console.log(`\n${broken.name} could not run (${reason}). The saved checks are marked out of date.`);
+  }
+}

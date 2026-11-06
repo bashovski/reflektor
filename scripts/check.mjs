@@ -6,7 +6,7 @@
 // Usage: node scripts/check.mjs [--open]
 
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -81,6 +81,27 @@ try {
   if (edgeBuilt.includes('member "')) fail(`build.mjs rejected a real contract member:\n${edgeBuilt}`);
   if (edgeContracts.map((c) => c.name).join() !== "Status,LIMIT,api") fail(`unexpected contracts after the build: ${edgeContracts.map((c) => c.name).join()}`);
   if (!edgeContracts.find((c) => c.name === "api")?.generated) fail("a contract in a generated file was not marked generated");
+
+  // Saved checks: worked out once per repo and reused, skipped when nothing they cover changed, out
+  // of date when the file they came from changes or a command is missing.
+  const checks = (...a) => run("node", [join(root, "skill/scripts/checks.mjs"), "--repo", edgeRepo, ...a], home);
+  const savedRun = join(tmp, "saved-checks.json");
+  if (!checks("--plan").includes("No checks for this repo yet")) fail("checks.mjs --plan did not ask for checks in a repo without any");
+  writeFileSync(join(edgeRepo, "package.json"), '{"scripts":{"lint":"echo ok"}}\n');
+  checks("--save", "--source", "from package.json", "--from", "package.json", "--run", "lint=echo lint ok", "--run", "api=echo api", "--when", "api=api/**");
+  if (!existsSync(join(home.PR_REPORT_HOME, "repos/gitlab.com/edge-group/sub/edge/checks.json"))) fail("saved checks are not stored under the repo's remote");
+  const plan = checks("--plan");
+  if (!plan.includes("saved for this repo") || !plan.includes("skipped, nothing it covers changed: api")) fail(`checks.mjs --plan did not use the saved checks:\n${plan}`);
+  const ranSaved = checks("--out", savedRun);
+  if (!ranSaved.includes("Project checks: 1 passed") || !ranSaved.includes("Skipping api")) fail(`the saved checks did not run as planned:\n${ranSaved}`);
+  writeFileSync(join(edgeRepo, "package.json"), '{"scripts":{"lint":"eslint ."}}\n');
+  if (!checks("--plan").includes("Out of date: package.json changed")) fail("a changed source file did not mark the saved checks out of date");
+  checks("--save", "--from", "package.json", "--run", "lint=definitely-not-a-tool-zz");
+  checks("--out", savedRun);
+  if (!checks("--plan").includes("could not run")) fail("a missing command did not mark the saved checks out of date");
+  checks("--share");
+  if (!checks("--plan").includes("Checks come from: .pr-report.json")) fail("--share did not make .pr-report.json the source");
+  checks("--forget");
 
   const checked = run("node", [
     join(root, "skill/scripts/checks.mjs"), "--repo", repo,

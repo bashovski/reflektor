@@ -57,18 +57,38 @@ Rules:
 
 ## 2b. Start the project's checks in the background
 
-Start the project's own lint, typecheck and test commands now, so the report shows what passes. They run while you collect and read the change; do not wait for them here. In Claude Code, use the Bash tool with `run_in_background`:
+Start the project's own lint, typecheck and test commands now, so the report shows what passes. They run while you collect and read the change; do not wait for them.
+
+First ask which checks this repo has:
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo . --run "lint=<command>" --run "typecheck=<command>" --run "tests=<command>"
+node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo . --plan
 ```
 
-- Use `checks` from `.pr-report.json` when it is set (then leave out `--run`).
-- Otherwise pick the project's own commands: scripts in package.json, Makefile targets, `go vet ./...` and `go test ./...`, `cargo clippy` and `cargo test`, `ruff check`, `mypy` and `pytest`, and so on. In a monorepo, run only the packages that changed.
-- Run the tests with the coverage flags from step 2, so one run gives both the result and the coverage file.
-- The same rules as coverage apply: never install anything, and ask first if a command needs services or looks slow.
-- It writes `checks.json` next to diff.json as it goes, and the review page shows each result as it arrives. Do not wait for it: step 7b updates the report when the checks end.
-- If you cannot run a background process, run it in the foreground and wait.
+It prints the commands and where they come from: `checks` in `.pr-report.json` (shared with the team), or the ones saved for this repo in `~/.pr-report/repos/` from an earlier report. It also lists checks it skips because nothing they cover changed.
+
+**When it lists commands and says to start them,** start them in the background. In Claude Code, use the Bash tool with `run_in_background`:
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo .
+```
+
+**When it says there are none yet, or that the saved ones are out of date or could not run,** work them out once and save them, then start them as above:
+
+1. Read the CI config first (`.github/workflows/*.yml`, `.gitlab-ci.yml`, `Jenkinsfile`, `.circleci/config.yml`, and so on): its lint, typecheck and test commands are the ones the team already trusts. Without CI config, use the project's own files: package.json scripts, Makefile targets, `go vet ./...` and `go test ./...`, `cargo clippy` and `cargo test`, `ruff check`, `mypy` and `pytest`, and so on.
+2. Give the test command the coverage flag from step 2, so one run gives both the result and the coverage file.
+3. In a monorepo, make one check per package, limited to its folder with `--when`, so a report only runs the packages it changed.
+4. Never install anything, and ask first if a command needs services or looks slow.
+5. Save them, naming the files they came from so a later change to those files marks them out of date:
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo . --save --source "<where they came from, in a few words>" --from <file>... \
+  --run "lint=<command>" --run "typecheck=<command>" --run "tests=<command>" [--when "tests=apps/api/**,packages/shared/**"]
+```
+
+In your final message, list the checks you saved, and say that `checks.mjs --forget` deletes them and `checks.mjs --share` copies them into `.pr-report.json` for the team. Do not ask before saving; the report should not wait.
+
+`--run` on the background command overrides everything, for a one-off run. The run writes `checks.json` next to diff.json as it goes, and the review page shows each result as it arrives; step 7b updates the report when the checks end. If you cannot run a background process, run it in the foreground and wait.
 
 ## 3. Collect
 
@@ -268,7 +288,7 @@ build.mjs also writes `pr-description.md` next to the report: the first line is 
 
 ## Repo config (optional)
 
-`.pr-report.json` in the repo root, read by collect.mjs:
+`.pr-report.json` in the repo root, read by collect.mjs and checks.mjs:
 
 ```json
 {
@@ -281,8 +301,14 @@ build.mjs also writes `pr-description.md` next to the report: the first line is 
     "cicd": [".github/**", ".gitlab-ci.yml"]
   },
   "generated": ["**/__generated__/**"],
-  "coverage": { "command": "make test-coverage", "files": ["coverage/lcov.info"] }
+  "coverage": { "command": "make test-coverage", "files": ["coverage/lcov.info"] },
+  "checks": [
+    { "name": "lint", "command": "pnpm lint" },
+    { "name": "api tests", "command": "pnpm -C services/api test --coverage", "when": ["services/api/**"], "timeout": 900 }
+  ]
 }
 ```
+
+`checks` here come before the ones saved in `~/.pr-report/repos/`; `checks.mjs --share` writes the saved ones here. `when` limits a check to changes in those paths.
 
 Globs follow .gitignore rules: a pattern without `/` matches at any depth. When the user asks for one, write it from the repo's real folder layout.
