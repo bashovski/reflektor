@@ -2,13 +2,25 @@ import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Bundle } from "../../skill/schema/types";
 import { App } from "./components/App";
-import { fetchRound, LiveProvider } from "./lib/live";
+import { fetchRound, LiveProvider, useLive } from "./lib/live";
 import { RoundCtx } from "./lib/rounds";
 import "./index.css";
 
 const readBundle = (): Bundle | null => {
   const text = document.getElementById("pr-report-data")?.textContent?.trim() ?? "";
   return text.startsWith("{") ? (JSON.parse(text) as Bundle) : null;
+};
+
+// When the agent publishes the round on screen again (fresh coverage, check results), load its data
+// in place. Comments, viewed files and open sections stay.
+const ReloadRepublished = ({ bundle, onReload }: { bundle: Bundle; onReload: (next: Bundle) => void }) => {
+  const { live } = useLive();
+  const builtAt = live && live.round === bundle.round ? live.roundBuiltAt : null;
+  useEffect(() => {
+    if (!builtAt || builtAt === bundle.builtAt) return;
+    fetchRound(bundle.round).then(onReload, () => {});
+  }, [builtAt, bundle.builtAt, bundle.round, onReload]);
+  return null;
 };
 
 // Holds the report data so a new round can replace it in place, without reloading the page.
@@ -20,6 +32,7 @@ const Root = ({ initial }: { initial: Bundle }) => {
   }, []);
   return (
     <LiveProvider>
+      <ReloadRepublished bundle={bundle} onReload={setBundle} />
       <RoundCtx.Provider value={{ showRound }}>
         <App key={bundle.round} bundle={bundle} />
       </RoundCtx.Provider>

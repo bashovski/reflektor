@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
-import type { Bundle, CommentKind, LiveQuestion, Ref, ReviewComment } from "../../../skill/schema/types";
+import type { Bundle, ChecksRun, CommentKind, LiveQuestion, Ref, ReviewComment } from "../../../skill/schema/types";
 
 // Live state of a review, streamed from the pr-report daemon.
 //
@@ -34,6 +34,10 @@ export type LiveState = {
   plan: AgentPlan | null;
   questions: LiveQuestion[];
   submitted: ReviewComment[];
+  // The project checks as they run; null when there are none.
+  checks: ChecksRun | null;
+  // Build time of the current round's data. It changes when the agent publishes the round again.
+  roundBuiltAt: string | null;
   lastAgentActivity: string | null;
   updatedAt: string;
 };

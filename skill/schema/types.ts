@@ -54,6 +54,20 @@ export type CheckStatus = "passed" | "failed" | "timeout";
 // One project check run by checks.mjs. outputTail holds the last lines of stdout and stderr.
 export type ProjectCheck = { name: string; command: string; status: CheckStatus; exitCode: number | null; durationMs: number; outputTail: string };
 
+// running: checks are still going, `pending` lists the ones without a result yet.
+// stopped: the run's process ended before its last check (killed or crashed).
+export type ChecksRunStatus = "running" | "done" | "stopped";
+
+// One run of checks.mjs, read from its checks.json. The daemon streams it to open pages as it changes.
+export type ChecksRun = {
+  status: ChecksRunStatus;
+  startedAt: string | null;
+  ranAt: string | null;
+  headSha: string;
+  results: ProjectCheck[];
+  pending: string[];
+};
+
 // The repo owner's picture: a data URL from github.com or gitlab.com, else initials on a color.
 export type RepoAvatar = { image: string | null; initials: string; color: string };
 
@@ -313,7 +327,8 @@ export type Bundle = {
   // File type icons (from atom-material-icons): SVG per icon key, and the key for each file path. Null when not installed.
   fileIcons: { icons: Record<string, string>; byPath: Record<string, string> } | null;
   // Results from checks.mjs. `stale` = code changed after the checks ran.
-  projectChecks: { ranAt: string; stale: boolean; results: ProjectCheck[] } | null;
+  // `file` is the checks.json the daemon watches for live updates.
+  projectChecks: (ChecksRun & { stale: boolean; file: string }) | null;
   // Pull request title and Markdown body, written from this report.
   prDescription: { title: string; body: string };
   warnings: string[];

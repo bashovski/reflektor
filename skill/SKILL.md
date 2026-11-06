@@ -67,7 +67,7 @@ node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo . --run "lint=<command>" --ru
 - Otherwise pick the project's own commands: scripts in package.json, Makefile targets, `go vet ./...` and `go test ./...`, `cargo clippy` and `cargo test`, `ruff check`, `mypy` and `pytest`, and so on. In a monorepo, run only the packages that changed.
 - Run the tests with the coverage flags from step 2, so one run gives both the result and the coverage file.
 - The same rules as coverage apply: never install anything, and ask first if a command needs services or looks slow.
-- It writes `checks.json` next to diff.json as it goes. Step 4b waits for it.
+- It writes `checks.json` next to diff.json as it goes, and the review page shows each result as it arrives. Do not wait for it: step 7b updates the report when the checks end.
 - If you cannot run a background process, run it in the foreground and wait.
 
 ## 3. Collect
@@ -87,7 +87,7 @@ It also prints **Safety checks**: fixed rules that flag likely secrets (key form
 
 Exit code 3 means there are no changes: tell the user and stop.
 
-While the tests from step 2b run, their coverage file may be missing or STALE. That is expected: step 4b collects again once they are done.
+While the tests from step 2b run, their coverage file may be missing or STALE. That is expected: step 7b collects again once they are done.
 
 collect.mjs fetches the base branch first. If the fetch fails, it warns and uses the local copy; tell the user. Pass `--no-fetch` to skip fetching, for example when offline.
 
@@ -105,20 +105,6 @@ Before writing, find out:
 - **The safety checks:** every high or medium finding must appear in the report as a `risk` highlight with a `ref` to its line and a `fix`. A secret also gets a `beforeMerge` item: remove it, rotate it, and load it from the environment. A false positive still gets a highlight that says why it is safe. Never copy a secret value into report text.
 
 For large changes (more than about 60 files or 3000 changed lines), read must-review files fully and skim the rest. Say in the summary that the report focuses on the most important parts.
-
-## 4b. Wait for the checks
-
-Before writing report.json, get the results of the checks from step 2b:
-
-```bash
-node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo . --wait
-```
-
-It returns at once when they are done and prints the results; otherwise it waits. Give the command a 10-minute timeout; after 9 minutes it says the checks are still running, and you run it again.
-
-- If the tests wrote a coverage file, run collect.mjs again with the same arguments. It takes a moment and puts the fresh coverage into diff.json; use its printed coverage for the "not tested" part of the report.
-- A failing check is not an error: add a `beforeMerge` item that names the check and the first error.
-- build.mjs refuses to build while the checks still run.
 
 ## 5. Write report.json
 
@@ -192,7 +178,7 @@ Line numbers refer to the new version of a file. Use `"side": "old"` only for de
 node ${CLAUDE_SKILL_DIR}/scripts/build.mjs --diff <diff file> --report <report file>
 ```
 
-It writes the report data, `<branch>-<sha>-r<round>.json`, next to the report file and records the run for `--since last`. Fix every `warning:` line by editing report.json and building again, at most two rounds. Mention anything left. `note:` lines come from collect (for example a stale coverage file); they need no report change, but tell the user when they matter.
+It writes the report data, `<branch>-<sha>-r<round>.json`, next to the report file and records the run for `--since last`. Fix every `warning:` line by editing report.json and building again, at most two rounds. Mention anything left. `note:` lines need no report change (for example a stale coverage file, or project checks still running), but tell the user when they matter. Build without waiting for the checks.
 
 ## 7. Open it for review
 
@@ -224,6 +210,16 @@ node ${CLAUDE_SKILL_DIR}/scripts/review.mjs answer --id <review id> --question <
 **A sent review:** go to the fix loop. **A review sent with no comments:** the review is done; offer to open the PR (step 9).
 
 If you cannot run a background process, run build.mjs with `--open` instead. It writes one self-contained HTML page and opens it. The page then shows "Copy for Claude", and the user pastes the comments into the chat. When the user wants a file to keep, pass `--html <file>` to build.mjs.
+
+## 7b. When the checks end
+
+When the background checks from step 2b exit (you are notified), the page already shows their results. Update the report with what they found:
+
+1. If the tests wrote a coverage file, run collect.mjs again with the same arguments, for the fresh coverage.
+2. In report.json, add a `beforeMerge` item for each failed check (its name and first error), and update the test gaps and `gap` highlights from the new coverage.
+3. Build and publish again with `review.mjs open --report <new json>`. It is the same round, so comments and progress stay, and open pages reload it in place.
+
+Skip this when the reviewer already sent the round: the next round includes the results. If you cannot get notified, check with `checks.mjs --repo . --wait` before you end your turn.
 
 ## 8. Fix loop
 

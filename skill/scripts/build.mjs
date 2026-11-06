@@ -11,6 +11,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readChecksRun } from "./checks-run.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -353,25 +354,14 @@ if (errors.length) {
 // ------------------------------------------------------------------ project checks
 // checks.json from checks.mjs, next to diff.json unless --checks says otherwise.
 
+// The checks may still be running: the report is built anyway, and the daemon streams their
+// progress from `file` to the page.
 function loadProjectChecks() {
-  const file = args.checks ?? join(dirname(resolve(args.diff)), "checks.json");
-  if (!existsSync(file)) return null;
-  const data = JSON.parse(readFileSync(file, "utf8"));
-  if (data.status === "running") {
-    let alive = true;
-    try {
-      process.kill(data.pid, 0);
-    } catch {
-      alive = false;
-    }
-    if (alive) {
-      console.log(`Project checks are still running. Wait for them, then build again:\n  node ${join(here, "checks.mjs")} --repo ${diff.repo.root} --wait`);
-      process.exit(1);
-    }
-    notes.push("Project checks stopped before they finished; the report shows the ones that did.");
-    data.ranAt = data.startedAt;
-  }
-  const ranAt = Date.parse(data.ranAt);
+  const file = resolve(args.checks ?? join(dirname(resolve(args.diff)), "checks.json"));
+  const run = readChecksRun(file);
+  if (!run) return null;
+  if (run.status === "stopped") notes.push("Project checks stopped before they finished; the report shows the ones that did.");
+  const since = Date.parse(run.ranAt ?? run.startedAt);
   // Stale when a commit or an uncommitted file is newer than the run.
   const newestCommit = Math.max(0, ...diff.commits.map((c) => Date.parse(c.date)));
   const newestFile = Math.max(
@@ -381,9 +371,9 @@ function loadProjectChecks() {
       return existsSync(full) ? statSync(full).mtimeMs : 0;
     }),
   );
-  const stale = data.headSha !== diff.branch.headSha || newestCommit > ranAt || newestFile > ranAt;
+  const stale = run.headSha !== diff.branch.headSha || newestCommit > since || newestFile > since;
   if (stale) notes.push("Project checks ran before the latest code change; run checks.mjs again for current results.");
-  return { ranAt: data.ranAt, stale, results: data.results };
+  return { ...run, stale, file };
 }
 
 const projectChecks = loadProjectChecks();
@@ -458,9 +448,11 @@ function prDescription() {
     lines.push("");
   }
 
-  if (projectChecks?.results.length) {
+  if (projectChecks?.results.length || projectChecks?.pending.length) {
     lines.push("## Checks", "");
     for (const c of projectChecks.results) lines.push(`- ${c.status === "passed" ? "Passed" : c.status === "failed" ? "**Failed**" : "**Timed out**"}: ${c.name} (\`${c.command}\`)`);
+    const unfinished = projectChecks.status === "stopped" ? "Did not finish" : "Still running";
+    for (const name of projectChecks.pending) lines.push(`- ${unfinished}: ${name}`);
     lines.push("");
   }
 
@@ -547,6 +539,8 @@ console.log(
 console.log("Saved this run for --since last (refs/pr-report/last)");
 console.log(`PR description: ${prFile} (first line is the title)`);
 for (const n of notes) console.log(`note: ${n}`);
+// Printed only: the page shows the checks live, so this would be out of date there.
+if (projectChecks?.status === "running") console.log("note: Project checks are still running; the review page shows each result when it is ready.");
 for (const w of warnings) console.log(`warning: ${w}`);
 
 if (args.open) {

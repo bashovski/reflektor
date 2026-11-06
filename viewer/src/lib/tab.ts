@@ -18,6 +18,10 @@ function newsBetween(before: LiveState, after: LiveState): string | null {
   if (after.phase === "done" && before.phase !== "done") return "Review finished";
   const answered = (s: LiveState) => s.questions.filter((q) => q.answer).length;
   if (answered(after) > answered(before)) return "Claude answered";
+  if (before.checks?.status === "running" && after.checks && after.checks.status !== "running") {
+    const failed = after.checks.results.filter((r) => r.status !== "passed").length;
+    return after.checks.status === "stopped" ? "Checks stopped" : failed ? `${failed} ${failed === 1 ? "check" : "checks"} failed` : "Checks passed";
+  }
   return null;
 }
 

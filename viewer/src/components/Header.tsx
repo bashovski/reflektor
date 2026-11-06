@@ -1,4 +1,5 @@
 import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Inbox, Settings } from "lucide-react";
+import { useChecks } from "../lib/checks";
 import { BASE_SOURCE, REVIEW, TAGS, TARGETS } from "../lib/meta";
 import { useReport } from "../lib/state";
 import { PrDescription } from "./PrDescription";
@@ -45,7 +46,7 @@ export const Hero = () => {
   const { diff, report } = bundle;
   const { branch, scope, stats, commits, coverage } = diff;
 
-  const failedChecks = bundle.projectChecks?.results.filter((r) => r.status !== "passed").length ?? 0;
+  const failedChecks = useChecks()?.results.filter((r) => r.status !== "passed").length ?? 0;
   const levelCounts = report.sections.reduce(
     (acc, s) => ({ ...acc, [s.review]: acc[s.review] + s.files.length }),
     { must: 0, skim: 0, skip: 0 },

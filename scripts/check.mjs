@@ -109,7 +109,7 @@ try {
   if (!/<title>feat\/books · library( · round \d+)?<\/title>/.test(page)) fail("the standalone page does not carry the branch · repo title");
   if (statSync(html).size < 1_000_000) fail("the standalone page is too small; build.mjs probably used the unbuilt viewer");
 
-  // Checks started in the background: build refuses until they finish, --wait returns their results.
+  // Checks started in the background: build does not wait and records them as running; --wait returns their results.
   const bgChecks = join(tmp, "bg-checks.json");
   spawn("node", [join(root, "skill/scripts/checks.mjs"), "--repo", repo, "--out", bgChecks, "--run", "slow=sleep 2"], { stdio: "ignore" });
   const started = () => {
@@ -120,13 +120,9 @@ try {
     }
   };
   for (let i = 0; i < 50 && !started(); i++) await sleep(50);
-  let refused = "";
-  try {
-    run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/diff.json"), "--report", join(root, "samples/report.json"), "--checks", bgChecks, "--out", join(tmp, "bg.json")]);
-  } catch (e) {
-    refused = e.stdout ?? "";
-  }
-  if (!refused.includes("still running")) fail("build.mjs did not refuse to build while the checks were running");
+  run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/diff.json"), "--report", join(root, "samples/report.json"), "--checks", bgChecks, "--out", join(tmp, "bg.json")]);
+  const bgRun = JSON.parse(readFileSync(join(tmp, "bg.json"), "utf8")).projectChecks;
+  if (bgRun?.status !== "running" || bgRun.pending.join() !== "slow" || bgRun.file !== bgChecks) fail(`build.mjs did not record the running checks: ${JSON.stringify(bgRun)}`);
   const waited = run("node", [join(root, "skill/scripts/checks.mjs"), "--repo", repo, "--out", bgChecks, "--wait"]);
   if (!waited.includes("Project checks: 1 passed")) fail(`checks.mjs --wait did not print the finished results:\n${waited}`);
 
@@ -198,9 +194,32 @@ async function daemonFlow() {
     const round1 = await (await fetch(`${base}${config.api}/bundle?round=1`, { headers: { "x-review-token": config.token } })).json();
     if (!round1?.report?.title) fail("the daemon did not return round 1's report data as an object");
     await post("presence", { tab: "t1" });
+    // The agent rebuilds round 1 (for example after the checks end) and publishes it again.
+    build(join(reviewDir, "round1.json"));
     const again = review("open", "--report", join(reviewDir, "round1.json"));
     if (!again.includes("Open in 1 tab")) fail("an open tab was not counted");
     if (!again.includes("already published")) fail("publishing round 1 again did not say it was already published");
+    const rebuiltAt = JSON.parse(readFileSync(join(reviewDir, "round1.json"), "utf8")).builtAt;
+    if ((await state()).roundBuiltAt !== rebuiltAt) fail("open pages are not told that round 1 was published again");
+
+    // Project checks stream into the page as they run, finish or crash.
+    const until = async (test) => {
+      for (let i = 0; i < 40; i++) {
+        const s = await state();
+        if (test(s.checks)) return s.checks;
+        await sleep(200);
+      }
+      return null;
+    };
+    const checksScript = join(root, "skill/scripts/checks.mjs");
+    if ((await state()).checks?.results.length !== 3) fail("the page state does not carry the project checks");
+    spawn("node", [checksScript, "--repo", repo, "--run", "quick=sleep 1"], { stdio: "ignore" });
+    if (!(await until((c) => c?.status === "running" && c.pending.join() === "quick"))) fail("a running check did not reach the page state");
+    if (!(await until((c) => c?.status === "done" && c.results[0]?.status === "passed"))) fail("a finished check did not reach the page state");
+    spawn("node", [checksScript, "--repo", repo, "--run", "hang=sleep 3"], { stdio: "ignore" });
+    await until((c) => c?.status === "running");
+    process.kill(JSON.parse(readFileSync(join(repo, ".git/pr-report/checks.json"), "utf8")).pid, "SIGKILL");
+    if (!(await until((c) => c?.status === "stopped" && c.pending.join() === "hang"))) fail("a crashed check run was not shown as stopped");
 
     await post("questions", { id: "q_1", target: { type: "report" }, text: "Why two migrations?" });
     if (!review("wait", "--id", id).includes("Live question q_1")) fail("wait did not return the live question");
@@ -268,7 +287,7 @@ async function daemonFlow() {
     review("open", "--report", join(reviewDir, "round3.json"));
     await post("submit", { comments: [] });
     if (!review("wait", "--id", id).includes("The review is done")) fail("an empty review did not end the review");
-    console.log("daemon flow: question, sent review, plan, status, round 2 finished without code changes, publishing again, waiting through a restart, empty round 3 all worked");
+    console.log("daemon flow: question, live checks, sent review, plan, status, round 2 finished without code changes, publishing again, waiting through a restart, empty round 3 all worked");
   } finally {
     try {
       review("stop");

@@ -16,6 +16,7 @@ import { connect } from "node:net";
 import { homedir } from "node:os";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readChecksRun } from "./checks-run.mjs";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const FIRST_PORT = Number(process.env.PR_REPORT_PORT ?? 7337);
@@ -98,6 +99,7 @@ function loadReview(entry) {
     title: entry.title,
     tag: entry.tag,
     avatar: entry.avatar ?? null,
+    checksFile: entry.checksFile ?? join(entry.dir, "checks.json"),
     repo: entry.repo,
     branch: entry.branch,
     rounds: saved.rounds ?? [],
@@ -110,6 +112,7 @@ function loadReview(entry) {
   };
   r.round = r.rounds.at(-1)?.round ?? 1;
   r.questions = readJson(questionsFile(r, r.round), []);
+  r.checks = readChecksRun(r.checksFile);
   return r;
 }
 for (const entry of registry) {
@@ -120,7 +123,7 @@ for (const entry of registry) {
 const saveRegistry = () =>
   writeJson(
     registryFile,
-    [...reviews.values()].map(({ id, dir, title, tag, repo, branch, avatar }) => ({ id, dir, title, tag, repo, branch, avatar })),
+    [...reviews.values()].map(({ id, dir, title, tag, repo, branch, avatar, checksFile }) => ({ id, dir, title, tag, repo, branch, avatar, checksFile })),
   );
 
 function save(r) {
@@ -176,6 +179,9 @@ const liveState = (r) => ({
   plan: r.plan,
   questions: r.questions.map(({ deliveredAt: _, ...q }) => q),
   submitted: submittedComments(r),
+  checks: r.checks ?? null,
+  // Changes when the agent publishes the same round again; open pages then reload its data.
+  roundBuiltAt: r.rounds.find((x) => x.round === r.round)?.builtAt ?? null,
   lastAgentActivity: r.lastAgentActivity,
   updatedAt: r.updatedAt,
 });
@@ -456,11 +462,13 @@ async function handle(req, res, port) {
     r.title = bundle.report.title;
     r.tag = bundle.report.tag;
     r.avatar = bundle.diff.repo.avatar ?? null;
+    r.checksFile = bundle.projectChecks?.file ?? join(dir, "checks.json");
+    r.checks = readChecksRun(r.checksFile);
     const round = bundle.round ?? r.round;
     // Publishing a round again (a rebuild, or an agent reconnecting) only swaps its data file.
     // Comments, plan and progress belong to the round and stay.
     const republished = r.rounds.some((x) => x.round === round);
-    r.rounds = [...r.rounds.filter((x) => x.round !== round), { round, file, publishedAt: now() }].sort((a, b) => a.round - b.round);
+    r.rounds = [...r.rounds.filter((x) => x.round !== round), { round, file, builtAt: bundle.builtAt, publishedAt: now() }].sort((a, b) => a.round - b.round);
     if (!republished && round !== r.round) {
       r.round = round;
       r.phase = "reviewing";
@@ -672,6 +680,25 @@ setInterval(() => {
     process.exit(0);
   }
 }, 60_000).unref();
+
+// Project checks write checks.json as they go. Stream every change to open pages, and notice a run
+// whose process ended without finishing.
+setInterval(() => {
+  for (const r of reviews.values()) {
+    let mtime = 0;
+    try {
+      mtime = statSync(r.checksFile).mtimeMs;
+    } catch {
+      // No checks for this review (yet).
+    }
+    if (mtime === r.checksMtime && r.checks?.status !== "running") continue;
+    r.checksMtime = mtime;
+    const next = readChecksRun(r.checksFile);
+    if (JSON.stringify(next) === JSON.stringify(r.checks ?? null)) continue;
+    r.checks = next;
+    broadcast(r);
+  }
+}, 1000).unref();
 
 // Reviews that finished their last comment before the daemon knew to end the round.
 for (const r of reviews.values()) if (finishIfSettled(r)) save(r);

@@ -5,7 +5,7 @@
 - PR description from the report
 - Secret and migration checks
 - Plan check: did the change do what the session planned
-- Project checks: run the repo's lint, typecheck and test commands
+- Project checks: run the repo's lint, typecheck and test commands in the background; the report opens right away and each result streams in live
 - Schema diagram for database changes
 - Types and contracts: new, changed and removed types, interfaces, enums and constants, checked against the code
 - Live questions while reviewing
