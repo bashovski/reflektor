@@ -233,7 +233,7 @@ export const ReviewBar = () => {
         </button>
         {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
         {mode === "server" && !review.connected && <span className="text-xs text-red-600 dark:text-red-400">Not connected to the review server.</span>}
-        {unheard && <ResumeHint text="No Claude session is listening, so questions wait." />}
+        {unheard && <ResumeHint text="No Claude session is listening, so your questions and requests wait." />}
 
         <span className="ml-auto inline-flex items-center gap-3">
           {mode === "server" ? (

@@ -163,7 +163,7 @@ try {
   if (!waited.includes("Project checks: 1 passed")) fail(`checks.mjs --wait did not print the finished results:\n${waited}`);
 
   await daemonFlow();
-  nextRoundFlow();
+  updateFlow();
 } catch (e) {
   fail(e.stderr?.toString() || e.message);
 } finally {
@@ -193,7 +193,7 @@ async function checkAppAssets(base, page) {
 // A whole review against a private daemon (own home folder and port), driven like an agent and a page.
 
 async function daemonFlow() {
-  const env = { PR_REPORT_HOME: join(tmp, "home"), PR_REPORT_PORT: String(4400 + Math.floor(Math.random() * 500)) };
+  const env = { PR_REPORT_HOME: join(tmp, "home"), PR_REPORT_PORT: String(4400 + Math.floor(Math.random() * 500)), PR_REPORT_DRIFT_SECONDS: "1" };
   const reviewDir = join(tmp, "review");
   const review = (...args) => run("node", [join(root, "skill/scripts/review.mjs"), ...args], env);
   const build = (out) =>
@@ -239,6 +239,24 @@ async function daemonFlow() {
     if (!again.includes("already published")) fail("publishing round 1 again did not say it was already published");
     const rebuiltAt = JSON.parse(readFileSync(join(reviewDir, "round1.json"), "utf8")).builtAt;
     if ((await state()).roundBuiltAt !== rebuiltAt) fail("open pages are not told that round 1 was published again");
+
+    // Code edited after the build: the page is told, and the reviewer can ask the agent for an update.
+    const edited = join(repo, "apps/web/src/api/books.ts");
+    const original = readFileSync(edited, "utf8");
+    writeFileSync(edited, `${original}// edited after the report\n`);
+    await post("presence", { tab: "t1" });
+    const driftIs = async (test) => {
+      for (let i = 0; i < 30; i++) {
+        if (test((await state()).drift)) return true;
+        await sleep(200);
+      }
+      return false;
+    };
+    if (!(await driftIs((d) => d?.fileCount === 1 && d.files[0] === "apps/web/src/api/books.ts"))) fail("an edit after the build did not reach the page as drift");
+    await post("refresh", {});
+    if (!review("wait", "--id", id).includes("asked for an updated report")) fail("wait did not report the request for an updated report");
+    writeFileSync(edited, original);
+    if (!(await driftIs((d) => d === null))) fail("undoing the edit did not clear the drift");
 
     // Project checks stream into the page as they run, finish or crash.
     const until = async (test) => {
@@ -344,10 +362,10 @@ async function daemonFlow() {
 }
 
 // ------------------------------------------------------------------ next round
-// After a sent review, collect --next-round shows the whole branch again, marks what changed since
+// After a sent review, collect --update shows the whole branch again, marks what changed since
 // the sent round, and moves report.json's line references to where their lines are now.
 
-function nextRoundFlow() {
+function updateFlow() {
   const dir = join(tmp, "rounds");
   mkdirSync(dir, { recursive: true });
   const collect = (...a) => run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch", "--out", join(dir, "diff.json"), ...a]);
@@ -368,15 +386,15 @@ function nextRoundFlow() {
   lines[18] += " // fixed";
   writeFileSync(file, ["// one", "// two", ...lines].join("\n"));
 
-  const collected = collect("--next-round");
-  if (!collected.includes("Since round 1, which the reviewer sent: 1 file changed")) fail(`collect --next-round did not list the change since round 1:\n${collected}`);
-  if (!collected.includes("apps/api/src/books/book.service.ts:21")) fail("collect --next-round did not ask to check a reference on a changed line");
+  const collected = collect("--update");
+  if (!collected.includes("Since round 1, which the reviewer sent: 1 file changed")) fail(`collect --update did not list the change since round 1:\n${collected}`);
+  if (!collected.includes("apps/api/src/books/book.service.ts:21")) fail("collect --update did not ask to check a reference on a changed line");
   const carried = readReport();
   const notes = service(carried).files.find((f) => f.path.endsWith("book.service.ts")).lineNotes.map((n) => n.line);
   if (notes.join() !== "8,21") fail(`line notes were not moved with their lines: ${notes.join()}`);
   if (!carried.refsAt) fail("the carried report does not record which code its references point into");
 
-  if (!collect("--next-round").includes("0 line references moved")) fail("collecting the next round twice moved the references twice");
+  if (!collect("--update").includes("0 line references moved")) fail("collecting the next round twice moved the references twice");
   if (service(readReport()).files.find((f) => f.path.endsWith("book.service.ts")).lineNotes[0].line !== 8) fail("a second collect changed the moved references");
 
   build("r2.json");

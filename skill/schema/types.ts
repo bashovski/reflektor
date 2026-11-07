@@ -88,7 +88,7 @@ export type DiffData = {
     pr: { number: number; url: string; title: string } | null;
   };
   scope: { mode: "branch" | "since" | "files" | "since+files"; from: string; includesUncommitted: boolean; files: string[] | null };
-  // collect.mjs --next-round: what changed since the round the reviewer sent. `from` is the snapshot
+  // collect.mjs --update: what changed since the round the reviewer sent. `from` is the snapshot
   // that round showed; each file's oldContent is its content then (null when added since).
   sinceRound?: { round: number; from: string; files: DiffFile[] };
   commits: Commit[];
@@ -261,7 +261,7 @@ export type Report = {
   plan?: { source: string; items: PlanItem[] };
   // Answers to the previous review round. Add one reply per comment in that round's review file.
   review?: { round: number; replies: Reply[] };
-  // Set by collect.mjs --next-round: the snapshot the line numbers in this file refer to. Leave it as is.
+  // Set by collect.mjs --update: the snapshot the line numbers in this file refer to. Leave it as is.
   refsAt?: string;
 };
 

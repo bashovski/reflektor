@@ -4,11 +4,12 @@
 // owner to github.com or gitlab.com for the owner's avatar.
 //
 // Usage:
-//   node collect.mjs [--repo .] [--base <branch>] [--since <sha|last>] [--files a,b,c] [--next-round]
+//   node collect.mjs [--repo .] [--base <branch>] [--since <sha|last>] [--files a,b,c] [--update]
 //                    [--no-uncommitted] [--no-fetch] [--coverage <file>]... [--out diff.json]
 //
-// --next-round is for the fix loop: the whole branch again, plus what changed since the round the
-// reviewer sent, and report.json's line references moved to where those lines are now.
+// --update brings the last report up to date with the code: the whole branch again, report.json's
+// line references moved to where those lines are now, and, after a sent review, what changed since
+// that round. For the fix loop, and for code that changed after a report was built.
 
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -45,11 +46,11 @@ function parseArgs(argv) {
     else if (a === "--coverage") args.coverage.push(next());
     else if (a === "--no-uncommitted") args.uncommitted = false;
     else if (a === "--no-fetch") args.fetch = false;
-    else if (a === "--next-round") args.nextRound = true;
+    else if (a === "--update") args.update = true;
     else if (a === "--out") args.out = next();
     else throw new Error(`Unknown argument: ${a}`);
   }
-  if (args.nextRound && (args.since || args.files)) throw new Error("--next-round covers the whole branch; it does not go with --since or --files.");
+  if (args.update && (args.since || args.files)) throw new Error("--update covers the whole branch; it does not go with --since or --files.");
   return args;
 }
 
@@ -393,11 +394,11 @@ if (!files.length) {
   process.exit(3);
 }
 
-// ------------------------------------------------------------------ next round
-// The fix loop shows the whole branch every round, so the reviewer approves what will be merged.
-// sinceRound holds what changed since the round the reviewer sent, for the page's "since round N"
-// view. The last report.json is carried forward: its line references move to where those lines are
-// now, and the ones on changed lines are listed for Claude to check.
+// ------------------------------------------------------------------ update
+// Every round shows the whole branch, so the reviewer approves what will be merged. sinceRound holds
+// what changed since the round the reviewer sent, for the page's "since round N" view. The last
+// report.json is carried forward: its line references move to where those lines are now, and the
+// ones on changed lines are listed for Claude to check.
 
 const commitExists = (sha) => Boolean(sha) && tryGit("cat-file", "-e", `${sha}^{commit}`) !== null;
 const toHead = to === "HEAD" ? headSha : to;
@@ -449,12 +450,11 @@ function moveLine(hunks, line) {
 
 let sinceRound = null;
 let carried = null;
-if (args.nextRound) {
+if (args.update) {
   const sent = latestReview();
-  if (!sent) throw new Error("--next-round compares with the round the reviewer sent, and no review was sent yet. Run without it.");
-  const roundFrom = commitExists(sent.snapshot) ? sent.snapshot : commitExists(sent.headSha) ? sent.headSha : null;
-  if (!roundFrom) warnings.push(`The code of round ${sent.round} is no longer in git, so the page cannot show what changed since then.`);
-  else sinceRound = { round: sent.round, from: roundFrom, files: diffFiles(roundFrom, to) };
+  const roundFrom = sent && (commitExists(sent.snapshot) ? sent.snapshot : commitExists(sent.headSha) ? sent.headSha : null);
+  if (sent && !roundFrom) warnings.push(`The code of round ${sent.round} is no longer in git, so the page cannot show what changed since then.`);
+  else if (sent) sinceRound = { round: sent.round, from: roundFrom, files: diffFiles(roundFrom, to) };
 
   // report.json's references point into the snapshot it was last built against.
   const report = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, "utf8")) : null;

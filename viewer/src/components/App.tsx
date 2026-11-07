@@ -8,6 +8,7 @@ import { ReportProvider, useReport } from "../lib/state";
 import { useTab } from "../lib/tab";
 import { BeforeMerge } from "./BeforeMerge";
 import { Contracts } from "./Contracts";
+import { DriftBanner } from "./DriftBanner";
 import { Coverage } from "./Coverage";
 import { FileModal } from "./FileModal";
 import { Findings } from "./Findings";
@@ -106,6 +107,7 @@ const Layout = () => {
     <>
       <TopBar onSettings={() => setSettings(true)} />
       <RoundBanner />
+      <DriftBanner />
       <div className="mx-auto grid max-w-[1440px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="hidden lg:block">
           <Sidebar />

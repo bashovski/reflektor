@@ -135,10 +135,15 @@ function explain(event, review) {
     if (kinds.length) console.log(`Kind changes by step: ${kinds.map(([step, kind]) => `step ${Number(step) + 1} -> ${kind}`).join(", ")}`);
     if (event.decision.note) console.log(`Note: ${event.decision.note}`);
     console.log(`\nNext: make the changes. Report each comment as you go: ${self} status --id ${review.id} --comment <id> --status working|fixed|answered|wontfix|noted --text "<short>"`);
-    console.log(`Then collect --next-round, update the carried report.json and add review.replies, build, and publish: ${self} open --report <new json>`);
+    console.log(`Then collect --update, update the carried report.json and add review.replies, build, and publish: ${self} open --report <new json>`);
   } else if (event.type === "round-finished") {
     console.log(`Round ${event.round} of ${review.id} is finished: all ${event.count} comments are handled and no code changed. The review is done.`);
     console.log("Offer to open the PR (ask first).");
+  } else if (event.type === "refresh") {
+    const files = event.files.length ? `: ${event.files.slice(0, 10).join(", ")}${event.files.length > 10 ? ", ..." : ""}` : "";
+    console.log(`The reviewer asked for an updated report: the code changed after round ${event.round} of ${review.id} was built${event.commits ? ` (${event.commits} new commits)` : ""}${files}.`);
+    console.log(`\nNext: collect with --update (it carries report.json forward), update report.json for those files, build, and publish the same round: ${self} open --report <new json>`);
+    console.log("Comments the reviewer wrote stay. Then run wait again in the background.");
   } else if (event.type === "plan-decision") {
     console.log(`The reviewer wants a different plan for ${review.id}.`);
     if (event.decision.note) console.log(`Note: ${event.decision.note}`);

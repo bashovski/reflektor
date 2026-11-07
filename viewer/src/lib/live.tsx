@@ -39,6 +39,9 @@ export type LiveState = {
   // Build time of the current round's data. It changes when the agent publishes the round again.
   roundBuiltAt: string | null;
   lastAgentActivity: string | null;
+  // Code that changed after this round was built: files (up to 50 of fileCount), new commits, and
+  // the branch now checked out when it is another one. Null while the code matches.
+  drift: { files: string[]; fileCount: number; commits: number; branch: string | null } | null;
   // An agent waits for this review's events (review.mjs wait), and since when the oldest one waits.
   listening: boolean;
   undeliveredSince: string | null;

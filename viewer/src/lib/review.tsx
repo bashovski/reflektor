@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Bundle, CommentKind, CommentTarget, LiveQuestion, ReviewComment } from "../../../skill/schema/types";
-import { type AgentPlan, type CommentStatus, type Phase, useLive } from "./live";
+import { type AgentPlan, type CommentStatus, type LiveState, type Phase, useLive } from "./live";
 import { SECTIONS } from "./meta";
 
 // Review comments live here. Served by the pr-report daemon, the page saves them to the repo's git
@@ -41,6 +41,9 @@ type ReviewState = {
   // An agent waits for this review's events, and since when the oldest event waits for one.
   listening: boolean;
   undeliveredSince: string | null;
+  drift: LiveState["drift"];
+  // Asks the agent to rebuild this round for the code as it is now.
+  requestRefresh: () => Promise<void>;
 };
 
 const Ctx = createContext<ReviewState | null>(null);
@@ -310,6 +313,15 @@ export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children:
     [api],
   );
 
+  const requestRefresh = useCallback(async () => {
+    setError(null);
+    try {
+      await api("refresh", "POST", {});
+    } catch (e) {
+      setError(`Could not ask for an update: ${(e as Error).message}`);
+    }
+  }, [api]);
+
   const value: ReviewState = {
     mode,
     round,
@@ -340,6 +352,8 @@ export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children:
     // A file opened without the daemon has no agent to listen.
     listening: live?.listening ?? true,
     undeliveredSince: current ? (live?.undeliveredSince ?? null) : null,
+    drift: current ? (live?.drift ?? null) : null,
+    requestRefresh,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -23,7 +23,7 @@ Base branch, first match wins:
 Scope:
 
 - **Default:** the whole branch since the merge base, plus uncommitted and untracked files. This matches what reviewers will see.
-- **`--since last`:** only changes since the previous report, when the user asks for a report about just those. After fixing review comments, use `--next-round` instead (step 8.5): it shows the whole branch and marks what changed. A `--since` or `--files` report does not update `pr-description.md`.
+- **`--since last`:** only changes since the previous report, when the user asks for a report about just those. After fixing review comments, use `--update` instead (step 8.5): it shows the whole branch and marks what changed. A `--since` or `--files` report does not update `pr-description.md`.
 - **`--files a,b,c`:** only these files. Use it when the user asks for this session's changes (argument `--session`): pass the files you created or edited in this conversation. If the branch also holds large unrelated earlier work and the user asks about "recent" changes, ask whether they want the whole branch or only this session's files.
 - **`--no-uncommitted`:** committed work only, when the user asks for it.
 
@@ -231,13 +231,15 @@ node ${CLAUDE_SKILL_DIR}/scripts/review.mjs answer --id <review id> --question <
 
 **A sent review:** go to the fix loop. **A review sent with no comments:** the review is done; offer to open the PR (step 9).
 
+**A request for an updated report:** the page tells the reviewer when the code changed after the report was built, and offers to ask you for an update. Run collect.mjs with `--update`, fix the report for the files the waiter names, build, and publish: it stays the same round, and the reviewer's comments stay.
+
 If you cannot run a background process, run build.mjs with `--open` instead. It writes one self-contained HTML page and opens it. The page then shows "Copy for Claude", and the user pastes the comments into the chat. When the user wants a file to keep, pass `--html <file>` to build.mjs.
 
 ## 7b. When the checks end
 
 When the background checks from step 2b exit (you are notified), the page already shows their results. Update the report with what they found:
 
-1. If the tests wrote a coverage file, run collect.mjs again with the same arguments (`--next-round` too, in a later round), for the fresh coverage.
+1. If the tests wrote a coverage file, run collect.mjs again with `--update` and the same `--base` and `--coverage` arguments, for the fresh coverage. `--update` keeps report.json and moves its line references if code changed.
 2. In report.json, add a `beforeMerge` item for each failed check (its name and first error), and update the test gaps and `gap` highlights from the new coverage.
 3. Build and publish again with `review.mjs open --report <new json>`. It is the same round, so comments and progress stay, and open pages reload it in place.
 
@@ -274,7 +276,7 @@ The reviewer follows along in the page: your plan and your progress on each comm
 5. **Rebuild for the next round.** Every round shows the whole branch, so the reviewer approves what will be merged; the page can also show only what changed since the round they sent.
 
    ```bash
-   node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs --repo . --next-round [--base <branch>] [--coverage <file>]...
+   node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs --repo . --update [--base <branch>] [--coverage <file>]...
    ```
 
    It collects the whole branch again, plus what changed since the round the reviewer sent, and carries report.json forward: its line references move to where those lines are now. Update that report.json; do not write a new one:
@@ -306,7 +308,7 @@ It finds this branch's review (or pass `--id`) and prints what waits for you, th
 ## Follow-ups
 
 - **Wording or grouping changes:** edit report.json and run build.mjs again. No need to collect again.
-- **After code changes:** run collect.mjs again (with `--since last` when the user wants only the new changes), update report.json, build, and open it for review again.
+- **After code changes:** run collect.mjs with `--update`, update the carried report.json for what changed, build, and publish again. Use `--since last` only when the user wants a report about just the new changes.
 - **"Viewer not found" from build.mjs:** tell the user to run `install.sh` in the pr-report repo.
 
 ## Repo config (optional)

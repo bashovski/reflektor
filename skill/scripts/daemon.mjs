@@ -9,13 +9,15 @@
 //
 // Started by review.mjs when needed. Stops itself after 4 hours without activity.
 
+import { execFile } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { connect } from "node:net";
 import { homedir } from "node:os";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { readChecksRun } from "./checks-run.mjs";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
@@ -184,6 +186,8 @@ const liveState = (r) => ({
   // Changes when the agent publishes the same round again; open pages then reload its data.
   roundBuiltAt: r.rounds.find((x) => x.round === r.round)?.builtAt ?? null,
   lastAgentActivity: r.lastAgentActivity,
+  // Code that changed after the current round was built; null when it still matches.
+  drift: r.drift ?? null,
   // Whether an agent waits for this review's events, and since when the oldest event waits for one.
   // The page warns when nobody picks up what the reviewer sent.
   listening: listening(r),
@@ -239,7 +243,7 @@ function nextEvent(r) {
 // An event is handled when the agent acts on it: a sent review by a plan or a status, a plan
 // decision by a status or a new plan, a question by its answer. Other events are news, handled once
 // delivered. `resume` hands an agent in a new session the event a lost session never handled.
-const needsAction = (e) => (e.type === "review-submitted" && e.count > 0) || e.type === "plan-decision" || e.type === "question";
+const needsAction = (e) => (e.type === "review-submitted" && e.count > 0) || e.type === "plan-decision" || e.type === "question" || e.type === "refresh";
 function markHandled(r, ...types) {
   for (const e of r.events) if (types.includes(e.type) && !e.handledAt) e.handledAt = now();
 }
@@ -415,6 +419,66 @@ function sendAsset(res, parts) {
   res.end(readFileSync(file));
 }
 
+// ------------------------------------------------------------------ drift
+// Reviews on screen are checked every 15 seconds for code that changed after their report was built:
+// new commits, edits, new files. The page then says the report may be out of date. Not while the agent
+// works on the round, since then the code is meant to change.
+
+const DRIFT_MS = Number(process.env.PR_REPORT_DRIFT_SECONDS ?? 15) * 1000;
+const run = promisify(execFile);
+const gitIn = (cwd, args, env) =>
+  run("git", ["-c", "core.quotePath=false", ...args], { cwd, env: env ?? process.env, maxBuffer: 16 * 1024 * 1024 }).then((x) => x.stdout.trim(), () => null);
+
+// The repo and the code a round was built from, read once from its data file.
+function roundFacts(r) {
+  const entry = r.rounds.find((x) => x.round === r.round);
+  if (!entry) return null;
+  if (r.facts?.builtAt === entry.builtAt) return r.facts;
+  try {
+    const { diff } = JSON.parse(roundText(roundFile(entry)));
+    r.facts = { builtAt: entry.builtAt, root: diff.repo.root, gitDir: diff.repo.gitDir, branch: diff.branch.head, headSha: diff.branch.headSha, snapshot: diff.branch.snapshot };
+  } catch {
+    r.facts = { builtAt: entry.builtAt, root: null };
+  }
+  return r.facts;
+}
+
+// The working tree as a git tree, untracked files included, without touching the real index.
+async function workingTree(f) {
+  const index = join(f.gitDir, "pr-report", "drift.index");
+  try {
+    if (existsSync(join(f.gitDir, "index"))) copyFileSync(join(f.gitDir, "index"), index);
+    const env = { ...process.env, GIT_INDEX_FILE: index };
+    if ((await gitIn(f.root, ["add", "-A"], env)) === null) return null;
+    return await gitIn(f.root, ["write-tree"], env);
+  } finally {
+    rmSync(index, { force: true });
+  }
+}
+
+async function checkDrift(r) {
+  const f = roundFacts(r);
+  if (!f?.root || !existsSync(f.root) || r.checkingDrift) return;
+  r.checkingDrift = true;
+  try {
+    const [tree, head, branch] = await Promise.all([workingTree(f), gitIn(f.root, ["rev-parse", "HEAD"]), gitIn(f.root, ["rev-parse", "--abbrev-ref", "HEAD"])]);
+    if (!tree || !head) return;
+    const files = ((await gitIn(f.root, ["diff", "--name-only", f.snapshot, tree])) ?? "").split("\n").filter(Boolean);
+    const commits = head === f.headSha ? 0 : Number(await gitIn(f.root, ["rev-list", "--count", `${f.headSha}..${head}`])) || 0;
+    const drift = files.length || branch !== f.branch ? { files: files.slice(0, 50), fileCount: files.length, commits, branch: branch !== f.branch ? branch : null } : null;
+    if (JSON.stringify(drift) !== JSON.stringify(r.drift ?? null)) {
+      r.drift = drift;
+      broadcast(r);
+    }
+  } finally {
+    r.checkingDrift = false;
+  }
+}
+
+setInterval(() => {
+  for (const r of reviews.values()) if (openTabs(r) > 0 && (r.phase === "reviewing" || r.phase === "done")) void checkDrift(r);
+}, DRIFT_MS).unref();
+
 // ------------------------------------------------------------------ routes
 
 let lastActivity = Date.now();
@@ -494,6 +558,9 @@ async function handle(req, res, port) {
     // Comments, plan and progress belong to the round and stay.
     const republished = r.rounds.some((x) => x.round === round);
     r.rounds = [...r.rounds.filter((x) => x.round !== round), { round, file, builtAt: bundle.builtAt, publishedAt: now() }].sort((a, b) => a.round - b.round);
+    // A new build matches the code again; a rebuild answers the reviewer's request for one.
+    r.drift = null;
+    markHandled(r, "refresh");
     if (!republished && round !== r.round) {
       r.round = round;
       r.phase = "reviewing";
@@ -621,6 +688,16 @@ async function handle(req, res, port) {
     return send(res, 200, { ok: true });
   }
 
+  // The reviewer asks the agent to rebuild this round because the code changed after it was built.
+  if (req.method === "POST" && action === "refresh") {
+    if (r.phase !== "reviewing") return send(res, 409, { error: "the round was already sent" });
+    if (!r.events.some((e) => e.type === "refresh" && !e.handledAt)) {
+      pushEvent(r, "refresh", { round: r.round, files: r.drift?.files ?? [], commits: r.drift?.commits ?? 0 });
+      save(r);
+    }
+    return send(res, 200, { ok: true });
+  }
+
   if (req.method === "POST" && action === "plan-decision") {
     if (!r.plan || r.phase !== "planning") return send(res, 409, { error: "no plan is waiting for a decision" });
     const decision = body.decision === "changes" ? "changes" : "approve";
@@ -656,6 +733,8 @@ async function handle(req, res, port) {
     writeJson(reviewFile(r, r.round), review);
     rmSync(draftFile(r), { force: true });
     r.phase = body.comments.length ? "sent" : "done";
+    // An update asked for this round is moot once the round is sent.
+    markHandled(r, "refresh");
     pushEvent(r, "review-submitted", { round: r.round, file: reviewFile(r, r.round), count: body.comments.length });
     save(r);
     return send(res, 200, { ok: true, round: r.round });
