@@ -113,8 +113,10 @@ export const ReviewBar = () => {
   const open = problems.length - queued - fine;
   const composingGeneral = composer?.key === "report" && !composer.editingId;
   // Something the reviewer sent has waited 15 seconds and no agent listens for it.
+  // A draft page: Claude is still writing the report and starts listening once it is published.
+  const draft = Boolean(bundle.draft);
   const unheard =
-    mode === "server" && review.connected && !review.listening && review.undeliveredSince !== null && Date.now() - Date.parse(review.undeliveredSince) > 15_000;
+    !draft && mode === "server" && review.connected && !review.listening && review.undeliveredSince !== null && Date.now() - Date.parse(review.undeliveredSince) > 15_000;
 
   if (sent) {
     const total = comments.length;
@@ -242,10 +244,12 @@ export const ReviewBar = () => {
               <button
                 type="button"
                 onClick={review.submit}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
+                disabled={draft}
+                title={draft ? "Claude is still writing the notes. Your comments are saved meanwhile." : undefined}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
               >
-                <Send className="size-3.5" />
-                {comments.length ? `Send ${comments.length} to Claude` : "Looks good, tell Claude"}
+                {draft ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+                {draft ? "Claude is writing the notes" : comments.length ? `Send ${comments.length} to Claude` : "Looks good, tell Claude"}
               </button>
             </>
           ) : (

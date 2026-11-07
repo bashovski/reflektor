@@ -1,4 +1,4 @@
-import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Inbox, Settings } from "lucide-react";
+import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Inbox, Loader2, Settings } from "lucide-react";
 import { useChecks } from "../lib/checks";
 import { BASE_SOURCE, REVIEW, TAGS, TARGETS } from "../lib/meta";
 import { useReport } from "../lib/state";
@@ -94,12 +94,21 @@ export const Hero = () => {
 
       <div className="space-y-3">
         <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-balance">
-          <span className={cx("mr-2.5 inline-block translate-y-[-3px] rounded-md px-2 py-0.5 align-middle font-mono text-xs font-semibold tracking-wide", TAGS[report.tag])}>
-            {report.tag}
-          </span>
+          {!bundle.draft && (
+            <span className={cx("mr-2.5 inline-block translate-y-[-3px] rounded-md px-2 py-0.5 align-middle font-mono text-xs font-semibold tracking-wide", TAGS[report.tag])}>
+              {report.tag}
+            </span>
+          )}
           {report.title}
         </h1>
-        <p className="max-w-3xl text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">{report.summary}</p>
+        {bundle.draft ? (
+          <p className="inline-flex max-w-3xl items-center gap-2 text-[15px] leading-relaxed text-violet-700 dark:text-violet-300">
+            <Loader2 className="size-4 shrink-0 animate-spin" />
+            Claude is reading the change and writing the notes. The diffs and checks are already here, and this page fills in by itself.
+          </p>
+        ) : (
+          <p className="max-w-3xl text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">{report.summary}</p>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -117,18 +126,22 @@ export const Hero = () => {
           {stats.files} files
           <LocCount additions={stats.additions} deletions={stats.deletions} className="ml-1" />
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Clock className="size-4 text-zinc-400" />
-          About {report.reviewMinutes} min to review
-        </span>
-        <span className="inline-flex items-center gap-3 text-xs">
-          {(["must", "skim", "skip"] as const).map((level) => (
-            <span key={level} className="inline-flex items-center gap-1.5">
-              <Dot className={REVIEW[level].dot} />
-              {levelCounts[level]} {REVIEW[level].label.toLowerCase()}
-            </span>
-          ))}
-        </span>
+        {!bundle.draft && (
+          <span className="inline-flex items-center gap-1.5">
+            <Clock className="size-4 text-zinc-400" />
+            About {report.reviewMinutes} min to review
+          </span>
+        )}
+        {!bundle.draft && (
+          <span className="inline-flex items-center gap-3 text-xs">
+            {(["must", "skim", "skip"] as const).map((level) => (
+              <span key={level} className="inline-flex items-center gap-1.5">
+                <Dot className={REVIEW[level].dot} />
+                {levelCounts[level]} {REVIEW[level].label.toLowerCase()}
+              </span>
+            ))}
+          </span>
+        )}
         {failedChecks > 0 && (
           <a href="#project-checks" className="inline-flex items-center gap-1.5 font-medium text-red-600 hover:underline dark:text-red-400">
             <CircleX className="size-4" />

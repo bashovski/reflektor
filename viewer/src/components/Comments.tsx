@@ -3,6 +3,7 @@ import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import type { CommentKind, CommentTarget, LiveQuestion, ReviewComment } from "../../../skill/schema/types";
 import { COMMENT_KINDS, REPLY_STATUS } from "../lib/meta";
 import { describeTarget, targetKey, useReview } from "../lib/review";
+import { useReport } from "../lib/state";
 import { RichText } from "./RichText";
 import { cx, Pill, RefLink } from "./ui";
 
@@ -24,7 +25,9 @@ export const SuggestedFix = ({ text, className }: { text: string; className?: st
 export const Composer = ({ target, placeholder }: { target: CommentTarget; placeholder?: string }) => {
   const { composer, comments, add, update, closeComposer, mode, ask } = useReview();
   const editing = composer?.editingId ? comments.find((c) => c.id === composer.editingId) : undefined;
-  const canAsk = mode === "server" && !editing && composer?.kind !== "decision";
+  // While the page is a draft, Claude is still writing the report and not answering yet.
+  const draft = Boolean(useReport().bundle.draft);
+  const canAsk = mode === "server" && !editing && composer?.kind !== "decision" && !draft;
   const [text, setText] = useState(editing?.text ?? "");
   const ref = useRef<HTMLTextAreaElement>(null);
 

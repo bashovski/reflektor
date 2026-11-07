@@ -115,6 +115,17 @@ collect.mjs fetches the base branch first. If the fetch fails, it warns and uses
 
 Do not read diff.json. It holds full file contents. Read the changes with the printed `git diff` command, file by file, and read untracked files directly.
 
+## 3b. Open the page while you read
+
+Publish the facts now, so the user can read the diffs and watch the checks while you write the report:
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/build.mjs --diff <diff file> --draft
+node ${CLAUDE_SKILL_DIR}/scripts/review.mjs open --report <json file from build> --open
+```
+
+After `collect --update` in a later round, add `--report <report file>` to the build, so the draft shows the carried report. The page says Claude is still writing the notes and holds back sending until the real report replaces it. Do not start the waiter yet, and say nothing to the user until step 7.
+
 ## 4. Understand the change
 
 Before writing, find out:
@@ -204,7 +215,7 @@ It writes the report data, `<branch>-<sha>-r<round>.json`, next to the report fi
 
 ## 7. Open it for review
 
-Publish the report to the pr-report daemon. It is one local server for every review on this machine (`http://127.0.0.1:7337`, with an inbox of all reviews at `/`), and `review.mjs` starts it when it is not running:
+Publish the report to the pr-report daemon. It is one local server for every review on this machine (`http://127.0.0.1:7337`, with an inbox of all reviews at `/`), and `review.mjs` starts it when it is not running. It replaces the draft from step 3b in the open tab:
 
 ```bash
 node ${CLAUDE_SKILL_DIR}/scripts/review.mjs open --report <json file from build> --open

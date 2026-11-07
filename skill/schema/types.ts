@@ -339,6 +339,8 @@ export type Bundle = {
   // Pull request title and Markdown body, written from this report. Null when the report covers only
   // part of the branch (--since or --files), so it cannot describe the pull request.
   prDescription: { title: string; body: string } | null;
+  // Built with --draft before Claude's report was ready: the page shows the facts and holds back sending.
+  draft?: boolean;
   warnings: string[];
   builtAt: string;
 };

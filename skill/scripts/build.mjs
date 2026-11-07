@@ -6,6 +6,11 @@
 // Usage:
 //   node build.mjs --diff diff.json --report report.json [--out report-r1.json]
 //                  [--html report.html] [--viewer viewer.html] [--open]
+//   node build.mjs --diff diff.json --draft [--report report.json]
+//
+// --draft builds the page before Claude's report is ready: the diffs, checks and coverage, with the
+// files in one list (or the given report, such as one carried forward by collect --update). The
+// page says the notes are still being written; the real build replaces it in the open tab.
 
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -56,15 +61,37 @@ function parseArgs(argv) {
     else if (a === "--viewer") args.viewer = next();
     else if (a === "--checks") args.checks = next();
     else if (a === "--open") args.open = true;
+    else if (a === "--draft") args.draft = true;
     else throw new Error(`Unknown argument: ${a}`);
   }
-  if (!args.diff || !args.report) throw new Error("--diff and --report are required");
+  if (!args.diff || (!args.report && !args.draft)) throw new Error("--diff and --report are required (or --draft)");
   return args;
 }
 
 const args = parseArgs(process.argv.slice(2));
 const diff = JSON.parse(readFileSync(args.diff, "utf8"));
-const report = JSON.parse(readFileSync(args.report, "utf8"));
+
+// The facts in report form, for the page that opens before Claude's report: every file in one list.
+function draftReport() {
+  const changes = diff.stats.additions + diff.stats.deletions;
+  const section = (kind, title, review, reason, files) => ({ kind, title, review, reason, highlights: [], questions: [], files: files.map((f) => ({ path: f.path, note: "" })) });
+  const generated = diff.files.filter((f) => f.generated);
+  return {
+    version: 1,
+    tag: "CHORE",
+    title: diff.branch.pr?.title ?? (diff.commits.length === 1 ? diff.commits[0].subject : diff.branch.head),
+    summary: "",
+    targets: [...new Set(diff.files.map((f) => f.target).filter(Boolean))],
+    reviewMinutes: Math.max(5, Math.round(changes / 40)),
+    beforeMerge: [],
+    flows: [],
+    sections: [
+      section("other", "Changed files", "skim", "Claude has not grouped these yet.", diff.files.filter((f) => !f.generated)),
+      ...(generated.length ? [section("generated", "Generated files", "skip", "Lockfiles and generated files.", generated)] : []),
+    ].filter((s) => s.files.length),
+  };
+}
+const report = args.report ? JSON.parse(readFileSync(args.report, "utf8")) : draftReport();
 
 const errors = [];
 const warnings = [];
@@ -215,7 +242,7 @@ if (report.schema) {
 // Every high or medium finding from collect.mjs must show up in a highlight or a before-merge item.
 
 const mentioned = [...report.sections.flatMap((s) => s.highlights.map((h) => h.ref)), ...report.beforeMerge.map((b) => b.ref)].filter(Boolean);
-for (const f of diff.findings ?? []) {
+for (const f of args.draft ? [] : (diff.findings ?? [])) {
   if (f.severity === "low") continue;
   const covered = mentioned.some((r) => r.path === f.path && (f.line == null || r.line == null || Math.abs(r.line - f.line) <= 3));
   if (!covered) warnings.push(`safety check "${f.rule}" at ${f.path}${f.line ? `:${f.line}` : ""} is not in any highlight or before-merge item`);
@@ -478,7 +505,7 @@ function prDescription() {
 // A report about part of the branch (--since, --files) cannot describe the pull request, so the
 // description from the last whole-branch build stays.
 const partial = diff.scope.mode !== "branch";
-const prText = partial ? null : prDescription();
+const prText = partial || args.draft ? null : prDescription();
 
 // The round is part of the name: fixes are often uncommitted, so two rounds can share a commit.
 const slug = diff.branch.head.replace(/[^\w.-]+/g, "-");
@@ -493,6 +520,7 @@ const bundle = {
   fileIcons,
   projectChecks,
   prDescription: prText,
+  ...(args.draft ? { draft: true } : {}),
   warnings: [...notes, ...warnings],
   builtAt: new Date().toISOString(),
 };
@@ -522,7 +550,7 @@ if (htmlOut) {
 }
 const prFile = join(dirname(out), "pr-description.md");
 if (prText) writeFileSync(prFile, `${prText.title}\n\n${prText.body}\n`);
-else notes.push(`PR description not updated: this report covers only part of the branch (${diff.scope.mode}). Build a whole-branch report before opening the PR.`);
+else if (!args.draft) notes.push(`PR description not updated: this report covers only part of the branch (${diff.scope.mode}). Build a whole-branch report before opening the PR.`);
 
 const state = join(dataDir, "last.json");
 mkdirSync(dirname(state), { recursive: true });
@@ -546,7 +574,10 @@ console.log(
 );
 console.log("Saved this run for --since last (refs/pr-report/last)");
 if (prText) console.log(`PR description: ${prFile} (first line is the title)`);
-if (diff.sinceRound) console.log(`Round ${round} shows the whole branch; ${diff.sinceRound.files.length} files changed since round ${diff.sinceRound.round}.`);
+if (diff.sinceRound) {
+  const n = diff.sinceRound.files.length;
+  console.log(`Round ${round} shows the whole branch; ${n} ${n === 1 ? "file" : "files"} changed since round ${diff.sinceRound.round}.`);
+}
 for (const n of notes) console.log(`note: ${n}`);
 // Printed only: the page shows the checks live, so this would be out of date there.
 if (projectChecks?.status === "running") console.log("note: Project checks are still running; the review page shows each result when it is ready.");

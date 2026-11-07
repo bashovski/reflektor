@@ -135,6 +135,12 @@ try {
   ]);
   for (const line of built.split("\n").filter((l) => l.startsWith("warning:"))) fail(line);
 
+  // A draft: the facts before Claude's report, every file listed, nothing that needs the report.
+  run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--draft", "--out", join(tmp, "draft.json")]);
+  const draft = JSON.parse(readFileSync(join(tmp, "draft.json"), "utf8"));
+  const listed = draft.report.sections.flatMap((s) => s.files).length;
+  if (!draft.draft || draft.prDescription !== null || listed !== draft.diff.files.length) fail(`a draft build is not a draft of every file: ${JSON.stringify({ draft: draft.draft, listed })}`);
+
   const bundle = JSON.parse(readFileSync(join(root, "samples/bundle.json"), "utf8"));
   const missingIcons = bundle.diff.files.filter((f) => !bundle.fileIcons?.byPath[f.path]);
   if (missingIcons.length) fail(`no file icon for ${missingIcons.length} files (run node scripts/build-icons.mjs)`);
