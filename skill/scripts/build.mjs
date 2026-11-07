@@ -320,7 +320,9 @@ const fileIcons = pickFileIcons([...diff.files.map((f) => f.path), ...Object.key
 // ------------------------------------------------------------------ review rounds
 // The daemon writes review-<round>.json next to the report. report.review answers one of them.
 
-const reviewDir = args.out ? dirname(resolve(args.out)) : join(diff.repo.gitDir, "pr-report");
+// Report files live next to diff.json (see reportDir in repo.mjs), unless --out puts them elsewhere.
+const dataDir = dirname(resolve(args.diff));
+const reviewDir = args.out ? dirname(resolve(args.out)) : dataDir;
 const rounds = existsSync(reviewDir)
   ? readdirSync(reviewDir)
       .map((f) => f.match(/^review-(\d+)\.json$/)?.[1])
@@ -480,7 +482,7 @@ const prText = partial ? null : prDescription();
 
 // The round is part of the name: fixes are often uncommitted, so two rounds can share a commit.
 const slug = diff.branch.head.replace(/[^\w.-]+/g, "-");
-const out = resolve(args.out ?? join(diff.repo.gitDir, "pr-report", `${slug}-${diff.branch.headSha.slice(0, 7)}-r${round}.json`));
+const out = resolve(args.out ?? join(dataDir, `${slug}-${diff.branch.headSha.slice(0, 7)}-r${round}.json`));
 
 const bundle = {
   diff,
@@ -522,7 +524,7 @@ const prFile = join(dirname(out), "pr-description.md");
 if (prText) writeFileSync(prFile, `${prText.title}\n\n${prText.body}\n`);
 else notes.push(`PR description not updated: this report covers only part of the branch (${diff.scope.mode}). Build a whole-branch report before opening the PR.`);
 
-const state = join(diff.repo.gitDir, "pr-report", "last.json");
+const state = join(dataDir, "last.json");
 mkdirSync(dirname(state), { recursive: true });
 writeFileSync(state, JSON.stringify({ headSha: diff.branch.headSha, snapshot: diff.branch.snapshot, round, report: out, builtAt: bundle.builtAt }, null, 2));
 // Keep the snapshot commits from being garbage-collected: the last one for --since last, and one per

@@ -34,7 +34,7 @@ try {
   if (!collected.includes("Patch coverage: 51%")) fail("collect.mjs did not read coverage from .pr-report.json");
   if (!collected.includes("(config)")) fail("collect.mjs did not take the base branch from .pr-report.json");
   if (!collected.includes("Safety checks: 1 high, 0 medium, 1 low")) fail("collect.mjs safety checks did not find the slug migration problems");
-  const books = JSON.parse(readFileSync(join(repo, ".git/pr-report/diff.json"), "utf8"));
+  const books = JSON.parse(readFileSync(join(repo, ".git/pr-report/feat-books/diff.json"), "utf8"));
   if (books.repo.avatar?.initials !== "AL" || books.repo.avatar.image !== null) fail(`acme-labs without a cached avatar should get initials AL: ${JSON.stringify(books.repo.avatar)}`);
 
   // Edge cases in a second repo. The key-shaped value is built at runtime, so no literal secret is stored here.
@@ -128,7 +128,7 @@ try {
 
   const built = run("node", [
     join(root, "skill/scripts/build.mjs"),
-    "--diff", join(repo, ".git/pr-report/diff.json"),
+    "--diff", join(repo, ".git/pr-report/feat-books/diff.json"),
     "--report", join(root, "samples/report.json"),
     "--out", join(root, "samples/bundle.json"),
     "--html", html,
@@ -156,7 +156,7 @@ try {
     }
   };
   for (let i = 0; i < 50 && !started(); i++) await sleep(50);
-  run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/diff.json"), "--report", join(root, "samples/report.json"), "--checks", bgChecks, "--out", join(tmp, "bg.json")]);
+  run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--checks", bgChecks, "--out", join(tmp, "bg.json")]);
   const bgRun = JSON.parse(readFileSync(join(tmp, "bg.json"), "utf8")).projectChecks;
   if (bgRun?.status !== "running" || bgRun.pending.join() !== "slow" || bgRun.file !== bgChecks) fail(`build.mjs did not record the running checks: ${JSON.stringify(bgRun)}`);
   const waited = run("node", [join(root, "skill/scripts/checks.mjs"), "--repo", repo, "--out", bgChecks, "--wait"]);
@@ -197,7 +197,7 @@ async function daemonFlow() {
   const reviewDir = join(tmp, "review");
   const review = (...args) => run("node", [join(root, "skill/scripts/review.mjs"), ...args], env);
   const build = (out) =>
-    run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
+    run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
   try {
     build(join(reviewDir, "round1.json"));
     const opened = review("open", "--report", join(reviewDir, "round1.json"));
@@ -274,7 +274,7 @@ async function daemonFlow() {
     if (!(await until((c) => c?.status === "done" && c.results[0]?.status === "passed"))) fail("a finished check did not reach the page state");
     spawn("node", [checksScript, "--repo", repo, "--run", "hang=sleep 3"], { stdio: "ignore" });
     await until((c) => c?.status === "running");
-    process.kill(JSON.parse(readFileSync(join(repo, ".git/pr-report/checks.json"), "utf8")).pid, "SIGKILL");
+    process.kill(JSON.parse(readFileSync(join(repo, ".git/pr-report/feat-books/checks.json"), "utf8")).pid, "SIGKILL");
     if (!(await until((c) => c?.status === "stopped" && c.pending.join() === "hang"))) fail("a crashed check run was not shown as stopped");
 
     await post("questions", { id: "q_1", target: { type: "report" }, text: "Why two migrations?" });
@@ -351,7 +351,18 @@ async function daemonFlow() {
     review("open", "--report", join(reviewDir, "round3.json"));
     await post("submit", { comments: [] });
     if (!review("wait", "--id", id).includes("The review is done")) fail("an empty review did not end the review");
-    console.log("daemon flow: question, live checks, sent review, plan, status, round 2 finished without code changes, publishing again, waiting through a restart, empty round 3 all worked");
+
+    // Archive, then delete: the review's folder and its round refs go; the code does not.
+    if ((await post("delete", {})).status !== 409) fail("a review that is not archived could be deleted");
+    await post("archive", {});
+    const archivedInbox = await (await fetch(`${base}/`)).text();
+    if (!archivedInbox.includes("Archived (1)") || !archivedInbox.includes("<title>PR reports</title>")) fail("an archived review did not move to the archived list");
+    if (!run("git", ["-C", repo, "for-each-ref", "refs/pr-report/rounds/feat-books/"]).trim()) fail("build did not keep a ref per round");
+    await post("delete", {});
+    if (existsSync(reviewDir)) fail("deleting an archived review left its folder");
+    if (run("git", ["-C", repo, "for-each-ref", "refs/pr-report/rounds/feat-books/"]).trim()) fail("deleting a review left its round refs");
+    if (review("list").includes(id)) fail("a deleted review is still listed");
+    console.log("daemon flow: question, drift, live checks, sent review, resume, plan, status, round 2 finished without code changes, publishing again, waiting through a restart, empty round 3, archive and delete all worked");
   } finally {
     try {
       review("stop");
@@ -410,6 +421,10 @@ function updateFlow() {
   const partial = build("r3.json");
   if (JSON.parse(readFileSync(join(dir, "r3.json"), "utf8")).prDescription !== null) fail("a --since report carried a PR description");
   if (readFileSync(join(dir, "pr-description.md"), "utf8") !== whole || !partial.includes("PR description not updated")) fail("a --since report overwrote the PR description");
+  // Another branch in the same checkout gets its own report folder, so their rounds stay apart.
+  run("git", ["-C", repo, "checkout", "-q", "-b", "feat/other"]);
+  const other = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"]);
+  if (!other.includes(join(".git", "pr-report", "feat-other", "diff.json"))) fail(`a second branch in the same checkout did not get its own report folder:\n${other.split("\n")[0]}`);
   console.log("next round: whole branch with the change since round 1, references moved once, PR description only from whole-branch builds");
 }
 

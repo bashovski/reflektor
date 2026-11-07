@@ -11,11 +11,11 @@
 
 import { execFile } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { connect } from "node:net";
 import { homedir } from "node:os";
-import { dirname, extname, join, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { readChecksRun } from "./checks-run.mjs";
@@ -104,6 +104,7 @@ function loadReview(entry) {
     checksFile: entry.checksFile ?? join(entry.dir, "checks.json"),
     repo: entry.repo,
     branch: entry.branch,
+    archived: entry.archived ?? null,
     rounds: saved.rounds ?? [],
     phase: saved.phase ?? "reviewing",
     statuses: saved.statuses ?? {},
@@ -126,7 +127,7 @@ for (const entry of registry) {
 const saveRegistry = () =>
   writeJson(
     registryFile,
-    [...reviews.values()].map(({ id, dir, title, tag, repo, branch, avatar, checksFile }) => ({ id, dir, title, tag, repo, branch, avatar, checksFile })),
+    [...reviews.values()].map(({ id, dir, title, tag, repo, branch, avatar, checksFile, archived }) => ({ id, dir, title, tag, repo, branch, avatar, checksFile, archived })),
   );
 
 function save(r) {
@@ -341,22 +342,29 @@ const inboxIcon = (dot) =>
       `</svg>`,
   )}`;
 
+const megabytes = (bytes) => (bytes < 100_000 ? `${Math.max(1, Math.round(bytes / 1000))} KB` : `${(bytes / 1_000_000).toFixed(1)} MB`);
+
+function inboxRow(r) {
+  const [label, color] = r.archived ? ["Archived", "#71717a"] : (PHASES[r.phase] ?? [r.phase, "#71717a"]);
+  const waiting = r.questions.filter((q) => !q.answer).length;
+  const id = escapeHtml(r.id);
+  const actions = r.archived
+    ? `<button class="act" data-act="restore" data-id="${id}">Restore</button><button class="act danger" data-act="delete" data-id="${id}" data-size="${megabytes(sizeOf(r))}">Delete</button>`
+    : `<button class="act" data-act="archive" data-id="${id}" title="Move to Archived">Archive</button>`;
+  return `<div class="row"><a href="/r/${encodeURIComponent(r.id)}">
+      <span class="tag">${escapeHtml(r.tag ?? "")}</span>
+      <span class="main"><span class="title">${escapeHtml(r.title ?? r.branch)}</span>
+      <span class="meta">${avatarHtml(r.avatar)}<span>${escapeHtml(r.repo)} · ${escapeHtml(r.branch)} · round ${r.round}${waiting ? ` · ${waiting} question${waiting === 1 ? "" : "s"} waiting` : ""}</span></span></span>
+      <span class="phase" style="color:${color}">${label}</span>
+      <time data-at="${r.updatedAt}"></time></a>${actions}</div>`;
+}
+
 function inboxPage() {
-  const rows = [...reviews.values()]
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .map((r) => {
-      const [label, color] = PHASES[r.phase] ?? [r.phase, "#71717a"];
-      const waiting = r.questions.filter((q) => !q.answer).length;
-      return `<a class="row" href="/r/${encodeURIComponent(r.id)}">
-        <span class="tag">${escapeHtml(r.tag ?? "")}</span>
-        <span class="main"><span class="title">${escapeHtml(r.title ?? r.branch)}</span>
-        <span class="meta">${avatarHtml(r.avatar)}<span>${escapeHtml(r.repo)} · ${escapeHtml(r.branch)} · round ${r.round}${waiting ? ` · ${waiting} question${waiting === 1 ? "" : "s"} waiting` : ""}</span></span></span>
-        <span class="phase" style="color:${color}">${label}</span>
-        <time data-at="${r.updatedAt}"></time></a>`;
-    })
-    .join("");
+  const all = [...reviews.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const active = all.filter((r) => !r.archived);
+  const archived = all.filter((r) => r.archived);
   // Reviews that need the reviewer: their turn to review, or a plan to approve.
-  const waitingOnYou = [...reviews.values()].filter((r) => r.phase === "reviewing" || r.phase === "planning").length;
+  const waitingOnYou = active.filter((r) => r.phase === "reviewing" || r.phase === "planning").length;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}PR reports</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}"><style>
 :root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;color-scheme:light dark}
@@ -364,22 +372,33 @@ function inboxPage() {
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif,system-ui,sans-serif}
 main{max-width:900px;margin:0 auto;padding:40px 16px}h1{font-size:20px;margin:0 0 4px}p{color:var(--muted);margin:0 0 24px}
 .list{border:1px solid var(--border);border-radius:12px;background:var(--surface);overflow:hidden}
-.row{display:flex;gap:12px;align-items:center;padding:12px 16px;border-top:1px solid var(--border);color:inherit;text-decoration:none}
-.row:first-child{border-top:0}.row:hover{background:color-mix(in srgb,var(--text) 4%,transparent)}
+.row{display:flex;align-items:center;border-top:1px solid var(--border);padding-right:12px}.row:first-child{border-top:0}
+.row>a{flex:1;min-width:0;display:flex;gap:12px;align-items:center;padding:12px 16px;color:inherit;text-decoration:none}
+.row:hover{background:color-mix(in srgb,var(--text) 4%,transparent)}
 .tag{font:600 11px ui-monospace,monospace;padding:2px 6px;border-radius:6px;background:color-mix(in srgb,var(--text) 8%,transparent);min-width:64px;text-align:center}
 .main{flex:1;min-width:0;display:flex;flex-direction:column}.title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta,time{color:var(--muted);font-size:12px}.meta{display:flex;align-items:center;gap:6px;min-width:0}
 .av{width:16px;height:16px;flex:none;border-radius:4px;object-fit:cover;display:inline-grid;place-items:center;color:#fff;font:600 8px/1 ui-sans-serif,system-ui,sans-serif}.phase{font-size:12px;font-weight:600;white-space:nowrap}time{min-width:64px;text-align:right}
+.act{cursor:pointer;font:500 12px ui-sans-serif,system-ui,sans-serif;color:var(--muted);background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;margin-left:6px;opacity:0}
+.row:hover .act,.act:focus-visible,.archived .act{opacity:1}.act:hover{color:var(--text)}.danger:hover{color:#dc2626;border-color:#dc2626}
+details{margin-top:24px}summary{cursor:pointer;color:var(--muted);margin-bottom:8px}
 .empty{padding:32px;text-align:center;color:var(--muted)}</style></head><body><main>
 <h1>PR reports</h1><p>Every review on this machine. Open one to comment, ask questions and send it to Claude.</p>
-<div class="list">${rows || '<div class="empty">No reviews yet. Run /pr-report in a repo.</div>'}</div></main>
+<div class="list">${active.map(inboxRow).join("") || '<div class="empty">No reviews yet. Run /pr-report in a repo.</div>'}</div>
+${archived.length ? `<details><summary>Archived (${archived.length}): finished reviews after 3 quiet days, others after 14</summary><div class="list archived">${archived.map(inboxRow).join("")}</div></details>` : ""}
+</main>
 <script>
 const ago=(t)=>{const s=(Date.now()-Date.parse(t))/1000;return s<60?"now":s<3600?Math.round(s/60)+" min ago":s<86400?Math.round(s/3600)+" h ago":Math.round(s/86400)+" d ago"};
 for(const el of document.querySelectorAll("time"))el.textContent=ago(el.dataset.at);
 // The stream starts with every review's current state, so reload only for a review that changed or is new.
-const shown=${JSON.stringify(Object.fromEntries([...reviews.values()].map((r) => [r.id, r.updatedAt]))).replace(/</g, "\\u003c")};
+const shown=${JSON.stringify(Object.fromEntries(all.map((r) => [r.id, r.updatedAt]))).replace(/</g, "\\u003c")};
 const es=new EventSource("/api/events?token=${pageToken}&watch=*");let t;
 es.addEventListener("state",(e)=>{const s=JSON.parse(e.data);if(shown[s.id]===s.updatedAt)return;clearTimeout(t);t=setTimeout(()=>location.reload(),400)});
+document.addEventListener("click",async(e)=>{const b=e.target.closest("button[data-act]");if(!b)return;
+if(b.dataset.act==="delete"&&!confirm("Delete this review's files ("+b.dataset.size+") and its saved rounds? This cannot be undone. Your code and branches are not touched."))return;
+const act=b.dataset.act==="delete"?"delete":"archive";
+const res=await fetch("/api/r/"+encodeURIComponent(b.dataset.id)+"/"+act,{method:"POST",headers:{"x-review-token":"${pageToken}","content-type":"application/json"},body:JSON.stringify({archived:b.dataset.act!=="restore"})});
+if(!res.ok)alert((await res.json().catch(()=>({}))).error||"Could not do that");location.reload()});
 </script></body></html>`;
 }
 
@@ -479,6 +498,53 @@ setInterval(() => {
   for (const r of reviews.values()) if (openTabs(r) > 0 && (r.phase === "reviewing" || r.phase === "done")) void checkDrift(r);
 }, DRIFT_MS).unref();
 
+// ------------------------------------------------------------------ archive
+// The inbox keeps reviews in use. Finished ones move to "Archived" after 3 quiet days, others after
+// 14; the reviewer can archive and restore by hand. Only an archived review can be deleted, which
+// removes its files and its git refs.
+
+const DAY = 86_400_000;
+function archiveIdle() {
+  let changed = false;
+  for (const r of reviews.values()) {
+    const quiet = Date.now() - Date.parse(r.updatedAt);
+    if (!r.archived && (quiet > 14 * DAY || (r.phase === "done" && quiet > 3 * DAY))) {
+      r.archived = now();
+      changed = true;
+    }
+  }
+  if (changed) saveRegistry();
+}
+archiveIdle();
+setInterval(archiveIdle, 3_600_000).unref();
+
+// A branch's own folder goes whole. A folder shared by older reviews keeps what may belong to others.
+const ownFolder = (r) => basename(r.dir) !== "pr-report";
+function reviewFiles(r) {
+  if (ownFolder(r)) return existsSync(r.dir) ? readdirSync(r.dir).map((f) => join(r.dir, f)) : [];
+  const rounds = r.rounds.map((x) => x.round);
+  return [
+    ...r.rounds.flatMap((x) => [roundFile(x), roundFile(x).replace(/\.json$/, ".html")]),
+    ...rounds.flatMap((n) => [reviewFile(r, n), questionsFile(r, n)]),
+    stateFile(r),
+    draftFile(r),
+  ].filter((f, i, all) => all.indexOf(f) === i && existsSync(f));
+}
+const sizeOf = (r) => reviewFiles(r).reduce((n, f) => n + statSync(f).size, 0);
+
+async function deleteReview(r) {
+  const f = roundFacts(r);
+  if (f?.root && existsSync(f.root)) {
+    const prefix = `refs/pr-report/rounds/${r.branch.replace(/[^\w.-]+/g, "-")}/`;
+    const refs = ((await gitIn(f.root, ["for-each-ref", "--format=%(refname)", prefix])) ?? "").split("\n").filter(Boolean);
+    for (const ref of refs) await gitIn(f.root, ["update-ref", "-d", ref]);
+  }
+  if (ownFolder(r)) rmSync(r.dir, { recursive: true, force: true });
+  else for (const file of reviewFiles(r)) rmSync(file, { force: true });
+  reviews.delete(r.id);
+  saveRegistry();
+}
+
 // ------------------------------------------------------------------ routes
 
 let lastActivity = Date.now();
@@ -550,6 +616,7 @@ async function handle(req, res, port) {
     }
     r.title = bundle.report.title;
     r.tag = bundle.report.tag;
+    r.archived = null;
     r.avatar = bundle.diff.repo.avatar ?? null;
     r.checksFile = bundle.projectChecks?.file ?? join(dir, "checks.json");
     r.checks = readChecksRun(r.checksFile);
@@ -685,6 +752,18 @@ async function handle(req, res, port) {
       pushEvent(r, "question", { questionId: body.id });
       save(r);
     }
+    return send(res, 200, { ok: true });
+  }
+
+  if (req.method === "POST" && action === "archive") {
+    r.archived = body.archived === false ? null : now();
+    saveRegistry();
+    save(r);
+    return send(res, 200, { ok: true });
+  }
+  if (req.method === "POST" && action === "delete") {
+    if (!r.archived) return send(res, 409, { error: "archive the review first" });
+    await deleteReview(r);
     return send(res, 200, { ok: true });
   }
 

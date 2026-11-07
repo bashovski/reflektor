@@ -15,7 +15,7 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { ownerAvatar } from "./avatar.mjs";
-import { globToRegExp, parseRemote } from "./repo.mjs";
+import { globToRegExp, parseRemote, reportDir } from "./repo.mjs";
 
 const MAX_BYTES = 512 * 1024;
 const MAX_LINES = 8000;
@@ -168,8 +168,8 @@ const mergeBase = git("merge-base", "HEAD", baseRef).trim();
 // ------------------------------------------------------------------ scope
 
 const gitDir = resolve(repoRoot, git("rev-parse", "--git-dir").trim());
-const stateFile = join(gitDir, "pr-report", "last.json");
-const out = resolve(args.out ?? join(gitDir, "pr-report", "diff.json"));
+const out = resolve(args.out ?? join(reportDir(gitDir, head), "diff.json"));
+const stateFile = join(dirname(out), "last.json");
 const reportFile = join(dirname(out), "report.json");
 
 let from = mergeBase;

@@ -25,7 +25,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { globToRegExp, parseRemote, repoKey } from "./repo.mjs";
+import { globToRegExp, parseRemote, repoKey, reportDir } from "./repo.mjs";
 
 const MAX_OUTPUT = 400 * 1024;
 const TAIL_LINES = 80;
@@ -62,7 +62,7 @@ const args = parseArgs(process.argv.slice(2));
 const git = (...argv) => execFileSync("git", argv, { cwd: resolve(args.repo), encoding: "utf8" }).trim();
 const root = git("rev-parse", "--show-toplevel");
 const gitDir = resolve(root, git("rev-parse", "--git-dir"));
-const out = resolve(args.out ?? join(gitDir, "pr-report", "checks.json"));
+const out = resolve(args.out ?? join(reportDir(gitDir, git("rev-parse", "--abbrev-ref", "HEAD")), "checks.json"));
 
 const readRun = () => {
   try {
