@@ -14,8 +14,11 @@
 //        node checks.mjs --repo . --plan          which checks would run, and from where
 //        node checks.mjs --repo . --save --run "name=command"... [--when "name=glob,glob"]... --source "<where from>" --from <file>...
 //        node checks.mjs --repo . --share         copy the saved checks into .pr-report.json
-//        node checks.mjs --repo . --forget        delete the saved checks
+//        node checks.mjs --repo . --forget        delete the saved checks and trusted authors
 //        node checks.mjs --repo . --wait [--out checks.json]
+//
+// The checks run the branch's own code. When the branch has commits by someone else, --plan says to
+// ask the user first and a run refuses to start; --trust records the user's yes for those authors.
 
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -28,7 +31,7 @@ const MAX_OUTPUT = 400 * 1024;
 const TAIL_LINES = 80;
 
 function parseArgs(argv) {
-  const args = { repo: ".", runs: [], when: {}, from: [], source: null, base: null, timeout: 600, out: null, mode: "run" };
+  const args = { repo: ".", runs: [], when: {}, from: [], source: null, base: null, timeout: 600, out: null, mode: "run", trust: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -48,6 +51,7 @@ function parseArgs(argv) {
     else if (a === "--base") args.base = next();
     else if (a === "--timeout") args.timeout = Number(next());
     else if (a === "--out") args.out = next();
+    else if (a === "--trust") args.trust = true;
     else if (["--wait", "--plan", "--save", "--share", "--forget"].includes(a)) args.mode = a.slice(2);
     else throw new Error(`Unknown argument: ${a}`);
   }
@@ -124,7 +128,9 @@ const quietGit = (...argv) => {
 };
 const remotes = (quietGit("remote") ?? "").split("\n").filter(Boolean);
 const remote = remotes.includes("origin") ? "origin" : remotes[0];
-const savedFile = join(HOME, "repos", ...repoKey(parseRemote(remote ? quietGit("remote", "get-url", remote) : null), root), "checks.json");
+const repoHome = join(HOME, "repos", ...repoKey(parseRemote(remote ? quietGit("remote", "get-url", remote) : null), root));
+const savedFile = join(repoHome, "checks.json");
+const trustFile = join(repoHome, "trust.json");
 const configFile = join(root, ".pr-report.json");
 const readJson = (file) => {
   try {
@@ -159,15 +165,36 @@ function pickChecks() {
   return { source: null, checks: [] };
 }
 
-// Files this branch changes, for checks limited to some paths with "when". Compared with --base or
-// the remote's default branch; when no base is found, every check runs.
-function changedFiles() {
+// Where this branch starts: the merge base with --base or the remote's default branch.
+function baseCommit() {
   for (const ref of [args.base, "origin/HEAD", "origin/main", "origin/master", "main", "master"].filter(Boolean)) {
     const base = quietGit("merge-base", "HEAD", ref);
-    if (!base) continue;
-    return [...(quietGit("diff", "--name-only", base) ?? "").split("\n"), ...(quietGit("ls-files", "--others", "--exclude-standard") ?? "").split("\n")].filter(Boolean);
+    if (base) return base;
   }
   return null;
+}
+
+// Files this branch changes, for checks limited to some paths with "when". When no base is found,
+// every check runs.
+function changedFiles() {
+  const base = baseCommit();
+  if (!base) return null;
+  return [...(quietGit("diff", "--name-only", base) ?? "").split("\n"), ...(quietGit("ls-files", "--others", "--exclude-standard") ?? "").split("\n")].filter(Boolean);
+}
+
+// Authors of this branch's commits other than the user and the authors trusted earlier for this repo.
+// Their code (tests, scripts, config) runs when the checks run.
+function untrustedAuthors() {
+  const base = baseCommit();
+  if (!base) return [];
+  const me = (quietGit("config", "user.email") ?? "").toLowerCase();
+  const trusted = new Set((readJson(trustFile)?.authors ?? []).map((a) => a.toLowerCase()));
+  const found = new Map();
+  for (const line of (quietGit("log", "--format=%ae%x09%an", `${base}..HEAD`) ?? "").split("\n").filter(Boolean)) {
+    const [email, name] = line.split("\t");
+    if (email.toLowerCase() !== me && !trusted.has(email.toLowerCase())) found.set(email.toLowerCase(), `${name} <${email}>`);
+  }
+  return [...found].map(([email, label]) => ({ email, label }));
 }
 
 function select(checks) {
@@ -193,7 +220,9 @@ if (args.mode === "save") {
 
 if (args.mode === "forget") {
   console.log(existsSync(savedFile) ? `Deleted the saved checks: ${savedFile}` : "No checks are saved for this repo.");
+  if (existsSync(trustFile)) console.log(`Deleted the trusted authors: ${trustFile}`);
   rmSync(savedFile, { force: true });
+  rmSync(trustFile, { force: true });
   process.exit(0);
 }
 
@@ -209,11 +238,17 @@ if (args.mode === "share") {
 }
 
 const picked = pickChecks();
+const strangers = untrustedAuthors();
+const strangerText = () => `this branch has commits by ${strangers.map((a) => a.label).join(", ")}, and the checks run their code (tests, scripts, config)`;
 
 if (args.mode === "plan") {
+  const askFirst = () => {
+    if (strangers.length) console.log(`\nAsk the user before starting any checks: ${strangerText()}. If they agree, start them with --trust, which trusts these authors for this repo from now on.`);
+  };
   if (!picked.source) {
     console.log("No checks for this repo yet. Work them out once (the CI config first, then the project's own files), then save them:");
     console.log(`  node ${process.argv[1]} --repo ${root} --save --source "<where they came from>" --from <file>... --run "name=command"... [--when "name=glob,glob"]`);
+    askFirst();
     process.exit(0);
   }
   const { run, skipped } = select(picked.checks);
@@ -224,10 +259,21 @@ if (args.mode === "plan") {
     console.log(`\nOut of date: ${picked.changed.join(", ")} changed since these were saved. Work them out again and save them with --save (it replaces them).`);
   } else if (picked.saved?.broken) {
     console.log(`\nLast run, ${picked.saved.broken.check} could not run (${picked.saved.broken.reason}). Work them out again and save them with --save.`);
-  } else if (run.length) {
+  } else if (run.length && !strangers.length) {
     console.log(`\nStart them in the background: node ${process.argv[1]} --repo ${root}`);
   }
+  askFirst();
   process.exit(0);
+}
+
+if (strangers.length && !args.trust) {
+  console.log(`Not started: ${strangerText()}. Ask the user first, then run again with --trust.`);
+  process.exit(4);
+}
+if (strangers.length) {
+  const authors = [...new Set([...(readJson(trustFile)?.authors ?? []), ...strangers.map((a) => a.email)])];
+  writeJson(trustFile, { version: 1, authors });
+  console.log(`Trusting for this repo from now on: ${strangers.map((a) => a.label).join(", ")} (--forget removes this)`);
 }
 
 if (running(readRun())) {

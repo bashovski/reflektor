@@ -73,6 +73,8 @@ It prints the commands and where they come from: `checks` in `.pr-report.json` (
 node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo .
 ```
 
+**When it says to ask the user first,** the branch has commits by someone else, such as a teammate's PR, and the checks would run their code. Ask in one line, naming the authors it lists. On a yes, add `--trust` to the background command; it remembers those authors for this repo. On a no, skip the checks and say so in the report's testing gaps.
+
 **When it says there are none yet, or that the saved ones are out of date or could not run,** work them out once and save them, then start them as above:
 
 1. Read the CI config first (`.github/workflows/*.yml`, `.gitlab-ci.yml`, `Jenkinsfile`, `.circleci/config.yml`, and so on): its lint, typecheck and test commands are the ones the team already trusts. Without CI config, use the project's own files: package.json scripts, Makefile targets, `go vet ./...` and `go test ./...`, `cargo clippy` and `cargo test`, `ruff check`, `mypy` and `pytest`, and so on.
@@ -86,7 +88,7 @@ node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo . --save --source "<where the
   --run "lint=<command>" --run "typecheck=<command>" --run "tests=<command>" [--when "tests=apps/api/**,packages/shared/**"]
 ```
 
-In your final message, list the checks you saved, and say that `checks.mjs --forget` deletes them and `checks.mjs --share` copies them into `.pr-report.json` for the team. Do not ask before saving; the report should not wait.
+In your final message, list the checks you saved, and say that `checks.mjs --forget` deletes them and `checks.mjs --share` copies them into `.pr-report.json` for the team. Do not ask before saving; the report should not wait. (Asking about other authors' code, above, is the one time to wait.)
 
 `--run` on the background command overrides everything, for a one-off run. The run writes `checks.json` next to diff.json as it goes, and the review page shows each result as it arrives; step 7b updates the report when the checks end. If you cannot run a background process, run it in the foreground and wait.
 

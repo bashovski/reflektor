@@ -103,6 +103,21 @@ try {
   if (!checks("--plan").includes("Checks come from: .pr-report.json")) fail("--share did not make .pr-report.json the source");
   checks("--forget");
 
+  // A commit by someone else: the checks would run their code, so they wait for the user's yes.
+  writeFileSync(join(edgeRepo, "theirs.txt"), "from a teammate\n");
+  run("bash", ["-c", `cd "${edgeRepo}" && git add theirs.txt && git -c user.name=Pat -c user.email=pat@other.test commit -q -m theirs`]);
+  if (!checks("--plan").includes("Ask the user before starting any checks: this branch has commits by Pat <pat@other.test>")) fail("--plan did not ask first about another author's commits");
+  try {
+    checks("--run", "x=echo ran", "--out", savedRun);
+    fail("checks ran another author's code without --trust");
+  } catch (e) {
+    if (e.status !== 4 || !e.stdout.includes("Not started")) fail(`checks without --trust did not refuse clearly: ${e.stdout}`);
+  }
+  if (!checks("--run", "x=echo ran", "--out", savedRun, "--trust").includes("Project checks: 1 passed")) fail("--trust did not start the checks");
+  if (checks("--plan").includes("Ask the user")) fail("an author trusted with --trust was asked about again");
+  checks("--forget");
+  if (!checks("--plan").includes("Ask the user")) fail("--forget did not remove the trusted authors");
+
   const checked = run("node", [
     join(root, "skill/scripts/checks.mjs"), "--repo", repo,
     "--run", "whitespace=git diff --check HEAD",
