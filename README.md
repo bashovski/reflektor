@@ -27,26 +27,31 @@ Then, in any git repo, ask Claude for a PR report or type:
 /pr-report develop      compare with develop
 /pr-report --since last only what changed since the last report
 /pr-report --session    only files changed in this Claude session
+/pr-report resume       pick up a review in a new session
 ```
 
-The report data is written to `<git folder>/pr-report/<branch>-<sha>-r<round>.json` (usually `.git/pr-report/`) and opens in your browser through the review daemon. Nothing is added to the repo's tracked files or branches. One hidden ref, `refs/pr-report/last`, records what the last report showed (uncommitted work included), so `--since last` shows only what is new.
+The report data is written to `<git folder>/pr-report/<branch>/` (usually `.git/pr-report/<branch>/`), one JSON file per round, and opens in your browser through the review daemon. Nothing is added to the repo's tracked files or branches. Hidden refs keep the code each report showed (uncommitted work included): `refs/pr-report/last` for `--since last`, and `refs/pr-report/rounds/<branch>/r<N>` so a later round can show what changed since an earlier one.
 
 ## How it works
 
-1. **`skill/scripts/collect.mjs`** reads git and writes `diff.json`: changed files, full old and new contents, commits, and coverage of new lines.
+1. **`skill/scripts/collect.mjs`** reads git and writes `diff.json`: changed files, full old and new contents, commits, and coverage of new lines. The page opens right away with these facts (`build.mjs --draft`), so you can read the diffs and watch the checks while Claude writes.
 2. **Claude** reads the changes and writes `report.json`: title, summary, sections, highlights, notes and flows. It points at lines and never copies code.
-3. **`skill/scripts/build.mjs`** checks `report.json` against the git facts, drops anything that points at code that doesn't exist, and writes both into one JSON file per round. With `--html <file>` it also writes a self-contained HTML page to keep or send.
+3. **`skill/scripts/build.mjs`** checks `report.json` against the git facts, drops anything that points at code that doesn't exist, and writes both into one JSON file per round. With `--html <file>` it also writes a self-contained HTML page to keep or send. It writes `pr-description.md` only from reports of the whole branch.
 4. **`skill/scripts/review.mjs open`** publishes the report to the **pr-report daemon**, one local server for every review on this machine: `http://127.0.0.1:7337`, with an inbox of all reviews at `/`. It starts the daemon when needed, and the daemon stops after 4 idle hours. In the report you can:
    - comment on lines (hover a line number and click +), files or the whole change
    - use "Fix this" or "It's fine" on problems, and answer Claude's questions
    - ask Claude live with "Ask Claude now"
    - click "Send to Claude"
 
-   Claude's plan then shows up in the page to approve, each comment shows Claude's progress live, and the next round arrives as a banner in the same tab. Each repo's `.git/pr-report/` folder stays the source of truth; the daemon only keeps a list of them in `~/.pr-report/`.
+   Claude's plan then shows up in the page to approve, each comment shows Claude's progress live, and the next round arrives as a banner in the same tab. Every round shows the whole branch, with a switch to see only what changed since the round you sent; `collect.mjs --update` carries the last report forward and moves its line references to where those lines are now. Each repo's `.git/pr-report/` folder stays the source of truth; the daemon only keeps a list of them in `~/.pr-report/`.
+
+   A review outlives the Claude session that made it. When you send something and no session is listening, the page says so and gives you `/pr-report resume` to type in a new one. When the code changes after a report was built, the page lists the files and can ask Claude to update the report.
+
+   The inbox archives finished reviews after 3 quiet days and others after 14. You can archive and restore by hand, and delete an archived review's files.
 
    The daemon serves the viewer as normal files the browser caches (about 1.3 MB on first visit). Each report is only its JSON data. Diffs render the lines near the screen only, and code is colored with WebAssembly lexers, so a 40-file change opens in well under a second.
 
-   The project's own lint, typecheck and test commands run in the background while Claude reads the change, and their results stream into the open report. Claude works out the commands once per repo (from the CI config first) and saves them in `~/.pr-report/repos/<host>/<owner>/<repo>/checks.json`, so later reports reuse them. They are worked out again when the files they came from change or a command stops working. `checks.mjs --share` copies them into `.pr-report.json` for the team; `--forget` deletes them.
+   The project's own lint, typecheck and test commands run in the background while Claude reads the change, and their results stream into the open report. Claude works out the commands once per repo (from the CI config first) and saves them in `~/.pr-report/repos/<host>/<owner>/<repo>/checks.json`, so later reports reuse them. They are worked out again when the files they came from change or a command stops working. `checks.mjs --share` copies them into `.pr-report.json` for the team; `--forget` deletes them. When the branch has commits by someone else, such as a teammate's PR, Claude asks before running them, since they run that code.
 
    The header and the inbox show the repo owner's avatar. For github.com and gitlab.com it is downloaded once into `~/.pr-report/cache/avatars/` and never again; delete that folder to refresh. Other hosts, and owners without a picture, get their initials on a color.
 
@@ -86,7 +91,7 @@ pnpm sample   # check, then open the sample report
 To redo an old report with a new viewer, without asking Claude again:
 
 ```bash
-node skill/scripts/build.mjs --diff .git/pr-report/diff.json --report .git/pr-report/report.json --open
+node skill/scripts/build.mjs --diff .git/pr-report/<branch>/diff.json --report .git/pr-report/<branch>/report.json --open
 ```
 
 ## Per-repo settings
@@ -100,4 +105,4 @@ File type icons come from [atom-material-icons](https://www.npmjs.com/package/at
 ## Known issues
 
 - **Symlinked skill folders:** `/skills` may not list them, and a Claude Code update may remove the link. Both come from user reports on GitHub. If the skill goes missing, run `./install.sh` again, or use `--copy`.
-- **File size:** each report is about 12 MB, because the viewer includes every Shiki language grammar so any stack gets syntax colors.
+- **Exported pages are large:** a page from `build.mjs --html` is about 11 MB, because it carries every Shiki language grammar as a fallback for browsers without WebAssembly. Reports opened through the daemon load the viewer once and are only their data.
