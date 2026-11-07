@@ -224,6 +224,7 @@ async function daemonFlow() {
     const inbox = await (await fetch(`${base}/`)).text();
     const shown = JSON.parse(inbox.match(/const shown=(\{.*?\});/)?.[1] ?? "{}");
     if (shown[id] !== (await state()).updatedAt) fail("the inbox would reload on the stream's first state event (reload loop)");
+    if ((await state()).listening) fail("a review with no waiter counts as listened to");
     if (!/<span class="av" style="background:#[0-9a-f]{6}">AL<\/span>/.test(inbox)) fail("the inbox does not show the owner's initials");
     if (!inbox.includes("<title>(1) PR reports</title>")) fail("the inbox title does not count the review waiting on you");
 
@@ -258,6 +259,7 @@ async function daemonFlow() {
     if (!(await until((c) => c?.status === "stopped" && c.pending.join() === "hang"))) fail("a crashed check run was not shown as stopped");
 
     await post("questions", { id: "q_1", target: { type: "report" }, text: "Why two migrations?" });
+    if (!(await state()).undeliveredSince) fail("a question nobody picked up is not shown as waiting");
     if (!review("wait", "--id", id).includes("Live question q_1")) fail("wait did not return the live question");
     review("answer", "--id", id, "--question", "q_1", "--text", "One per change.");
     if (!(await state()).questions[0]?.answer) fail("the answer did not reach the page state");
@@ -265,17 +267,23 @@ async function daemonFlow() {
     const comment = { id: "c_1", target: { type: "report" }, text: "Rename slug to handle", createdAt: new Date().toISOString() };
     await post("submit", { comments: [comment] });
     if (!review("wait", "--id", id).includes("was sent with 1 comments")) fail("wait did not report the sent review");
+    // A session that got the review and ended before posting a plan: a new one picks it up.
+    if (!review("resume", "--id", id).includes("was sent with 1 comments")) fail("resume did not hand over a sent review that has no plan yet");
+    if (!review("resume", "--repo", repo).includes("No review of feat/books is open")) fail("resume found a review outside this repo's git folder");
 
     writeFileSync(join(tmp, "plan.json"), JSON.stringify({ steps: [{ comments: ["c_1"], where: "0043_add_author_slug.sql", kind: "fix", action: "Rename the column" }] }));
     review("plan", "--id", id, "--file", join(tmp, "plan.json"));
     if ((await state()).phase !== "planning") fail("posting a plan did not move the review to planning");
+    if (!review("resume", "--id", id).includes("waits on the reviewer's decision")) fail("resume handed over a sent review that already has a plan");
     await post("plan-decision", { decision: "approve", kinds: {} });
     if (!review("wait", "--id", id).includes("approved the plan")) fail("wait did not report the approved plan");
+    if (!review("resume", "--id", id).includes("approved the plan")) fail("resume did not hand over an approved plan with no progress");
 
     review("status", "--id", id, "--comment", "c_1", "--status", "fixed", "--text", "Renamed");
     const afterFix = await state();
     if (afterFix.statuses.c_1?.status !== "fixed") fail("the status did not reach the page state");
     if (afterFix.phase !== "working") fail("a fixed comment ended the round before the next round was published");
+    if (!review("resume", "--id", id).includes("Every comment in round 1 has a status")) fail("resume did not say the fix loop only needs the next round");
 
     build(join(reviewDir, "round2.json"));
     if (!review("open", "--report", join(reviewDir, "round2.json")).includes("round 2")) fail("publishing the next build did not start round 2");
@@ -299,6 +307,7 @@ async function daemonFlow() {
     waiter.stdout.on("data", (d) => (waited += d));
     const waiterExit = new Promise((resolveExit) => waiter.on("exit", resolveExit));
     await sleep(500);
+    if (!(await state()).listening) fail("a running waiter does not count as listening");
     const daemonPid = () => JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")).pid;
     const oldPid = daemonPid();
     review("stop");

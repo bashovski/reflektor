@@ -52,6 +52,37 @@ export const targetAnchor = (t: CommentTarget, sections: { kind: string }[]): { 
   }
 };
 
+// A new Claude session picks up a review with this, for example after the one that made it ended.
+const RESUME = "/pr-report resume";
+
+const ResumeHint = ({ text }: { text: string }) => {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(RESUME);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // The command is on screen to type by hand.
+    }
+  };
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-1.5 text-xs text-amber-700 dark:text-amber-400">
+      {text} In Claude Code, run
+      <button
+        type="button"
+        onClick={copy}
+        title="Copy"
+        className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-[11px] ring-1 ring-amber-500/25 ring-inset hover:bg-amber-500/20"
+      >
+        {RESUME}
+        <ClipboardCopy className="size-3" />
+      </button>
+      {copied && <span className="text-zinc-500">Copied</span>}
+    </span>
+  );
+};
+
 export const ReviewBar = () => {
   const { bundle, jumpTo, setSectionOpen } = useReport();
 
@@ -66,10 +97,10 @@ export const ReviewBar = () => {
   };
   const review = useReview();
   const problems = useProblems();
-  // Re-render every 30 seconds so "no update from Claude" can appear without a new event.
+  // Re-render every 5 seconds so the warnings about a missing agent can appear without a new event.
   const [, setTick] = useState(0);
   useEffect(() => {
-    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
+    const id = window.setInterval(() => setTick((n) => n + 1), 5_000);
     return () => window.clearInterval(id);
   }, []);
   const [listOpen, setListOpen] = useState(false);
@@ -81,6 +112,9 @@ export const ReviewBar = () => {
   const fine = problems.filter((k) => decidedKinds.get(k) === "accepted").length;
   const open = problems.length - queued - fine;
   const composingGeneral = composer?.key === "report" && !composer.editingId;
+  // Something the reviewer sent has waited 15 seconds and no agent listens for it.
+  const unheard =
+    mode === "server" && review.connected && !review.listening && review.undeliveredSince !== null && Date.now() - Date.parse(review.undeliveredSince) > 15_000;
 
   if (sent) {
     const total = comments.length;
@@ -89,7 +123,7 @@ export const ReviewBar = () => {
       return status && status.status !== "working";
     }).length;
     const quiet = review.lastAgentActivity ? Date.now() - Date.parse(review.lastAgentActivity) : 0;
-    const stale = review.phase === "working" && quiet > 10 * 60_000;
+    const stale = (review.phase === "working" || review.phase === "sent") && !unheard && quiet > 10 * 60_000;
     const message =
       review.latestRound > round
         ? `This is round ${round}. Round ${review.latestRound} is newer.`
@@ -97,7 +131,9 @@ export const ReviewBar = () => {
           ? total
             ? `Review finished. Claude handled all ${total} ${total === 1 ? "comment" : "comments"} without changing code, so there is no new round. Claude can open the PR now.`
             : "Review finished. Claude can open the PR now."
-          : review.phase === "sent"
+          : review.phase === "sent" && unheard
+            ? `Sent round ${round} with ${total} ${total === 1 ? "comment" : "comments"}.`
+            : review.phase === "sent"
             ? `Sent round ${round} with ${total} ${total === 1 ? "comment" : "comments"}. Claude is reading them and will post a plan here.`
             : review.phase === "planning"
               ? "Claude's plan is ready. Approve it, or ask for a new one."
@@ -119,7 +155,8 @@ export const ReviewBar = () => {
               <span className="block h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.round((done / total) * 100)}%` }} />
             </span>
           )}
-          {stale && <span className="text-xs text-amber-600 dark:text-amber-400">No update from Claude for 10 minutes. Is the Claude session still running?</span>}
+          {unheard && <ResumeHint text="No Claude session is listening for this review." />}
+          {stale && <ResumeHint text="No update from Claude for 10 minutes. If its session ended," />}
           {!review.connected && <span className="text-xs text-red-600 dark:text-red-400">Not connected to the review server.</span>}
           {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
         </div>
@@ -196,6 +233,7 @@ export const ReviewBar = () => {
         </button>
         {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
         {mode === "server" && !review.connected && <span className="text-xs text-red-600 dark:text-red-400">Not connected to the review server.</span>}
+        {unheard && <ResumeHint text="No Claude session is listening, so questions wait." />}
 
         <span className="ml-auto inline-flex items-center gap-3">
           {mode === "server" ? (

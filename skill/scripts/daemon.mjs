@@ -106,7 +106,8 @@ function loadReview(entry) {
     phase: saved.phase ?? "reviewing",
     statuses: saved.statuses ?? {},
     plan: saved.plan ?? null,
-    events: saved.events ?? [],
+    // Events saved before handling was tracked count as handled once delivered.
+    events: (saved.events ?? []).map((e) => ("handledAt" in e ? e : { ...e, handledAt: e.deliveredAt })),
     lastAgentActivity: saved.lastAgentActivity ?? null,
     updatedAt: saved.updatedAt ?? now(),
   };
@@ -183,6 +184,10 @@ const liveState = (r) => ({
   // Changes when the agent publishes the same round again; open pages then reload its data.
   roundBuiltAt: r.rounds.find((x) => x.round === r.round)?.builtAt ?? null,
   lastAgentActivity: r.lastAgentActivity,
+  // Whether an agent waits for this review's events, and since when the oldest event waits for one.
+  // The page warns when nobody picks up what the reviewer sent.
+  listening: listening(r),
+  undeliveredSince: r.events.find((e) => !e.deliveredAt && !answered(r, e))?.at ?? null,
   updatedAt: r.updatedAt,
 });
 
@@ -210,20 +215,40 @@ const openTabs = (r) => {
 // ------------------------------------------------------------------ agent events (long poll)
 
 const waiters = new Map(); // review id -> [{ res, timer }]
+// A waiter reconnects right after each long poll ends, so it counts as listening for a short while
+// after it leaves.
+const waiterLeft = new Map(); // review id -> ms
+const LISTEN_GRACE_MS = 30_000;
+const listening = (r) => (waiters.get(r.id)?.length ?? 0) > 0 || Date.now() - (waiterLeft.get(r.id) ?? 0) < LISTEN_GRACE_MS;
+function waiterGone(r) {
+  waiterLeft.set(r.id, Date.now());
+  setTimeout(() => !listening(r) && broadcast(r), LISTEN_GRACE_MS + 500).unref();
+}
+
+const answered = (r, e) => e.type === "question" && Boolean(r.questions.find((q) => q.id === e.questionId)?.answer);
 
 function nextEvent(r) {
   const ready = (e) => !e.deliveredAt || (e.type === "question" && Date.now() - Date.parse(e.deliveredAt) > REDELIVER_MS);
   for (const e of r.events) {
-    if (e.type === "question" && r.questions.find((q) => q.id === e.questionId)?.answer) continue;
+    if (answered(r, e)) continue;
     if (ready(e)) return e;
   }
   return null;
 }
 
-function deliver(r, res) {
-  const e = nextEvent(r);
+// An event is handled when the agent acts on it: a sent review by a plan or a status, a plan
+// decision by a status or a new plan, a question by its answer. Other events are news, handled once
+// delivered. `resume` hands an agent in a new session the event a lost session never handled.
+const needsAction = (e) => (e.type === "review-submitted" && e.count > 0) || e.type === "plan-decision" || e.type === "question";
+function markHandled(r, ...types) {
+  for (const e of r.events) if (types.includes(e.type) && !e.handledAt) e.handledAt = now();
+}
+const openEvent = (r) => r.events.find((e) => !e.handledAt && !answered(r, e)) ?? null;
+
+function deliver(r, res, e = nextEvent(r)) {
   if (!e) return false;
   e.deliveredAt = now();
+  if (!needsAction(e)) e.handledAt = e.deliveredAt;
   const payload = { ...e };
   if (e.type === "question") payload.question = r.questions.find((q) => q.id === e.questionId);
   send(res, 200, { event: payload, review: { id: r.id, round: r.round, dir: r.dir } });
@@ -242,7 +267,7 @@ function wakeWaiters(r) {
 }
 
 function pushEvent(r, type, data) {
-  r.events.push({ seq: (r.events.at(-1)?.seq ?? 0) + 1, type, at: now(), deliveredAt: null, ...data });
+  r.events.push({ seq: (r.events.at(-1)?.seq ?? 0) + 1, type, at: now(), deliveredAt: null, handledAt: null, ...data });
   r.events = r.events.slice(-200);
 }
 
@@ -492,24 +517,43 @@ async function handle(req, res, port) {
   if (admin) {
     if (req.method === "GET" && action === "next-event") {
       if (deliver(r, res)) return;
+      const wasListening = listening(r);
       const list = waiters.get(r.id) ?? [];
       waiters.set(r.id, list);
       const w = {
         res,
         timer: setTimeout(() => {
           list.splice(list.indexOf(w), 1);
+          waiterGone(r);
           send(res, 204, {});
         }, LONG_POLL_MS),
       };
       list.push(w);
+      if (!wasListening) broadcast(r);
       req.on("close", () => {
         const i = list.indexOf(w);
         if (i >= 0) {
           clearTimeout(w.timer);
           list.splice(i, 1);
+          waiterGone(r);
         }
       });
       return;
+    }
+    // A new session picks up a review: the event a lost session never handled, or none.
+    if (req.method === "GET" && action === "resume") {
+      const e = openEvent(r);
+      const comments = submittedComments(r);
+      const skipped = new Set((r.plan?.steps ?? []).flatMap((s, i) => ((r.plan.decision?.kinds?.[i] ?? s.kind) === "skip" ? s.comments : [])));
+      const open = comments.filter((c) => !skipped.has(c.id) && (!r.statuses[c.id] || r.statuses[c.id].status === "working"));
+      const review = { id: r.id, round: r.round, dir: r.dir, phase: r.phase, file: reviewFile(r, r.round), comments: comments.length, open };
+      if (!e) return send(res, 200, { event: null, review });
+      e.deliveredAt = now();
+      r.lastAgentActivity = now();
+      save(r);
+      const payload = { ...e };
+      if (e.type === "question") payload.question = r.questions.find((q) => q.id === e.questionId);
+      return send(res, 200, { event: payload, review });
     }
     if (req.method !== "POST") return send(res, 404, { error: "not found" });
     const body = JSON.parse(await readBody(req));
@@ -519,6 +563,7 @@ async function handle(req, res, port) {
       const q = r.questions.find((x) => x.id === body.questionId);
       if (!q || !String(body.text ?? "").trim()) return send(res, 400, { error: "unknown question or empty answer" });
       q.answer = { text: String(body.text).trim(), ref: body.ref ?? undefined, answeredAt: now() };
+      for (const e of r.events) if (e.type === "question" && e.questionId === q.id) e.handledAt ??= now();
       save(r);
       return send(res, 200, { ok: true });
     }
@@ -526,12 +571,14 @@ async function handle(req, res, port) {
       if (!Array.isArray(body.steps) || !body.steps.length) return send(res, 400, { error: "a plan needs steps" });
       r.plan = { round: r.round, steps: body.steps, note: body.note ?? null, createdAt: now(), decision: null };
       r.phase = "planning";
+      markHandled(r, "review-submitted", "plan-decision");
       save(r);
       return send(res, 200, { ok: true });
     }
     if (action === "status") {
       if (typeof body.commentId !== "string" || typeof body.status !== "string") return send(res, 400, { error: "commentId and status are required" });
       r.statuses[body.commentId] = { status: body.status, text: body.text ?? null, ref: body.ref ?? undefined, at: now() };
+      markHandled(r, "review-submitted", "plan-decision");
       if (r.phase === "sent" || r.phase === "planning") r.phase = "working";
       const finished = finishIfSettled(r);
       save(r);

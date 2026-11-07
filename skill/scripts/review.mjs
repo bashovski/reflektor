@@ -6,10 +6,11 @@
 //   answer  --id <review> --question <id> (--text <t> | --text-file <f>) [--ref path:line]
 //   plan    --id <review> --file <plan.json>
 //   status  --id <review> --comment <id> --status working|fixed|answered|wontfix|noted [--text <t>] [--ref path:line]
+//   resume  [--id <review>] [--repo .]   pick up a review in a new session: what is waiting, and what to do
 //   list                                  every review the daemon knows
 //   stop                                  stop the daemon
 
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -110,6 +111,43 @@ const describe = (t) => {
 
 const self = `node ${join(here, "review.mjs")}`;
 
+// What the reviewer did, and what the agent runs next. Printed by wait and resume.
+function explain(event, review) {
+  if (event.type === "question") {
+    const q = event.question;
+    console.log(`Live question ${q.id} in review ${review.id}`);
+    console.log(`About: ${describe(q.target)}`);
+    if (q.target.type === "line") console.log(["```", q.target.code, "```"].join("\n"));
+    if (q.target.fix) console.log(`Suggested fix shown with it: ${q.target.fix}`);
+    console.log(`Question: ${q.text}`);
+    console.log(`\nAnswer: ${self} answer --id ${review.id} --question ${q.id} --text "<answer>"`);
+    console.log("Then run wait again in the background.");
+  } else if (event.type === "review-submitted" && event.count === 0) {
+    console.log(`The reviewer finished round ${event.round} of ${review.id} with no comments. The review is done.`);
+    console.log("Offer to open the PR (ask first).");
+  } else if (event.type === "review-submitted") {
+    console.log(`Review for round ${event.round} of ${review.id} was sent with ${event.count} comments: ${event.file}`);
+    console.log(`\nNext: read the file, then post your plan: ${self} plan --id ${review.id} --file <plan.json>`);
+    console.log("Then run wait again in the background for the reviewer's decision.");
+  } else if (event.type === "plan-decision" && event.decision.decision === "approve") {
+    const kinds = Object.entries(event.decision.kinds ?? {});
+    console.log(`The reviewer approved the plan for ${review.id}.`);
+    if (kinds.length) console.log(`Kind changes by step: ${kinds.map(([step, kind]) => `step ${Number(step) + 1} -> ${kind}`).join(", ")}`);
+    if (event.decision.note) console.log(`Note: ${event.decision.note}`);
+    console.log(`\nNext: make the changes. Report each comment as you go: ${self} status --id ${review.id} --comment <id> --status working|fixed|answered|wontfix|noted --text "<short>"`);
+    console.log(`Then collect --since last, write report.json with review.replies, build, and publish: ${self} open --report <new json>`);
+  } else if (event.type === "round-finished") {
+    console.log(`Round ${event.round} of ${review.id} is finished: all ${event.count} comments are handled and no code changed. The review is done.`);
+    console.log("Offer to open the PR (ask first).");
+  } else if (event.type === "plan-decision") {
+    console.log(`The reviewer wants a different plan for ${review.id}.`);
+    if (event.decision.note) console.log(`Note: ${event.decision.note}`);
+    console.log(`\nNext: post a new plan with ${self} plan, then run wait again in the background.`);
+  } else {
+    console.log(JSON.stringify(event, null, 2));
+  }
+}
+
 // ------------------------------------------------------------------ commands
 
 if (command === "open") {
@@ -150,41 +188,42 @@ if (command === "open") {
       continue;
     }
     if (result.status === 204) continue;
-    const { event, review } = result.data;
-    if (event.type === "question") {
-      const q = event.question;
-      console.log(`Live question ${q.id} in review ${review.id}`);
-      console.log(`About: ${describe(q.target)}`);
-      if (q.target.type === "line") console.log(["```", q.target.code, "```"].join("\n"));
-      if (q.target.fix) console.log(`Suggested fix shown with it: ${q.target.fix}`);
-      console.log(`Question: ${q.text}`);
-      console.log(`\nAnswer: ${self} answer --id ${review.id} --question ${q.id} --text "<answer>"`);
-      console.log("Then run wait again in the background.");
-    } else if (event.type === "review-submitted" && event.count === 0) {
-      console.log(`The reviewer finished round ${event.round} of ${review.id} with no comments. The review is done.`);
-      console.log("Offer to open the PR (ask first).");
-    } else if (event.type === "review-submitted") {
-      console.log(`Review for round ${event.round} of ${review.id} was sent with ${event.count} comments: ${event.file}`);
-      console.log(`\nNext: read the file, then post your plan: ${self} plan --id ${review.id} --file <plan.json>`);
-      console.log("Then run wait again in the background for the reviewer's decision.");
-    } else if (event.type === "plan-decision" && event.decision.decision === "approve") {
-      const kinds = Object.entries(event.decision.kinds ?? {});
-      console.log(`The reviewer approved the plan for ${review.id}.`);
-      if (kinds.length) console.log(`Kind changes by step: ${kinds.map(([step, kind]) => `step ${Number(step) + 1} -> ${kind}`).join(", ")}`);
-      if (event.decision.note) console.log(`Note: ${event.decision.note}`);
-      console.log(`\nNext: make the changes. Report each comment as you go: ${self} status --id ${review.id} --comment <id> --status working|fixed|answered|wontfix|noted --text "<short>"`);
-      console.log(`Then collect --since last, write report.json with review.replies, build, and publish: ${self} open --report <new json>`);
-    } else if (event.type === "round-finished") {
-      console.log(`Round ${event.round} of ${review.id} is finished: all ${event.count} comments are handled and no code changed. The review is done.`);
-      console.log("Offer to open the PR (ask first).");
-    } else if (event.type === "plan-decision") {
-      console.log(`The reviewer wants a different plan for ${review.id}.`);
-      if (event.decision.note) console.log(`Note: ${event.decision.note}`);
-      console.log(`\nNext: post a new plan with ${self} plan, then run wait again in the background.`);
-    } else {
-      console.log(JSON.stringify(event, null, 2));
-    }
+    explain(result.data.event, result.data.review);
     process.exit(0);
+  }
+} else if (command === "resume") {
+  const info = await ensureDaemon();
+  let id = typeof args.id === "string" ? args.id : null;
+  if (!id) {
+    // This branch's review: the newest one whose files are in this repo's git folder.
+    const git = (...a) => execFileSync("git", a, { cwd: resolve(typeof args.repo === "string" ? args.repo : "."), encoding: "utf8" }).trim();
+    const gitDir = resolve(git("rev-parse", "--show-toplevel"), git("rev-parse", "--git-dir"));
+    const branch = git("rev-parse", "--abbrev-ref", "HEAD");
+    const { data } = await api(info, "GET", "/api/reviews");
+    const mine = data.reviews.filter((r) => r.branch === branch && (r.dir === join(gitDir, "pr-report") || r.dir.startsWith(gitDir)));
+    id = mine.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id;
+    if (!id) {
+      console.log(`No review of ${branch} is open. Run /pr-report to start one.`);
+      process.exit(0);
+    }
+  }
+  const { data } = await api(info, "GET", `/api/r/${encodeURIComponent(id)}/resume`);
+  const { event, review } = data;
+  console.log(`Picking up review ${review.id}, round ${review.round}: http://127.0.0.1:${info.port}/r/${review.id}\n`);
+  if (event) explain(event, review);
+  else if (review.phase === "working" && review.open.length) {
+    console.log(`The fix loop for round ${review.round} was cut off: ${review.comments - review.open.length} of ${review.comments} comments are handled. Review file: ${review.file}`);
+    console.log("Still open:");
+    for (const c of review.open) console.log(`  ${c.id} (${c.kind ?? "no kind"}): ${c.text.split("\n")[0].slice(0, 120) || "(no text)"}`);
+    console.log(`\nNext: read the review file and the plan (the page shows it), finish these comments with ${self} status, then rebuild and publish the next round.`);
+  } else if (review.phase === "working") {
+    console.log(`Every comment in round ${review.round} has a status. Next: rebuild and publish the next round with ${self} open --report <new json>.`);
+  } else if (review.phase === "done") {
+    console.log("The review is done. Offer to open the PR (ask first).");
+  } else {
+    const waitingOn = review.phase === "planning" ? "the reviewer's decision on your plan" : "the reviewer";
+    console.log(`Nothing is waiting for you: round ${review.round} waits on ${waitingOn}.`);
+    console.log(`\nNext: run in the background: ${self} wait --id ${review.id}`);
   }
 } else if (command === "answer") {
   need("id", "question");
@@ -227,6 +266,6 @@ if (command === "open") {
     console.log("Stopped the daemon.");
   }
 } else {
-  console.log("Usage: review.mjs open|wait|answer|plan|status|list|stop (see the top of this file)");
+  console.log("Usage: review.mjs open|wait|resume|answer|plan|status|list|stop (see the top of this file)");
   process.exit(2);
 }

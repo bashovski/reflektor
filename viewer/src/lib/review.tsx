@@ -38,6 +38,9 @@ type ReviewState = {
   decidePlan: (decision: "approve" | "changes", kinds: Record<number, string>, note: string) => Promise<void>;
   connected: boolean;
   lastAgentActivity: string | null;
+  // An agent waits for this review's events, and since when the oldest event waits for one.
+  listening: boolean;
+  undeliveredSince: string | null;
 };
 
 const Ctx = createContext<ReviewState | null>(null);
@@ -334,6 +337,9 @@ export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children:
     decidePlan,
     connected,
     lastAgentActivity: live?.lastAgentActivity ?? null,
+    // A file opened without the daemon has no agent to listen.
+    listening: live?.listening ?? true,
+    undeliveredSince: current ? (live?.undeliveredSince ?? null) : null,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

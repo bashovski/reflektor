@@ -1,7 +1,7 @@
 ---
 name: pr-report
 description: Builds a visual HTML review report for the current branch or PR against its base branch, with a plain-English title and summary, review order, highlights, request flows, GitHub-style diffs with notes, and test coverage of new lines. The user can comment in the report and send the comments back for fixing. Use when the user asks for a PR report, a review report, a summary of branch changes for review, or wants to review changes before opening a PR. Works with any language or stack.
-argument-hint: "[base-branch] [--since last] [--session]"
+argument-hint: "[base-branch] [--since last] [--session] [resume]"
 allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/review.mjs *)
 ---
 
@@ -11,7 +11,7 @@ You write the judgment in `report.json`: words, grouping, risks and flows. Scrip
 
 Scripts and reference files live in `${CLAUDE_SKILL_DIR}`. Needs git and Node.js 18 or newer. `gh` is optional.
 
-Arguments typed after `/pr-report` can be a base branch, `--since last` or `--session`.
+Arguments typed after `/pr-report` can be a base branch, `--since last`, `--session` or `resume`. For `resume`, or when the user asks to continue or pick up a review, go to "Pick up a review" at the end and skip the other steps.
 
 ## 1. Pick the base branch and scope
 
@@ -281,6 +281,16 @@ build.mjs also writes `pr-description.md` next to the report: the first line is 
 1. Ask first: opening a PR is visible to others.
 2. Use the repo's own tool: `gh pr create --title "<title>" --body-file <body file>` for GitHub, `glab mr create --title "<title>" --description "$(cat <body file>)"` for GitLab. Write the body without the title line to a temporary file first.
 3. Without a CLI for the host, give the user the file path; the report page also has a "PR description" button with copy buttons.
+
+## Pick up a review
+
+A review outlives the session that made it: the page tells the user to run `/pr-report resume` when no session listens for it. In the repo of the review:
+
+```bash
+node ${CLAUDE_SKILL_DIR}/scripts/review.mjs resume --repo .
+```
+
+It finds this branch's review (or pass `--id`) and prints what waits for you, the same way the waiter does: a sent review, a plan decision, a question, or a fix loop that was cut off, with the comments still open. Follow it from there; for a cut-off fix loop, comments that already have a final status are done. When nothing waits for you, it says to start the waiter.
 
 ## Follow-ups
 

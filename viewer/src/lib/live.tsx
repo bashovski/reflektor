@@ -39,6 +39,9 @@ export type LiveState = {
   // Build time of the current round's data. It changes when the agent publishes the round again.
   roundBuiltAt: string | null;
   lastAgentActivity: string | null;
+  // An agent waits for this review's events (review.mjs wait), and since when the oldest one waits.
+  listening: boolean;
+  undeliveredSince: string | null;
   updatedAt: string;
 };
 
