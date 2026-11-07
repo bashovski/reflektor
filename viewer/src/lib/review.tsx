@@ -78,7 +78,7 @@ const clip = (text: string, n = 70) => (text.length > n ? `${text.slice(0, n - 1
 export const describeTarget = (t: CommentTarget): string => {
   switch (t.type) {
     case "line":
-      return `${fileName(t.path)} ${t.start === t.end ? `line ${t.start}` : `lines ${t.start}-${t.end}`}${t.side === "old" ? " (old version)" : ""}`;
+      return `${fileName(t.path)} ${t.start === t.end ? `line ${t.start}` : `lines ${t.start}-${t.end}`}${t.side === "old" ? (t.round ? ` (as in round ${t.round})` : " (old version)") : ""}`;
     case "file":
       return fileName(t.path);
     case "highlight":

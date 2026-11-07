@@ -9,7 +9,7 @@ import { cx, FileIcon, LocCount } from "./ui";
 type Mode = "changes" | "file";
 
 export const FileModal = () => {
-  const { modal, openModal, filesByPath, bundle, resolvedTheme, diffStyle } = useReport();
+  const { modal, openModal, branchFiles: filesByPath, bundle, resolvedTheme, diffStyle } = useReport();
   const ref = useRef<HTMLDialogElement>(null);
   const [mode, setMode] = useState<Mode>("changes");
 

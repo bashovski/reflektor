@@ -4,11 +4,14 @@
 // owner to github.com or gitlab.com for the owner's avatar.
 //
 // Usage:
-//   node collect.mjs [--repo .] [--base <branch>] [--since <sha|last>] [--files a,b,c]
+//   node collect.mjs [--repo .] [--base <branch>] [--since <sha|last>] [--files a,b,c] [--next-round]
 //                    [--no-uncommitted] [--no-fetch] [--coverage <file>]... [--out diff.json]
+//
+// --next-round is for the fix loop: the whole branch again, plus what changed since the round the
+// reviewer sent, and report.json's line references moved to where those lines are now.
 
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { ownerAvatar } from "./avatar.mjs";
 import { globToRegExp, parseRemote } from "./repo.mjs";
@@ -42,9 +45,11 @@ function parseArgs(argv) {
     else if (a === "--coverage") args.coverage.push(next());
     else if (a === "--no-uncommitted") args.uncommitted = false;
     else if (a === "--no-fetch") args.fetch = false;
+    else if (a === "--next-round") args.nextRound = true;
     else if (a === "--out") args.out = next();
     else throw new Error(`Unknown argument: ${a}`);
   }
+  if (args.nextRound && (args.since || args.files)) throw new Error("--next-round covers the whole branch; it does not go with --since or --files.");
   return args;
 }
 
@@ -163,6 +168,8 @@ const mergeBase = git("merge-base", "HEAD", baseRef).trim();
 
 const gitDir = resolve(repoRoot, git("rev-parse", "--git-dir").trim());
 const stateFile = join(gitDir, "pr-report", "last.json");
+const out = resolve(args.out ?? join(gitDir, "pr-report", "diff.json"));
+const reportFile = join(dirname(out), "report.json");
 
 let from = mergeBase;
 let mode = "branch";
@@ -215,7 +222,6 @@ const snapshot = snapshotWorkingTree();
 // Compare commit to commit. The snapshot holds uncommitted and untracked files, so they are
 // compared like any other change, including by `--since last`.
 const to = args.uncommitted ? snapshot : "HEAD";
-const range = [from, to];
 
 // ------------------------------------------------------------------ changed files
 
@@ -275,21 +281,11 @@ function parseChangedLines(text) {
   return map;
 }
 
-const nameStatus = parseNameStatus(git("diff", "--name-status", "-M", ...range));
-const numstat = parseNumstat(git("diff", "--numstat", "-M", ...range));
-const changedLines = parseChangedLines(git("diff", "-U0", "--no-color", "-M", ...range));
-
 const uncommittedSet = new Set();
 const untracked = [];
 if (args.uncommitted) {
   for (const p of (tryGit("diff", "--name-only", "HEAD", snapshot) ?? "").split("\n")) if (p.trim()) uncommittedSet.add(p.trim());
   for (const p of git("ls-files", "--others", "--exclude-standard").split("\n")) if (p.trim()) untracked.push(p.trim());
-}
-
-let entries = nameStatus;
-if (args.files) {
-  const wanted = new Set(args.files);
-  entries = entries.filter((e) => wanted.has(e.path) || wanted.has(e.oldPath));
 }
 
 // Files marked `linguist-generated` in .gitattributes, asked for all paths at once.
@@ -346,52 +342,166 @@ function tooLarge(text) {
   return text === TOO_LARGE || (typeof text === "string" && (text.length > MAX_BYTES || text.split("\n").length > MAX_LINES));
 }
 
-const oldSpec = (e) => `${from}:${e.oldPath ?? e.path}`;
-const newSpec = (e) => `${to}:${e.path}`;
-const blobs = readBlobs([
-  ...entries.filter((e) => e.status !== "added").map(oldSpec),
-  ...entries.filter((e) => e.status !== "deleted").map(newSpec),
-]);
-const attributeGenerated = generatedByAttribute(entries.map((e) => e.path));
-const isGenerated = (path) =>
-  LOCKFILES.has(basename(path)) || GENERATED.some((re) => re.test(path)) || generatedGlobs.some((re) => re.test(path)) || attributeGenerated.has(path);
+// The files that differ between two commits, with both versions and the changed line numbers.
+function diffFiles(a, b, wanted = null) {
+  let entries = parseNameStatus(git("diff", "--name-status", "-M", a, b));
+  if (wanted) entries = entries.filter((e) => wanted.has(e.path) || wanted.has(e.oldPath));
+  const numstat = parseNumstat(git("diff", "--numstat", "-M", a, b));
+  const changedLines = parseChangedLines(git("diff", "-U0", "--no-color", "-M", a, b));
+  const oldSpec = (e) => `${a}:${e.oldPath ?? e.path}`;
+  const newSpec = (e) => `${b}:${e.path}`;
+  const blobs = readBlobs([...entries.filter((e) => e.status !== "added").map(oldSpec), ...entries.filter((e) => e.status !== "deleted").map(newSpec)]);
+  const attributeGenerated = generatedByAttribute(entries.map((e) => e.path));
+  const isGenerated = (path) =>
+    LOCKFILES.has(basename(path)) || GENERATED.some((re) => re.test(path)) || generatedGlobs.some((re) => re.test(path)) || attributeGenerated.has(path);
 
-const files = entries.map((e) => {
-  const stat = numstat.get(e.path) ?? { additions: 0, deletions: 0, binary: false };
-  let oldContent = e.status === "added" ? null : blobs.get(oldSpec(e));
-  let newContent = e.status === "deleted" ? null : blobs.get(newSpec(e));
-  const binary = stat.binary || looksBinary(oldContent) || looksBinary(newContent);
-  const large = tooLarge(oldContent) || tooLarge(newContent);
-  const lines = changedLines.get(e.path) ?? { added: [], removed: [] };
+  return entries
+    .map((e) => {
+      const stat = numstat.get(e.path) ?? { additions: 0, deletions: 0, binary: false };
+      let oldContent = e.status === "added" ? null : blobs.get(oldSpec(e));
+      let newContent = e.status === "deleted" ? null : blobs.get(newSpec(e));
+      const binary = stat.binary || looksBinary(oldContent) || looksBinary(newContent);
+      const large = tooLarge(oldContent) || tooLarge(newContent);
+      if (binary || large) {
+        oldContent = null;
+        newContent = null;
+      }
+      return {
+        path: e.path,
+        oldPath: e.status === "renamed" ? e.oldPath : null,
+        status: e.status,
+        additions: stat.additions,
+        deletions: stat.deletions,
+        binary,
+        tooLarge: large,
+        generated: isGenerated(e.path),
+        uncommitted: uncommittedSet.has(e.path),
+        untracked: untracked.includes(e.path),
+        target: targetFor(e.path),
+        oldContent,
+        newContent,
+        changedLines: changedLines.get(e.path) ?? { added: [], removed: [] },
+      };
+    })
+    .sort((x, y) => x.path.localeCompare(y.path));
+}
 
-  if (binary || large) {
-    oldContent = null;
-    newContent = null;
-  }
-
-  return {
-    path: e.path,
-    oldPath: e.status === "renamed" ? e.oldPath : null,
-    status: e.status,
-    additions: stat.additions,
-    deletions: stat.deletions,
-    binary,
-    tooLarge: large,
-    generated: isGenerated(e.path),
-    uncommitted: uncommittedSet.has(e.path),
-    untracked: untracked.includes(e.path),
-    target: targetFor(e.path),
-    oldContent,
-    newContent,
-    changedLines: lines,
-  };
-});
-
-files.sort((a, b) => a.path.localeCompare(b.path));
+const files = diffFiles(from, to, args.files ? new Set(args.files) : null);
 
 if (!files.length) {
   console.log(`No changes between ${baseRef} (${from.slice(0, 7)}) and ${args.uncommitted ? "the working tree" : "HEAD"}. Nothing to report.`);
   process.exit(3);
+}
+
+// ------------------------------------------------------------------ next round
+// The fix loop shows the whole branch every round, so the reviewer approves what will be merged.
+// sinceRound holds what changed since the round the reviewer sent, for the page's "since round N"
+// view. The last report.json is carried forward: its line references move to where those lines are
+// now, and the ones on changed lines are listed for Claude to check.
+
+const commitExists = (sha) => Boolean(sha) && tryGit("cat-file", "-e", `${sha}^{commit}`) !== null;
+const toHead = to === "HEAD" ? headSha : to;
+
+function latestReview() {
+  const dir = dirname(out);
+  const rounds = existsSync(dir) ? readdirSync(dir).map((f) => Number(f.match(/^review-(\d+)\.json$/)?.[1])).filter(Boolean) : [];
+  if (!rounds.length) return null;
+  const round = Math.max(...rounds);
+  return { round, ...JSON.parse(readFileSync(join(dir, `review-${round}.json`), "utf8")) };
+}
+
+// Hunks of a zero-context diff per file: where lines went between two commits.
+function parseHunks(text) {
+  const map = new Map();
+  let oldPath = null;
+  let current = null;
+  for (const line of text.split("\n")) {
+    if (line.startsWith("--- ")) oldPath = line.slice(4) === "/dev/null" ? null : line.slice(4).replace(/^a\//, "");
+    else if (line.startsWith("+++ ")) {
+      const newPath = line.slice(4) === "/dev/null" ? null : line.slice(4).replace(/^b\//, "");
+      current = { newPath, hunks: [] };
+      if (oldPath) map.set(oldPath, current);
+    } else {
+      const h = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+      if (h && current) current.hunks.push({ oldStart: +h[1], oldLen: h[2] === undefined ? 1 : +h[2], newStart: +h[3], newLen: h[4] === undefined ? 1 : +h[4] });
+    }
+  }
+  return map;
+}
+
+// Where an old line is now. `changed` when the line itself changed; it then points at the new code there.
+function moveLine(hunks, line) {
+  let delta = 0;
+  for (const h of hunks) {
+    if (h.oldLen === 0) {
+      if (h.oldStart < line) {
+        delta += h.newLen;
+        continue;
+      }
+      break;
+    }
+    if (line < h.oldStart) break;
+    if (line < h.oldStart + h.oldLen) return { line: Math.max(1, h.newStart), changed: true };
+    delta += h.newLen - h.oldLen;
+  }
+  return { line: line + delta, changed: false };
+}
+
+let sinceRound = null;
+let carried = null;
+if (args.nextRound) {
+  const sent = latestReview();
+  if (!sent) throw new Error("--next-round compares with the round the reviewer sent, and no review was sent yet. Run without it.");
+  const roundFrom = commitExists(sent.snapshot) ? sent.snapshot : commitExists(sent.headSha) ? sent.headSha : null;
+  if (!roundFrom) warnings.push(`The code of round ${sent.round} is no longer in git, so the page cannot show what changed since then.`);
+  else sinceRound = { round: sent.round, from: roundFrom, files: diffFiles(roundFrom, to) };
+
+  // report.json's references point into the snapshot it was last built against.
+  const report = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, "utf8")) : null;
+  const last = existsSync(stateFile) ? JSON.parse(readFileSync(stateFile, "utf8")) : null;
+  const refsFrom = report?.refsAt ?? last?.snapshot ?? last?.headSha;
+  if (!report) warnings.push(`No report.json at ${reportFile} to carry forward; write a new one.`);
+  else if (!commitExists(refsFrom)) warnings.push("The code report.json was written for is no longer in git, so its line references were not moved. Check them.");
+  else if (refsFrom === toHead) carried = { moved: 0, check: [], gone: [] };
+  else {
+    const moves = parseHunks(git("diff", "-U0", "--no-color", "-M", refsFrom, to));
+    carried = { moved: 0, check: [], gone: [] };
+    // Moves one reference in place. Old-side lines are in the base version, which did not change.
+    const carry = (ref, where, path = ref?.path) => {
+      if (!ref || ref.side === "old" || !path) return;
+      const m = moves.get(path);
+      if (!m) return;
+      if (!m.newPath) {
+        carried.gone.push(`${where}: ${path}`);
+        return;
+      }
+      if (m.newPath !== path && "path" in ref) ref.path = m.newPath;
+      if (ref.line == null) return;
+      const moved = moveLine(m.hunks, ref.line);
+      if (moved.line !== ref.line) carried.moved++;
+      if (moved.changed) carried.check.push(`${where}: ${m.newPath}:${moved.line}`);
+      ref.line = moved.line;
+    };
+    for (const [i, b] of (report.beforeMerge ?? []).entries()) carry(b.ref, `beforeMerge[${i}]`);
+    for (const [si, sec] of (report.sections ?? []).entries()) {
+      const where = `sections[${si}] (${sec.kind})`;
+      for (const [hi, h] of (sec.highlights ?? []).entries()) carry(h.ref, `${where}.highlights[${hi}]`);
+      for (const f of sec.files ?? []) {
+        const original = f.path;
+        for (const n of f.lineNotes ?? []) carry(n, `${where} line note`, original);
+        const m = moves.get(original);
+        if (m?.newPath && m.newPath !== original) f.path = m.newPath;
+      }
+    }
+    for (const [i, item] of (report.plan?.items ?? []).entries()) carry(item.ref, `plan.items[${i}]`);
+    for (const [i, t] of (report.schema?.tables ?? []).entries()) carry(t.ref, `schema.tables[${i}] (${t.name})`);
+    for (const [fi, flow] of (report.flows ?? []).entries()) for (const [si, st] of (flow.steps ?? []).entries()) carry(st.ref, `flows[${fi}].steps[${si}] (${st.symbol})`);
+    for (const [i, c] of (report.contracts ?? []).entries()) if (c.status !== "removed") carry(c.ref, `contracts[${i}] (${c.name})`);
+  }
+  if (report && carried) {
+    report.refsAt = toHead;
+    writeFileSync(reportFile, `${JSON.stringify(report, null, 2)}\n`);
+  }
 }
 
 
@@ -644,6 +754,7 @@ const data = {
   repo: { ...identity, root: repoRoot, gitDir, avatar: await ownerAvatar(identity, { allowDownload: args.fetch }) },
   branch: { head, headSha, snapshot, base, baseRef, baseSource, mergeBase, pr: pr ? { number: pr.number, url: pr.url, title: pr.title } : null },
   scope: { mode, from, includesUncommitted: args.uncommitted, files: args.files ?? null },
+  ...(sinceRound ? { sinceRound } : {}),
   commits,
   stats: {
     files: files.length,
@@ -658,12 +769,11 @@ const data = {
   warnings,
 };
 
-const out = args.out ?? join(gitDir, "pr-report", "diff.json");
-mkdirSync(dirname(resolve(out)), { recursive: true });
+mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify(data, null, 2));
 
-console.log(`Diff file:   ${resolve(out)}`);
-console.log(`Report file: ${join(dirname(resolve(out)), "report.json")}   (write report.json here)`);
+console.log(`Diff file:   ${out}`);
+console.log(`Report file: ${reportFile}   (${carried ? "carried forward from the last round; update it" : "write report.json here"})`);
 console.log(`${identity.owner ?? ""}${identity.owner ? "/" : ""}${identity.name}  ${head} → ${base} (${baseSource})`);
 console.log(`${commits.length} commits, ${files.length} files, +${data.stats.additions} -${data.stats.deletions}, ${data.stats.uncommittedFiles} uncommitted`);
 // Groups line numbers into ranges: [3,4,5,9] -> "3-5, 9"
@@ -701,6 +811,29 @@ for (const f of files) {
   console.log(`  ${code[f.status]}  ${lines.padEnd(10)} ${(f.target ?? "-").padEnd(15)} ${f.oldPath ? `${f.oldPath} -> ` : ""}${f.path}${flags.length ? `  [${flags.join(", ")}]` : ""}`);
 }
 console.log("");
+if (sinceRound) {
+  console.log(`Since round ${sinceRound.round}, which the reviewer sent: ${sinceRound.files.length} ${sinceRound.files.length === 1 ? "file" : "files"} changed`);
+  for (const f of sinceRound.files) console.log(`  ${code[f.status]}  +${f.additions} -${f.deletions}`.padEnd(18) + ` ${f.oldPath ? `${f.oldPath} -> ` : ""}${f.path}`);
+  console.log(`Read them with: git diff ${sinceRound.from} ${to} -- <path>`);
+  console.log("");
+}
+if (carried) {
+  console.log(`Carried report.json forward: ${carried.moved} line references moved to where their lines are now.`);
+  if (carried.check.length) {
+    console.log("Check these; the lines they point at changed:");
+    for (const c of carried.check.slice(0, 40)) console.log(`  ${c}`);
+    if (carried.check.length > 40) console.log(`  ... and ${carried.check.length - 40} more`);
+  }
+  if (carried.gone.length) console.log(`These point at deleted files; move or remove them:\n${carried.gone.map((g) => `  ${g}`).join("\n")}`);
+  const report = JSON.parse(readFileSync(reportFile, "utf8"));
+  const inSections = new Set((report.sections ?? []).flatMap((sec) => (sec.files ?? []).map((f) => f.path)));
+  const inBranch = new Set(files.map((f) => f.path));
+  const missing = files.filter((f) => !inSections.has(f.path)).map((f) => f.path);
+  const left = [...inSections].filter((p) => !inBranch.has(p));
+  if (missing.length) console.log(`New in the branch, add them to a section: ${missing.join(", ")}`);
+  if (left.length) console.log(`No longer changed by the branch, remove them from their sections: ${left.join(", ")}`);
+  console.log("");
+}
 if (findings.length) {
   const count = (sev) => findings.filter((f) => f.severity === sev).length;
   console.log(`Safety checks: ${count("high")} high, ${count("medium")} medium, ${count("low")} low`);

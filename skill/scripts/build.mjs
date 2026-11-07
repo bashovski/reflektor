@@ -473,7 +473,10 @@ function prDescription() {
   return { title, body: lines.join("\n") };
 }
 
-const prText = prDescription();
+// A report about part of the branch (--since, --files) cannot describe the pull request, so the
+// description from the last whole-branch build stays.
+const partial = diff.scope.mode !== "branch";
+const prText = partial ? null : prDescription();
 
 // The round is part of the name: fixes are often uncommitted, so two rounds can share a commit.
 const slug = diff.branch.head.replace(/[^\w.-]+/g, "-");
@@ -516,15 +519,18 @@ if (htmlOut) {
   );
 }
 const prFile = join(dirname(out), "pr-description.md");
-writeFileSync(prFile, `${prText.title}\n\n${prText.body}\n`);
+if (prText) writeFileSync(prFile, `${prText.title}\n\n${prText.body}\n`);
+else notes.push(`PR description not updated: this report covers only part of the branch (${diff.scope.mode}). Build a whole-branch report before opening the PR.`);
 
 const state = join(diff.repo.gitDir, "pr-report", "last.json");
 mkdirSync(dirname(state), { recursive: true });
-writeFileSync(state, JSON.stringify({ headSha: diff.branch.headSha, snapshot: diff.branch.snapshot, report: out, builtAt: bundle.builtAt }, null, 2));
-// Keeps the snapshot commit from being garbage-collected; the ref is invisible to branches and tags.
+writeFileSync(state, JSON.stringify({ headSha: diff.branch.headSha, snapshot: diff.branch.snapshot, round, report: out, builtAt: bundle.builtAt }, null, 2));
+// Keep the snapshot commits from being garbage-collected: the last one for --since last, and one per
+// round, so the next round can show what changed since this one. Refs are invisible to branches and tags.
 if (diff.branch.snapshot) {
   try {
     execFileSync("git", ["update-ref", "refs/pr-report/last", diff.branch.snapshot], { cwd: diff.repo.root, stdio: "ignore" });
+    execFileSync("git", ["update-ref", `refs/pr-report/rounds/${slug}/r${round}`, diff.branch.snapshot], { cwd: diff.repo.root, stdio: "ignore" });
   } catch {
     warnings.push("Could not save refs/pr-report/last; --since last may fail after git garbage collection.");
   }
@@ -537,7 +543,8 @@ console.log(
   `${report.sections.length} sections, ${diff.files.length} files, ${steps.filter((st) => st.verified).length}/${steps.length} flow steps verified, ${warnings.length} warnings`,
 );
 console.log("Saved this run for --since last (refs/pr-report/last)");
-console.log(`PR description: ${prFile} (first line is the title)`);
+if (prText) console.log(`PR description: ${prFile} (first line is the title)`);
+if (diff.sinceRound) console.log(`Round ${round} shows the whole branch; ${diff.sinceRound.files.length} files changed since round ${diff.sinceRound.round}.`);
 for (const n of notes) console.log(`note: ${n}`);
 // Printed only: the page shows the checks live, so this would be out of date there.
 if (projectChecks?.status === "running") console.log("note: Project checks are still running; the review page shows each result when it is ready.");

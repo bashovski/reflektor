@@ -23,7 +23,7 @@ Base branch, first match wins:
 Scope:
 
 - **Default:** the whole branch since the merge base, plus uncommitted and untracked files. This matches what reviewers will see.
-- **`--since last`:** only changes since the previous report. Use it when the user asks what changed since the last report or review, or when you rebuild after fixing review comments.
+- **`--since last`:** only changes since the previous report, when the user asks for a report about just those. After fixing review comments, use `--next-round` instead (step 8.5): it shows the whole branch and marks what changed. A `--since` or `--files` report does not update `pr-description.md`.
 - **`--files a,b,c`:** only these files. Use it when the user asks for this session's changes (argument `--session`): pass the files you created or edited in this conversation. If the branch also holds large unrelated earlier work and the user asks about "recent" changes, ask whether they want the whole branch or only this session's files.
 - **`--no-uncommitted`:** committed work only, when the user asks for it.
 
@@ -237,7 +237,7 @@ If you cannot run a background process, run build.mjs with `--open` instead. It 
 
 When the background checks from step 2b exit (you are notified), the page already shows their results. Update the report with what they found:
 
-1. If the tests wrote a coverage file, run collect.mjs again with the same arguments, for the fresh coverage.
+1. If the tests wrote a coverage file, run collect.mjs again with the same arguments (`--next-round` too, in a later round), for the fresh coverage.
 2. In report.json, add a `beforeMerge` item for each failed check (its name and first error), and update the test gaps and `gap` highlights from the new coverage.
 3. Build and publish again with `review.mjs open --report <new json>`. It is the same round, so comments and progress stay, and open pages reload it in place.
 
@@ -271,12 +271,23 @@ The reviewer follows along in the page: your plan and your progress on each comm
    Mark a comment `working` when you start it and give the final status when done. If you think a requested fix is wrong, do not make it; use `wontfix` and say why.
 
    When every comment has a final status and none is `fixed`, no code changed: the daemon ends the review, and the last `status` call says so. A running waiter exits with the same news. Skip steps 5 and 6 and offer to open the PR (step 9).
-5. **Rebuild for the next round:** run collect.mjs with `--since last`, then write a new report.json about these changes only. Add `review: { round, replies }`: `round` is the round you answered, and every comment gets one reply with the same status and text as above (`fixed` with a `ref` to the new code, `answered`, `wontfix` with the reason, `noted` for `accepted` comments and nits you skipped).
+5. **Rebuild for the next round.** Every round shows the whole branch, so the reviewer approves what will be merged; the page can also show only what changed since the round they sent.
+
+   ```bash
+   node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs --repo . --next-round [--base <branch>] [--coverage <file>]...
+   ```
+
+   It collects the whole branch again, plus what changed since the round the reviewer sent, and carries report.json forward: its line references move to where those lines are now. Update that report.json; do not write a new one:
+   - Read the changes since that round with the `git diff` command it prints.
+   - Fix what it lists: references on lines that changed, files new to the branch (add them to a section), and files no longer in it (remove them).
+   - Rewrite the notes, highlights, flows and contracts the fixes made wrong, and the title or summary if the change itself changed. Leave the rest as it is.
+   - Set `review: { round, replies }`: `round` is the round you answered, and every comment gets one reply with the same status and text as above (`fixed` with a `ref` to the new code, `answered`, `wontfix` with the reason, `noted` for `accepted` comments and nits you skipped).
+   - Leave `refsAt` as it is; collect uses it to move the references again next time.
 6. **Build and publish** with `review.mjs open` (steps 6 and 7) and start the waiter again. Open tabs show "Round N is ready". Repeat until the reviewer sends a round with no comments.
 
 ## 9. Open the PR
 
-build.mjs also writes `pr-description.md` next to the report: the first line is the title, the rest is the Markdown body. When the user asks to open the PR, or the review ends with no comments and the user wants a PR:
+build.mjs also writes `pr-description.md` next to the report: the first line is the title, the rest is the Markdown body. Only whole-branch builds write it, so it always describes the whole PR. When the user asks to open the PR, or the review ends with no comments and the user wants a PR:
 
 1. Ask first: opening a PR is visible to others.
 2. Use the repo's own tool: `gh pr create --title "<title>" --body-file <body file>` for GitHub, `glab mr create --title "<title>" --description "$(cat <body file>)"` for GitLab. Write the body without the title line to a temporary file first.

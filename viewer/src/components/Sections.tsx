@@ -25,14 +25,15 @@ const QuestionItem = ({ target, id }: { target: Extract<CommentTarget, { type: "
   );
 };
 
-const SectionCard = ({ section, index }: { section: Section; index: number }) => {
+const SectionCard = ({ section, index, paths }: { section: Section; index: number; paths: string[] }) => {
   const { filesByPath, isSectionOpen, setSectionOpen, isViewed } = useReport();
   const open = isSectionOpen(index);
   const meta = SECTIONS[section.kind];
   const review = REVIEW[section.review];
   const Icon = meta.icon;
 
-  const files = section.files.map((f) => filesByPath.get(f.path)!);
+  const shown = section.files.filter((f) => paths.includes(f.path));
+  const files = shown.map((f) => filesByPath.get(f.path)!);
   const additions = files.reduce((n, f) => n + f.additions, 0);
   const deletions = files.reduce((n, f) => n + f.deletions, 0);
   const viewed = files.filter((f) => isViewed(f.path)).length;
@@ -106,7 +107,7 @@ const SectionCard = ({ section, index }: { section: Section; index: number }) =>
           )}
 
           <div className="space-y-3">
-            {section.files.map((f) => (
+            {shown.map((f) => (
               <FileCard key={f.path} sectionFile={f} />
             ))}
           </div>
@@ -116,18 +117,65 @@ const SectionCard = ({ section, index }: { section: Section; index: number }) =>
   );
 };
 
+// Later rounds show the whole branch or only what changed since the round the reviewer sent.
+export const ViewSwitch = () => {
+  const { view, setView, sinceRound, bundle } = useReport();
+  if (!sinceRound) return null;
+  const options = [
+    { value: "round", label: `Since round ${sinceRound.round}`, count: sinceRound.paths.size },
+    { value: "branch", label: "Whole branch", count: bundle.diff.files.length },
+  ] as const;
+  return (
+    <div className="inline-flex rounded-lg border border-[var(--border)] p-0.5 text-xs" role="radiogroup" aria-label="Which changes to show">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={view === o.value}
+          onClick={() => setView(o.value)}
+          className={cx(
+            "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium",
+            view === o.value ? "bg-zinc-500/15 text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300",
+          )}
+        >
+          {o.label}
+          <span className="tabular-nums text-zinc-400">{o.count}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
 export const Sections = () => {
-  const { bundle } = useReport();
+  const { bundle, shownSections, view, sinceRound, setView } = useReport();
+  const hidden = bundle.report.sections.length - shownSections.filter((s) => s.index < bundle.report.sections.length).length;
   return (
     <div id="changes">
-      <SectionTitle>
+      <SectionTitle right={<ViewSwitch />}>
         <span className="inline-flex items-center gap-2">
           <Layers className="size-4" /> Changes, in review order
         </span>
       </SectionTitle>
+      {view === "round" && sinceRound && (
+        <p className="mb-3 text-sm text-zinc-500">
+          Each file against its version in round {sinceRound.round}.
+          {hidden > 0 && (
+            <>
+              {" "}
+              {hidden} {hidden === 1 ? "section has" : "sections have"} no changes since then;{" "}
+              <button type="button" onClick={() => setView("branch")} className="text-blue-600 hover:underline dark:text-blue-400">
+                show the whole branch
+              </button>
+              .
+            </>
+          )}
+        </p>
+      )}
+      {view === "round" && sinceRound && !sinceRound.paths.size && <p className="text-sm text-zinc-500">No code changed since round {sinceRound.round}.</p>}
       <div className="space-y-3">
-        {bundle.report.sections.map((s, i) => (
-          <SectionCard key={`${s.kind}-${i}`} section={s} index={i} />
+        {shownSections.map(({ section, index, paths }) => (
+          <SectionCard key={`${view}-${section.kind}-${index}`} section={section} index={index} paths={paths} />
         ))}
       </div>
     </div>

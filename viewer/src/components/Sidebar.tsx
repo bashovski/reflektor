@@ -4,7 +4,7 @@ import { sectionDomId, useReport } from "../lib/state";
 import { cx } from "./ui";
 
 export const Sidebar = () => {
-  const { bundle, isViewed, viewedCount, setSectionOpen } = useReport();
+  const { bundle, isViewed, viewedCount, setSectionOpen, shownSections } = useReport();
   const { report, diff } = bundle;
   const total = diff.stats.files;
   const pct = total ? Math.round((viewedCount / total) * 100) : 0;
@@ -29,9 +29,9 @@ export const Sidebar = () => {
       </div>
 
       <ol className="space-y-0.5">
-        {report.sections.map((s, i) => {
-          const done = s.files.filter((f) => isViewed(f.path)).length;
-          const complete = done === s.files.length;
+        {shownSections.map(({ section: s, index: i, paths }) => {
+          const done = paths.filter((p) => isViewed(p)).length;
+          const complete = done === paths.length;
           return (
             <li key={i}>
               <button
@@ -52,7 +52,7 @@ export const Sidebar = () => {
                 </span>
                 <span className={cx("size-1.5 shrink-0 rounded-full", REVIEW[s.review].dot)} title={REVIEW[s.review].label} />
                 <span className="w-7 shrink-0 text-right text-[11px] text-zinc-400 tabular-nums">
-                  {done}/{s.files.length}
+                  {done}/{paths.length}
                 </span>
               </button>
             </li>

@@ -88,6 +88,9 @@ export type DiffData = {
     pr: { number: number; url: string; title: string } | null;
   };
   scope: { mode: "branch" | "since" | "files" | "since+files"; from: string; includesUncommitted: boolean; files: string[] | null };
+  // collect.mjs --next-round: what changed since the round the reviewer sent. `from` is the snapshot
+  // that round showed; each file's oldContent is its content then (null when added since).
+  sinceRound?: { round: number; from: string; files: DiffFile[] };
   commits: Commit[];
   stats: { files: number; additions: number; deletions: number; uncommittedFiles: number };
   files: DiffFile[];
@@ -103,8 +106,8 @@ export type RepoConfig = {
   targets?: Partial<Record<Target, string[]>>;
   generated?: string[];
   coverage?: { command?: string; files?: string[] };
-  // The project's own checks, run by checks.mjs.
-  checks?: { name: string; command: string; timeout?: number }[];
+  // The project's own checks, run by checks.mjs. `when` limits one to changes in those paths.
+  checks?: { name: string; command: string; timeout?: number; when?: string[] }[];
 };
 
 // ------------------------------------------------------------------ report.json
@@ -258,6 +261,8 @@ export type Report = {
   plan?: { source: string; items: PlanItem[] };
   // Answers to the previous review round. Add one reply per comment in that round's review file.
   review?: { round: number; replies: Reply[] };
+  // Set by collect.mjs --next-round: the snapshot the line numbers in this file refer to. Leave it as is.
+  refsAt?: string;
 };
 
 // ------------------------------------------------------------------ review (comments from the report page)
@@ -266,7 +271,9 @@ export type Report = {
 export type CommentKind = "fix" | "question" | "nit" | "accepted" | "decision";
 
 export type CommentTarget =
-  | { type: "line"; path: string; side: "new" | "old"; start: number; end: number; code: string }
+  // `round` is set on an old-side comment made while the page showed the changes since that round:
+  // the line numbers are then in the file as that round showed it, not in the base version.
+  | { type: "line"; path: string; side: "new" | "old"; start: number; end: number; code: string; round?: number }
   | { type: "file"; path: string }
   | { type: "highlight"; section: SectionKind; index: number; kind: HighlightKind; text: string; fix?: string }
   | { type: "question"; section: SectionKind; index: number; text: string }
@@ -329,8 +336,9 @@ export type Bundle = {
   // Results from checks.mjs. `stale` = code changed after the checks ran.
   // `file` is the checks.json the daemon watches for live updates.
   projectChecks: (ChecksRun & { stale: boolean; file: string }) | null;
-  // Pull request title and Markdown body, written from this report.
-  prDescription: { title: string; body: string };
+  // Pull request title and Markdown body, written from this report. Null when the report covers only
+  // part of the branch (--since or --files), so it cannot describe the pull request.
+  prDescription: { title: string; body: string } | null;
   warnings: string[];
   builtAt: string;
 };

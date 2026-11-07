@@ -99,7 +99,7 @@ const need = (...keys) => {
 const describe = (t) => {
   switch (t.type) {
     case "line":
-      return `${t.path} ${t.start === t.end ? `line ${t.start}` : `lines ${t.start}-${t.end}`} (${t.side} version)`;
+      return `${t.path} ${t.start === t.end ? `line ${t.start}` : `lines ${t.start}-${t.end}`} (${t.side === "old" && t.round ? `the version round ${t.round} showed` : `${t.side} version`})`;
     case "file":
       return t.path;
     case "report":
@@ -135,7 +135,7 @@ function explain(event, review) {
     if (kinds.length) console.log(`Kind changes by step: ${kinds.map(([step, kind]) => `step ${Number(step) + 1} -> ${kind}`).join(", ")}`);
     if (event.decision.note) console.log(`Note: ${event.decision.note}`);
     console.log(`\nNext: make the changes. Report each comment as you go: ${self} status --id ${review.id} --comment <id> --status working|fixed|answered|wontfix|noted --text "<short>"`);
-    console.log(`Then collect --since last, write report.json with review.replies, build, and publish: ${self} open --report <new json>`);
+    console.log(`Then collect --next-round, update the carried report.json and add review.replies, build, and publish: ${self} open --report <new json>`);
   } else if (event.type === "round-finished") {
     console.log(`Round ${event.round} of ${review.id} is finished: all ${event.count} comments are handled and no code changed. The review is done.`);
     console.log("Offer to open the PR (ask first).");

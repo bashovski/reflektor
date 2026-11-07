@@ -22,7 +22,8 @@ export const PreviousReview = () => {
         Your review, round {previous.round}
       </h2>
       <p className="mb-3 text-xs text-zinc-500">
-        {previous.comments.length} comments, {done} fixed. The changes below are only what changed since that review.
+        {previous.comments.length} {previous.comments.length === 1 ? "comment" : "comments"}, {done} fixed.{" "}
+        {bundle.diff.sinceRound ? "The changes below can show what changed since that review, or the whole branch." : "The changes below are only what changed since that review."}
       </p>
       <ul className="divide-y divide-[var(--border)]">
         {previous.comments.map((c) => {

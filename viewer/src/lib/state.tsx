@@ -1,16 +1,29 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { Bundle, DiffFile, Ref } from "../../../skill/schema/types";
+import type { Bundle, DiffFile, Ref, Section } from "../../../skill/schema/types";
 
 export type ThemeChoice = "system" | "light" | "dark";
 export type DiffStyle = "unified" | "split";
 export type Focus = { path: string; line?: number; side?: "new" | "old"; at: number };
 export type ModalTarget = { path: string; line?: number; side?: "new" | "old" };
+// "branch": the whole branch against its base. "round": only what changed since the round the
+// reviewer sent, each file against its version in that round.
+export type DiffView = "branch" | "round";
+// A section as the current view shows it. `index` is its place in report.sections; the extra group
+// for files whose change was undone since the round gets the index after the last section.
+export type ShownSection = { section: Section; index: number; paths: string[] };
 
 type ReportState = {
   bundle: Bundle;
+  // The files of the current view, and of the whole branch.
   filesByPath: Map<string, DiffFile>;
+  branchFiles: Map<string, DiffFile>;
   sectionOfFile: Map<string, number>;
   orderedFiles: string[];
+  view: DiffView;
+  setView: (v: DiffView) => void;
+  // The round the "round" view compares with, and the paths that changed since; null without one.
+  sinceRound: { round: number; paths: Set<string> } | null;
+  shownSections: ShownSection[];
   theme: ThemeChoice;
   setTheme: (t: ThemeChoice) => void;
   resolvedTheme: "light" | "dark";
@@ -86,20 +99,55 @@ const useSystemDark = () => {
 export const ReportProvider = ({ bundle, children }: { bundle: Bundle; children: ReactNode }) => {
   const repoKey = `pr-report:${bundle.diff.repo.owner ?? ""}/${bundle.diff.repo.name}`;
 
-  const filesByPath = useMemo(() => new Map(bundle.diff.files.map((f) => [f.path, f])), [bundle]);
-  const hashes = useMemo(() => new Map(bundle.diff.files.map((f) => [f.path, contentHash(f)])), [bundle]);
+  const branchFiles = useMemo(() => new Map(bundle.diff.files.map((f) => [f.path, f])), [bundle]);
+  const roundFiles = useMemo(() => new Map((bundle.diff.sinceRound?.files ?? []).map((f) => [f.path, f])), [bundle]);
+  const sinceRound = useMemo(
+    () => (bundle.diff.sinceRound ? { round: bundle.diff.sinceRound.round, paths: new Set(roundFiles.keys()) } : null),
+    [bundle, roundFiles],
+  );
+  // A later round opens on what changed since the reviewer sent the last one.
+  const [view, setView] = useState<DiffView>(() => (roundFiles.size ? "round" : "branch"));
+  const filesByPath = view === "round" ? roundFiles : branchFiles;
+  // Viewed marks follow the whole-branch version, so a file changed since a round shows up as not viewed.
+  const hashes = useMemo(
+    () => new Map([...roundFiles.values(), ...branchFiles.values()].map((f) => [f.path, contentHash(f)])),
+    [branchFiles, roundFiles],
+  );
 
-  const { sectionOfFile, orderedFiles } = useMemo(() => {
+  const { sectionOfFile, orderedFiles, shownSections } = useMemo(() => {
     const map = new Map<string, number>();
     const order: string[] = [];
-    bundle.report.sections.forEach((s, i) =>
-      s.files.forEach((f) => {
-        map.set(f.path, i);
-        order.push(f.path);
-      }),
-    );
-    return { sectionOfFile: map, orderedFiles: order };
-  }, [bundle]);
+    const shown: ShownSection[] = [];
+    const sections = bundle.report.sections;
+    sections.forEach((section, index) => {
+      const paths = section.files.map((f) => f.path).filter((p) => filesByPath.has(p));
+      if (!paths.length) return;
+      shown.push({ section, index, paths });
+      for (const p of paths) {
+        map.set(p, index);
+        order.push(p);
+      }
+    });
+    // Changed since the round but no longer part of the branch: the change was undone.
+    const undone = view === "round" ? [...roundFiles.keys()].filter((p) => !map.has(p)) : [];
+    if (undone.length) {
+      const section: Section = {
+        kind: "other",
+        title: "Undone since that round",
+        review: "skim",
+        reason: "These files are back to their base version, so the branch no longer changes them.",
+        highlights: [],
+        questions: [],
+        files: undone.map((path) => ({ path, note: "" })),
+      };
+      shown.push({ section, index: sections.length, paths: undone });
+      for (const p of undone) {
+        map.set(p, sections.length);
+        order.push(p);
+      }
+    }
+    return { sectionOfFile: map, orderedFiles: order, shownSections: shown };
+  }, [bundle, filesByPath, roundFiles, view]);
 
   const [theme, setThemeState] = useState<ThemeChoice>(() => storage.get("pr-report:theme", "system"));
   const systemDark = useSystemDark();
@@ -165,6 +213,18 @@ export const ReportProvider = ({ bundle, children }: { bundle: Bundle; children:
     (ref: Ref) => {
       const sectionIndex = sectionOfFile.get(ref.path);
       if (sectionIndex === undefined) {
+        // Not in this view, but in the branch: show the whole branch there.
+        if (view === "round" && branchFiles.has(ref.path)) {
+          setView("branch");
+          window.setTimeout(() => {
+            setFileOpen(ref.path, true);
+            setCurrent(ref.path);
+            setFocus({ path: ref.path, line: ref.line, side: ref.side, at: Date.now() });
+          }, 0);
+          const index = bundle.report.sections.findIndex((s) => s.files.some((f) => f.path === ref.path));
+          if (index >= 0) setSectionOpen(index, true);
+          return;
+        }
         openModal({ path: ref.path, line: ref.line, side: ref.side });
         return;
       }
@@ -173,7 +233,7 @@ export const ReportProvider = ({ bundle, children }: { bundle: Bundle; children:
       setCurrent(ref.path);
       setFocus({ path: ref.path, line: ref.line, side: ref.side, at: Date.now() });
     },
-    [sectionOfFile, setSectionOpen, setFileOpen],
+    [sectionOfFile, setSectionOpen, setFileOpen, view, branchFiles, bundle],
   );
 
   useEffect(() => {
@@ -192,8 +252,13 @@ export const ReportProvider = ({ bundle, children }: { bundle: Bundle; children:
   const value: ReportState = {
     bundle,
     filesByPath,
+    branchFiles,
     sectionOfFile,
     orderedFiles,
+    view,
+    setView,
+    sinceRound,
+    shownSections,
     theme,
     setTheme,
     resolvedTheme,

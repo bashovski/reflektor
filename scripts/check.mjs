@@ -163,6 +163,7 @@ try {
   if (!waited.includes("Project checks: 1 passed")) fail(`checks.mjs --wait did not print the finished results:\n${waited}`);
 
   await daemonFlow();
+  nextRoundFlow();
 } catch (e) {
   fail(e.stderr?.toString() || e.message);
 } finally {
@@ -340,6 +341,58 @@ async function daemonFlow() {
       // Already stopped.
     }
   }
+}
+
+// ------------------------------------------------------------------ next round
+// After a sent review, collect --next-round shows the whole branch again, marks what changed since
+// the sent round, and moves report.json's line references to where their lines are now.
+
+function nextRoundFlow() {
+  const dir = join(tmp, "rounds");
+  mkdirSync(dir, { recursive: true });
+  const collect = (...a) => run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch", "--out", join(dir, "diff.json"), ...a]);
+  const build = (out) => run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(dir, "diff.json"), "--report", join(dir, "report.json"), "--out", join(dir, out)]);
+  const readReport = () => JSON.parse(readFileSync(join(dir, "report.json"), "utf8"));
+  const service = (r) => r.sections.find((s) => s.kind === "backend");
+
+  collect();
+  writeFileSync(join(dir, "report.json"), readFileSync(join(root, "samples/report.json")));
+  build("r1.json");
+  const round1 = JSON.parse(readFileSync(join(dir, "r1.json"), "utf8"));
+  writeFileSync(join(dir, "review-1.json"), JSON.stringify({ version: 1, round: 1, branch: "feat/books", headSha: round1.diff.branch.headSha, snapshot: round1.diff.branch.snapshot, comments: [] }));
+  const description = readFileSync(join(dir, "pr-description.md"), "utf8");
+
+  // The fix: two lines on top of book.service.ts, and a change to its line 19.
+  const file = join(repo, "apps/api/src/books/book.service.ts");
+  const lines = readFileSync(file, "utf8").split("\n");
+  lines[18] += " // fixed";
+  writeFileSync(file, ["// one", "// two", ...lines].join("\n"));
+
+  const collected = collect("--next-round");
+  if (!collected.includes("Since round 1, which the reviewer sent: 1 file changed")) fail(`collect --next-round did not list the change since round 1:\n${collected}`);
+  if (!collected.includes("apps/api/src/books/book.service.ts:21")) fail("collect --next-round did not ask to check a reference on a changed line");
+  const carried = readReport();
+  const notes = service(carried).files.find((f) => f.path.endsWith("book.service.ts")).lineNotes.map((n) => n.line);
+  if (notes.join() !== "8,21") fail(`line notes were not moved with their lines: ${notes.join()}`);
+  if (!carried.refsAt) fail("the carried report does not record which code its references point into");
+
+  if (!collect("--next-round").includes("0 line references moved")) fail("collecting the next round twice moved the references twice");
+  if (service(readReport()).files.find((f) => f.path.endsWith("book.service.ts")).lineNotes[0].line !== 8) fail("a second collect changed the moved references");
+
+  build("r2.json");
+  const round2 = JSON.parse(readFileSync(join(dir, "r2.json"), "utf8"));
+  if (round2.round !== 2 || round2.diff.files.length !== round1.diff.files.length) fail("round 2 does not show the whole branch");
+  if (round2.diff.sinceRound?.round !== 1 || round2.diff.sinceRound.files.map((f) => f.path).join() !== "apps/api/src/books/book.service.ts") fail("round 2 does not carry the change since round 1");
+  if (!round2.prDescription || readFileSync(join(dir, "pr-description.md"), "utf8") === description) fail("a whole-branch round did not rewrite the PR description");
+
+  // A report about part of the branch leaves the PR description alone.
+  const whole = readFileSync(join(dir, "pr-description.md"), "utf8");
+  writeFileSync(file, `${readFileSync(file, "utf8")}\n// three\n`);
+  collect("--since", "last");
+  const partial = build("r3.json");
+  if (JSON.parse(readFileSync(join(dir, "r3.json"), "utf8")).prDescription !== null) fail("a --since report carried a PR description");
+  if (readFileSync(join(dir, "pr-description.md"), "utf8") !== whole || !partial.includes("PR description not updated")) fail("a --since report overwrote the PR description");
+  console.log("next round: whole branch with the change since round 1, references moved once, PR description only from whole-branch builds");
 }
 
 if (failed) process.exit(1);

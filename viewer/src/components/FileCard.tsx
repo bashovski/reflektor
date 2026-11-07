@@ -105,7 +105,7 @@ const CoveragePill = ({ covered, uncovered }: { covered: number; uncovered: numb
 };
 
 export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
-  const { filesByPath, bundle, diffStyle, resolvedTheme, isViewed, toggleViewed, isFileOpen, setFileOpen, current, setCurrent, focus, openModal } =
+  const { filesByPath, bundle, diffStyle, resolvedTheme, isViewed, toggleViewed, isFileOpen, setFileOpen, current, setCurrent, focus, openModal, view, sinceRound } =
     useReport();
   const file = filesByPath.get(sectionFile.path)!;
   const path = file.path;
@@ -119,8 +119,13 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
   const { comments, composer, openComposer, editable, questions } = useReview();
   const fileTarget = useMemo<CommentTarget>(() => ({ type: "file", path }), [path]);
 
+  // The old side is the base version in the whole-branch view and the round's version in the round
+  // view, so an old-side note or comment shows only in the view it was written in.
+  const roundView = view === "round" && sinceRound ? sinceRound.round : undefined;
+  const inView = (t: { side?: "new" | "old"; round?: number }) => t.side !== "old" || t.round === roundView;
+
   const annotations = useMemo<DiffLineAnnotation<AnnotationMeta>[]>(() => {
-    const list: DiffLineAnnotation<AnnotationMeta>[] = (sectionFile.lineNotes ?? []).map((n) => ({
+    const list: DiffLineAnnotation<AnnotationMeta>[] = (sectionFile.lineNotes ?? []).filter(inView).map((n) => ({
       side: n.side === "old" ? "deletions" : "additions",
       lineNumber: n.line,
       metadata: { type: "note", text: n.text },
@@ -129,19 +134,19 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
       if (finding.path === path && finding.line) list.push({ side: "additions", lineNumber: finding.line, metadata: { type: "finding", finding } });
     }
     for (const c of comments) {
-      if (c.target.type !== "line" || c.target.path !== path) continue;
+      if (c.target.type !== "line" || c.target.path !== path || !inView(c.target)) continue;
       list.push({ side: c.target.side === "old" ? "deletions" : "additions", lineNumber: c.target.end, metadata: { type: "comment", id: c.id } });
     }
     for (const q of questions) {
-      if (q.target.type !== "line" || q.target.path !== path) continue;
+      if (q.target.type !== "line" || q.target.path !== path || !inView(q.target)) continue;
       list.push({ side: q.target.side === "old" ? "deletions" : "additions", lineNumber: q.target.end, metadata: { type: "question", id: q.id } });
     }
-    if (composer?.target.type === "line" && composer.target.path === path && !composer.editingId) {
+    if (composer?.target.type === "line" && composer.target.path === path && !composer.editingId && inView(composer.target)) {
       const t = composer.target;
       list.push({ side: t.side === "old" ? "deletions" : "additions", lineNumber: t.end, metadata: { type: "composer", target: t } });
     }
     return list;
-  }, [sectionFile, comments, composer, path, bundle, questions]);
+  }, [sectionFile, comments, composer, path, bundle, questions, roundView]);
 
   // A ref keeps the diff options stable while the click handler sees fresh state.
   const onGutter = useRef<(range: SelectedLineRange) => void>(() => {});
@@ -151,7 +156,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
     const end = Math.max(range.start, range.end);
     const content = (side === "old" ? file.oldContent : file.newContent) ?? "";
     const code = content.split("\n").slice(start - 1, end).join("\n");
-    openComposer({ type: "line", path, side, start, end, code });
+    openComposer({ type: "line", path, side, start, end, code, ...(side === "old" && roundView ? { round: roundView } : {}) });
   };
 
   const uncoveredCss = useMemo(() => {
@@ -220,6 +225,9 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
           <span className="shrink-0 font-semibold">{name}</span>
           {file.oldPath && <span className="truncate text-zinc-400">&nbsp;(from {file.oldPath})</span>}
         </button>
+        {view === "branch" && sinceRound?.paths.has(path) && (
+          <Pill className="shrink-0 bg-blue-500/10 px-2 text-[10px] text-blue-700 ring-blue-500/30 dark:text-blue-300">Changed since round {sinceRound.round}</Pill>
+        )}
         {file.uncommitted && <Pill className="shrink-0 bg-amber-500/10 px-2 text-[10px] text-amber-700 ring-amber-500/30 dark:text-amber-300">Not committed</Pill>}
         {file.generated && <Pill className="shrink-0 bg-zinc-500/10 px-2 text-[10px] text-zinc-500 ring-zinc-500/25">Generated</Pill>}
 
