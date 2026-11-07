@@ -132,6 +132,10 @@ export const LiveProvider = ({ children }: { children: ReactNode }) => {
       if (m.type === "connection") setConnected(m.connected);
     };
     listeners.add(onMessage);
+    // The stream may have opened or sent state between the first render and this subscription.
+    setConnected(connected);
+    const state = latest.get(config.id);
+    if (state) setLive(state);
     return () => {
       listeners.delete(onMessage);
     };

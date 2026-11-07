@@ -68,6 +68,7 @@ The report data is written to `<git folder>/pr-report/<branch>/` (usually `.git/
 | `fixtures/make-books-repo.sh` | Builds a fake repo with a "books" feature branch |
 | `samples/report.json` | A hand-written report for that fake repo |
 | `scripts/check.mjs` | End-to-end test on the fake repo |
+| `scripts/browser-check.mjs` | The same review clicked through the real page in headless Chrome |
 | `scripts/build-icons.mjs` | Builds `skill/assets/file-icons.json` from the icon package |
 
 ## Changing it
@@ -83,6 +84,7 @@ Commands:
 
 ```bash
 pnpm check    # typecheck, then run the whole pipeline on the fake repo; fails on any warning
+pnpm check:browser  # drive a whole review through the page in headless Chrome (needs Google Chrome)
 pnpm dev      # viewer with live reload, using the sample data (run pnpm check once first)
 pnpm build    # build the viewer: skill/assets/app/ (served by the daemon) and skill/assets/viewer.html (standalone)
 pnpm sample   # check, then open the sample report

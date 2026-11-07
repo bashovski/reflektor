@@ -6,6 +6,7 @@
     "dev": "pnpm -C viewer dev",
     "build": "node scripts/build-icons.mjs && pnpm -C viewer build && mkdir -p skill/assets && rm -rf skill/assets/app && cp -R viewer/dist/app skill/assets/app && cp viewer/dist/standalone/index.html skill/assets/viewer.html",
     "check": "pnpm -C viewer typecheck && node scripts/check.mjs",
+    "check:browser": "node scripts/browser-check.mjs",
     "sample": "node scripts/check.mjs --open"
   }
 }
