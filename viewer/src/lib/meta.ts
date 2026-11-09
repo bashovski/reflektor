@@ -2,14 +2,17 @@ import {
   Activity,
   AppWindow,
   ArrowRight,
+  Blocks,
   Bot,
   Braces,
+  Bug,
   CircleDashed,
   CircleX,
   ClipboardCheck,
   Database,
   DatabaseZap,
   Flag,
+  Flame,
   FlaskConical,
   Folder,
   GitMerge,
@@ -27,10 +30,13 @@ import {
   Server,
   ShieldCheck,
   Shuffle,
+  Sparkles,
   SlidersHorizontal,
   TriangleAlert,
   Waypoints,
   Workflow,
+  Wrench,
+  Zap,
 } from "lucide-react";
 import type {
   BaseSource,
@@ -49,14 +55,16 @@ import type {
   Target,
 } from "../../../skill/schema/types";
 
-export const TAGS: Record<Tag, string> = {
-  HOTFIX: "bg-red-600 text-white",
-  SECURITY: "bg-rose-700 text-white",
-  FEATURE: "bg-violet-600 text-white",
-  FIX: "bg-sky-600 text-white",
-  PERF: "bg-teal-600 text-white",
-  REFACTOR: "bg-slate-600 text-white",
-  CHORE: "bg-zinc-500 text-white",
+// The PR type pill: a color and a Lucide icon per tag. The inbox in skill/scripts/daemon.mjs draws the same
+// pill from its own copy of this list (TAGS there), so a change here needs the same change there.
+export const TAGS: Record<Tag, { color: string; icon: LucideIcon }> = {
+  HOTFIX: { color: "#dc2626", icon: Flame },
+  SECURITY: { color: "#be123c", icon: ShieldCheck },
+  FEATURE: { color: "#7c3aed", icon: Sparkles },
+  FIX: { color: "#0284c7", icon: Bug },
+  PERF: { color: "#0d9488", icon: Zap },
+  REFACTOR: { color: "#475569", icon: Blocks },
+  CHORE: { color: "#71717a", icon: Wrench },
 };
 
 export const TARGETS: Record<Target, { label: string; className: string; dot: string }> = {
@@ -216,3 +224,6 @@ export const FINDING_KINDS: Record<FindingKind, { label: string; icon: LucideIco
   secret: { label: "Secret", icon: KeyRound },
   migration: { label: "Migration", icon: DatabaseZap },
 };
+
+// Where the project lives, for the help and bug report links in the user menu.
+export const PROJECT = { issues: "https://github.com/bashovski/pr-report/issues/new", readme: "https://github.com/bashovski/pr-report#readme" };

@@ -8,6 +8,10 @@ import type { Bundle, ChecksRun, CommentKind, LiveQuestion, PrState, Ref, Review
 // over a BroadcastChannel. When that tab closes, the lock moves to another tab, which opens the stream.
 
 export type ReviewConfig = { live: true; id: string; round: number; token: string; api: string };
+// The daemon as it introduces itself on the stream: its version and when it started.
+export type DaemonInfo = { version: string; pid: number; node: string; startedAt: string };
+// The page's link to the daemon. "restarting" follows the daemon's own word that it is being replaced.
+export type Link = "up" | "restarting" | "down";
 
 declare global {
   interface Window {
@@ -53,16 +57,25 @@ export type LiveState = {
   updatedAt: string;
 };
 
-type Message = { type: "state"; state: LiveState } | { type: "hello" } | { type: "connection"; connected: boolean };
+type Message =
+  | { type: "state"; state: LiveState }
+  | { type: "hello" }
+  | { type: "connection"; connected: boolean }
+  | { type: "daemon"; daemon: DaemonInfo }
+  | { type: "link"; link: Link };
 
 const config = window.__PR_REVIEW__;
 const listeners = new Set<(m: Message) => void>();
 const latest = new Map<string, LiveState>();
 let connected = false;
+let daemon: DaemonInfo | null = null;
+let link: Link = "down";
 
 const emit = (m: Message) => {
   if (m.type === "state") latest.set(m.state.id, m.state);
   if (m.type === "connection") connected = m.connected;
+  if (m.type === "daemon") daemon = m.daemon;
+  if (m.type === "link") link = m.link;
   for (const l of listeners) l(m);
 };
 
@@ -72,21 +85,27 @@ function startStream() {
   const lead = () =>
     new Promise<void>(() => {
       const connect = () => {
+        const share = (m: Message) => {
+          emit(m);
+          channel?.postMessage(m);
+        };
         const source = new EventSource(`/api/events?token=${config.token}&watch=*`);
         source.onopen = () => {
-          emit({ type: "connection", connected: true });
-          channel?.postMessage({ type: "connection", connected: true });
+          share({ type: "connection", connected: true });
+          share({ type: "link", link: "up" });
         };
         source.onerror = () => {
-          emit({ type: "connection", connected: false });
-          channel?.postMessage({ type: "connection", connected: false });
+          share({ type: "connection", connected: false });
+          // A daemon that announced its restart keeps that status until it is back or the 20 seconds below run out.
+          if (link !== "restarting") share({ type: "link", link: "down" });
           // EventSource retries network errors by itself, but gives up on an HTTP error (a restarting daemon).
           if (source.readyState === EventSource.CLOSED) window.setTimeout(connect, 3000);
         };
-        source.addEventListener("state", (e) => {
-          const m: Message = { type: "state", state: JSON.parse((e as MessageEvent).data) };
-          emit(m);
-          channel?.postMessage(m);
+        source.addEventListener("state", (e) => share({ type: "state", state: JSON.parse((e as MessageEvent).data) }));
+        source.addEventListener("daemon", (e) => share({ type: "daemon", daemon: JSON.parse((e as MessageEvent).data) }));
+        source.addEventListener("shutdown", () => {
+          share({ type: "link", link: "restarting" });
+          window.setTimeout(() => link === "restarting" && share({ type: "link", link: "down" }), 20_000);
         });
       };
       connect();
@@ -94,6 +113,8 @@ function startStream() {
       channel?.addEventListener("message", (e) => {
         if ((e.data as Message).type !== "hello") return;
         channel.postMessage({ type: "connection", connected });
+        channel.postMessage({ type: "link", link });
+        if (daemon) channel.postMessage({ type: "daemon", daemon });
         for (const state of latest.values()) channel.postMessage({ type: "state", state });
       });
     });
@@ -109,11 +130,19 @@ function startStream() {
 
 startStream();
 
-const Ctx = createContext<{ live: LiveState | null; connected: boolean; config: ReviewConfig | null }>({ live: null, connected: false, config: null });
+const Ctx = createContext<{ live: LiveState | null; connected: boolean; daemon: DaemonInfo | null; link: Link; config: ReviewConfig | null }>({
+  live: null,
+  connected: false,
+  daemon: null,
+  link: "down",
+  config: null,
+});
 
 export const LiveProvider = ({ children }: { children: ReactNode }) => {
   const [live, setLive] = useState<LiveState | null>(() => (config ? (latest.get(config.id) ?? null) : null));
   const [isConnected, setConnected] = useState(connected);
+  const [daemonInfo, setDaemon] = useState(daemon);
+  const [linkState, setLink] = useState(link);
 
   // Tell the daemon this review is on screen, so the agent does not open another tab for each round.
   useEffect(() => {
@@ -135,10 +164,14 @@ export const LiveProvider = ({ children }: { children: ReactNode }) => {
     const onMessage = (m: Message) => {
       if (m.type === "state" && m.state.id === config.id) setLive(m.state);
       if (m.type === "connection") setConnected(m.connected);
+      if (m.type === "daemon") setDaemon(m.daemon);
+      if (m.type === "link") setLink(m.link);
     };
     listeners.add(onMessage);
     // The stream may have opened or sent state between the first render and this subscription.
     setConnected(connected);
+    setDaemon(daemon);
+    setLink(link);
     const state = latest.get(config.id);
     if (state) setLive(state);
     return () => {
@@ -146,7 +179,7 @@ export const LiveProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  return <Ctx.Provider value={{ live, connected: isConnected, config: config ?? null }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ live, connected: isConnected, daemon: daemonInfo, link: linkState, config: config ?? null }}>{children}</Ctx.Provider>;
 };
 
 export const useLive = () => useContext(Ctx);

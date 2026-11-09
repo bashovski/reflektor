@@ -14,6 +14,7 @@ import { FileModal } from "./FileModal";
 import { Findings } from "./Findings";
 import { Flows } from "./Flows";
 import { Hero, TopBar } from "./Header";
+import { HelpDialog } from "./Help";
 import { PlanCheck } from "./PlanCheck";
 import { PreviousReview } from "./PreviousReview";
 import { ProjectChecks } from "./ProjectChecks";
@@ -22,6 +23,7 @@ import { ReviewBar } from "./ReviewBar";
 import { RoundBanner } from "./RoundBanner";
 import { Sections } from "./Sections";
 import { SettingsDialog } from "./Settings";
+import { SetupBanner } from "./SetupBanner";
 import { Sidebar } from "./Sidebar";
 
 const useShortcuts = (onHelp: () => void) => {
@@ -100,13 +102,15 @@ const WindowVirtualizer = ({ children }: { children: ReactNode }) => {
 
 const Layout = () => {
   const [settings, setSettings] = useState(false);
+  const [help, setHelp] = useState(false);
   useShortcuts(() => setSettings(true));
   const { bundle } = useReport();
   useTab();
 
   return (
     <>
-      <TopBar onSettings={() => setSettings(true)} />
+      <TopBar onSettings={() => setSettings(true)} onHelp={() => setHelp(true)} />
+      <SetupBanner />
       <RoundBanner />
       <MergedBanner />
       <DriftBanner />
@@ -135,6 +139,7 @@ const Layout = () => {
       <ReviewBar />
       <FileModal />
       <SettingsDialog open={settings} onClose={() => setSettings(false)} />
+      <HelpDialog open={help} onClose={() => setHelp(false)} />
     </>
   );
 };

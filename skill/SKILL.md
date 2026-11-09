@@ -18,7 +18,7 @@ Arguments typed after `/pr-report` can be a base branch, `--since last`, `--sess
 Base branch, first match wins:
 
 1. A branch the user passed as an argument, or named in this conversation as the PR target.
-2. Otherwise leave `--base` out. collect.mjs then tries the open PR for this branch (through `gh`), then `base` in `.pr-report.json`, then the remote's default branch.
+2. Otherwise leave `--base` out. collect.mjs then tries the open PR for this branch (through `gh`), then `base` in `.pr-report.json`, then the remote's default branch, then a common name (main, master, develop, staging, demo, trunk), and last the branch this one most recently forked from. When it prints `(guess)`, name the base in your message to the user, so they can correct it with `/pr-report <branch>`.
 
 Scope:
 

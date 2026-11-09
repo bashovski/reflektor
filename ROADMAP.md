@@ -42,3 +42,4 @@
 ## Before selling
 
 - Add a third-party notices file. The page bundles @pierre/diffs (Apache-2.0), the inbox serves Fuse.js (Apache-2.0), React, Headless UI, Tailwind and atom-material-icons (MIT), Lucide (ISC) and the Geist fonts (OFL-1.1). Apache-2.0 and MIT require shipping their license texts.
+- Let users plug in their own hooks. Shell commands named in `.pr-report.json`, run with JSON on stdin at `afterCollect`, `beforePublish` (can block with a message), `afterPublish`, `onReviewSent` and `onRoundDone`, so a team gets them by cloning. With them: user-defined safety rules (pattern, severity, message) next to the fixed secret and migration checks, and an instructions file appended to the style guide. No code plugin API until report.json, the bundle and the daemon API stop changing, and third-party code never runs inside the daemon or the viewer.

@@ -1,14 +1,15 @@
 import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Inbox, Loader2, Settings } from "lucide-react";
 import { useChecks } from "../lib/checks";
-import { BASE_SOURCE, REVIEW, TAGS, TARGETS } from "../lib/meta";
+import { BASE_SOURCE, REVIEW, TARGETS } from "../lib/meta";
 import { usePr } from "../lib/pr";
 import { useReport } from "../lib/state";
 import { OwnerMenu } from "./OwnerMenu";
 import { PrDescription } from "./PrDescription";
 import { PrStatePill } from "./PullRequest";
-import { cx, Dot, LocCount, Pill } from "./ui";
+import { UserMenu } from "./UserMenu";
+import { Dot, LocCount, Pill, TagPill } from "./ui";
 
-export const TopBar = ({ onSettings }: { onSettings: () => void }) => {
+export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp: () => void }) => {
   const { bundle } = useReport();
   const { repo, branch } = bundle.diff;
   return (
@@ -30,14 +31,19 @@ export const TopBar = ({ onSettings }: { onSettings: () => void }) => {
             <Inbox className="size-3.5" /> All reviews
           </a>
         )}
-        <button
-          type="button"
-          onClick={onSettings}
-          title="Settings and keyboard shortcuts (?)"
-          className={cx(!window.__PR_REVIEW__ && "ml-auto", "inline-flex rounded-md p-2 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100")}
-        >
-          <Settings className="size-4" />
-        </button>
+        {window.__PR_REVIEW__ ? (
+          <UserMenu onSettings={onSettings} onHelp={onHelp} />
+        ) : (
+          // The standalone HTML file has no daemon to ask who is reading it, so it keeps the plain settings button.
+          <button
+            type="button"
+            onClick={onSettings}
+            title="Settings and keyboard shortcuts (?)"
+            className="ml-auto inline-flex rounded-md p-2 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100"
+          >
+            <Settings className="size-4" />
+          </button>
+        )}
       </div>
     </header>
   );
@@ -99,9 +105,7 @@ export const Hero = () => {
       <div className="space-y-3">
         <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-balance">
           {!bundle.draft && (
-            <span className={cx("mr-2.5 inline-block translate-y-[-3px] rounded-md px-2 py-0.5 align-middle font-mono text-xs font-semibold tracking-wide", TAGS[report.tag])}>
-              {report.tag}
-            </span>
+            <TagPill tag={report.tag} className="mr-2.5 translate-y-[-3px] align-middle" />
           )}
           {report.title}
         </h1>

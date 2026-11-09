@@ -1,6 +1,7 @@
 import { FileText } from "lucide-react";
 import { type ButtonHTMLAttributes, type ReactNode, useMemo } from "react";
-import type { Ref, RepoAvatar } from "../../../skill/schema/types";
+import type { Ref, RepoAvatar, Tag } from "../../../skill/schema/types";
+import { TAGS } from "../lib/meta";
 import { useReport } from "../lib/state";
 
 export const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(" ");
@@ -12,6 +13,49 @@ export const Pill = ({ className, children }: { className: string; children: Rea
 );
 
 export const Dot = ({ className }: { className: string }) => <span className={cx("size-1.5 shrink-0 rounded-full", className)} />;
+
+// What a key cap shows for keys whose name is not what the keyboard prints on them.
+export const KEY_LABELS: Record<string, string> = {
+  Enter: "↵",
+  Escape: "Esc",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  ArrowLeft: "←",
+  ArrowRight: "→",
+  Backspace: "⌫",
+  Tab: "⇥",
+  Shift: "⇧",
+  Meta: "⌘",
+  Control: "Ctrl",
+  " ": "Space",
+};
+
+// A key cap: a small rounded rectangle with a hairline border and a one-pixel ledge under it, the way
+// Linear draws shortcuts. `name` is the key as KeyboardEvent.key gives it ("Enter", "j", "?").
+export const Kbd = ({ name, className }: { name: string; className?: string }) => (
+  <kbd
+    className={cx(
+      "inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-[5px] border border-[var(--border)] bg-[var(--surface-2)] px-1.5 font-mono text-[11px] leading-none font-medium text-zinc-600 shadow-[0_1px_0_0_var(--border)] dark:text-zinc-300",
+      className,
+    )}
+  >
+    {KEY_LABELS[name] ?? name}
+  </kbd>
+);
+
+// The PR type, drawn the same way as in the inbox (tagPill in skill/scripts/daemon.mjs): a colored pill with a white icon.
+export const TagPill = ({ tag, className }: { tag: Tag; className?: string }) => {
+  const { color, icon: Icon } = TAGS[tag];
+  return (
+    <span
+      className={cx("inline-flex h-[22px] items-center gap-[5px] rounded-full pr-[9px] pl-[7px] font-mono text-[11px] font-semibold tracking-[0.03em] whitespace-nowrap text-white", className)}
+      style={{ background: color }}
+    >
+      <Icon className="size-3" strokeWidth={2.4} aria-hidden="true" />
+      {tag}
+    </span>
+  );
+};
 
 export const LocCount = ({ additions, deletions, className }: { additions: number; deletions: number; className?: string }) => (
   <span className={cx("font-mono text-xs tabular-nums", className)}>

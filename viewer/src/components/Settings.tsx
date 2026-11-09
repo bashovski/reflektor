@@ -1,7 +1,9 @@
 import { Monitor, Moon, Sun, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
+import type { BundledTheme } from "shiki/themes";
 import { type DiffStyle, type ThemeChoice, useReport } from "../lib/state";
-import { cx } from "./ui";
+import { codeThemesFor, type ThemeMode } from "../lib/themes";
+import { cx, Kbd } from "./ui";
 
 export const SHORTCUTS = [
   ["j", "Next file"],
@@ -13,7 +15,8 @@ export const SHORTCUTS = [
   ["?", "Open these settings"],
 ] as const;
 
-const Choice = <T extends string>({
+// A row of equal buttons, one of them chosen. Shared with the setup page.
+export const Choice = <T extends string>({
   value,
   onChange,
   options,
@@ -44,7 +47,7 @@ const Choice = <T extends string>({
 );
 
 export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
-  const { theme, setTheme, diffStyle, setDiffStyle } = useReport();
+  const { theme, setTheme, resolvedTheme, diffStyle, setDiffStyle, codeTheme, setCodeTheme } = useReport();
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -93,16 +96,48 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
         </section>
 
         <section>
+          <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-zinc-500">Code theme</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(["dark", "light"] as const).map((mode: ThemeMode) => (
+              <label key={mode} className="flex flex-col gap-1 text-xs text-zinc-500">
+                <span className="inline-flex items-center gap-1.5">
+                  {mode === "dark" ? <Moon className="size-3.5" /> : <Sun className="size-3.5" />}
+                  {mode === "dark" ? "Dark mode" : "Light mode"}
+                  {resolvedTheme === mode && <span className="text-zinc-400">(on screen now)</span>}
+                </span>
+                <select
+                  value={codeTheme[mode]}
+                  onChange={(e) => setCodeTheme(mode, e.target.value as BundledTheme)}
+                  className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-sm text-[var(--text)] outline-none focus:border-blue-500"
+                >
+                  {codeThemesFor(mode).map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section>
           <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-zinc-500">Keyboard shortcuts</h3>
           <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
             {SHORTCUTS.map(([key, label]) => (
               <li key={key} className="flex items-center gap-2.5">
-                <kbd className="inline-flex min-w-6 justify-center rounded border border-[var(--border)] bg-zinc-500/10 px-1.5 font-mono text-xs">{key}</kbd>
+                <Kbd name={key} />
                 <span className="text-zinc-600 dark:text-zinc-400">{label}</span>
               </li>
             ))}
           </ul>
         </section>
+
+        {window.__PR_REVIEW__ && (
+          <a href="/setup" className="inline-block text-xs text-zinc-500 hover:underline">
+            Run the first-time setup again
+          </a>
+        )}
       </div>
     </dialog>
   );

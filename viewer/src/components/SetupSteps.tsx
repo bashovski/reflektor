@@ -1,0 +1,206 @@
+import { File as CodeFile, type FileOptions } from "@pierre/diffs/react";
+import { ArrowLeft, Check, Monitor, Moon, Sun } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo } from "react";
+import type { BundledTheme } from "shiki/themes";
+import { type ThemeChoice, usePrefs } from "../lib/prefs";
+import { afterSetup, markSetupDone } from "../lib/setup";
+import { codeThemesFor, HIGHLIGHTER } from "../lib/themes";
+import { Choice } from "./Settings";
+import { cx, Kbd } from "./ui";
+
+// First-run setup, one screen per step. Enter moves on, Escape skips the rest, and every choice
+// applies as soon as it is clicked, so the page itself shows what a choice does.
+
+const THEME_CHOICES: ThemeChoice[] = ["system", "light", "dark"];
+
+// What the code theme preview shows: a few lines of TypeScript with a comment, a string, a type
+// and a call, so the main token colors of a theme are all on screen.
+const SAMPLE = `import { readFile } from "node:fs/promises";
+
+type Book = { isbn: string; title: string; ownerId: string };
+
+export async function loadBooks(path: string): Promise<Book[]> {
+  const text = await readFile(path, "utf8");
+  const books: Book[] = JSON.parse(text);
+  // One copy per owner: the same ISBN twice is a duplicate.
+  const seen = new Set<string>();
+  return books.filter((book) => {
+    const key = \`\${book.ownerId}:\${book.isbn}\`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+`;
+
+export type SetupStep = { id: string; title: string; next: string };
+
+const Primary = ({ label, onClick }: { label: string; onClick: () => void }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="inline-flex items-center gap-2.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+  >
+    {label}
+    <Kbd name="Enter" className="h-[18px] min-w-[18px] border-white/25 bg-white/15 text-white shadow-none" />
+  </button>
+);
+
+export const SetupFrame = ({
+  steps,
+  index,
+  onBack,
+  onNext,
+  onSkip,
+  children,
+}: {
+  steps: SetupStep[];
+  index: number;
+  onBack: () => void;
+  onNext: () => void;
+  onSkip: () => void;
+  children: ReactNode;
+}) => {
+  const step = steps[index];
+  return (
+    <main className="mx-auto flex min-h-screen w-full max-w-[860px] flex-col justify-center px-4 py-10 sm:px-6">
+      <div className="mb-4 flex items-center justify-between text-xs text-zinc-500">
+        <span className="font-semibold tracking-tight text-[var(--text)]">pr-report</span>
+        <span className="inline-flex items-center gap-1.5" aria-label={`Step ${index + 1} of ${steps.length}`}>
+          {steps.map((s, i) => (
+            <span key={s.id} className={cx("h-1.5 rounded-full transition-all", i === index ? "w-6 bg-blue-600" : "w-1.5 bg-zinc-500/30")} />
+          ))}
+        </span>
+      </div>
+      <section className="surface rounded-2xl border p-6 shadow-sm sm:p-8">
+        <h1 className="text-[24px] font-semibold tracking-tight text-balance">{step.title}</h1>
+        <div className="mt-4">{children}</div>
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          {index > 0 && (
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
+              <ArrowLeft className="size-4" /> Back
+            </button>
+          )}
+          <span className="ml-auto inline-flex items-center gap-3">
+            {index < steps.length - 1 && (
+              <button type="button" onClick={onSkip} className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:underline">
+                Skip setup <Kbd name="Escape" />
+              </button>
+            )}
+            <Primary label={step.next} onClick={onNext} />
+          </span>
+        </div>
+      </section>
+    </main>
+  );
+};
+
+export const IntroStep = () => (
+  <div className="space-y-3 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">
+    <p>
+      pr-report turns a branch into a review page: a plain-English summary, the files in the order to read them, risks with a suggested fix, and
+      diffs with notes. You comment on the page, Claude fixes, and the next round comes back to the same tab.
+    </p>
+    <p>This takes a minute: the tools on this machine, then how the page looks.</p>
+  </div>
+);
+
+export const ThemeStep = () => {
+  const { theme, setTheme } = usePrefs();
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-zinc-500">Applied as you click. Change it any time from the gear in a report.</p>
+      <Choice<ThemeChoice>
+        value={theme}
+        onChange={setTheme}
+        options={[
+          { value: "system", label: "System", icon: <Monitor className="size-3.5" />, hint: "Follow your OS" },
+          { value: "light", label: "Light", icon: <Sun className="size-3.5" />, hint: "Always light" },
+          { value: "dark", label: "Dark", icon: <Moon className="size-3.5" />, hint: "Always dark" },
+        ]}
+      />
+    </div>
+  );
+};
+
+// Arrow keys move the theme choice left and right.
+export const useThemeKeys = (active: boolean) => {
+  const { theme, setTheme } = usePrefs();
+  return useCallback(
+    (e: KeyboardEvent) => {
+      if (!active || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return false;
+      const i = THEME_CHOICES.indexOf(theme);
+      setTheme(THEME_CHOICES[(i + (e.key === "ArrowRight" ? 1 : THEME_CHOICES.length - 1)) % THEME_CHOICES.length]);
+      return true;
+    },
+    [active, theme, setTheme],
+  );
+};
+
+export const CodeThemeStep = () => {
+  const { theme, resolvedTheme, codeTheme, renderTheme, setCodeTheme } = usePrefs();
+  const themes = codeThemesFor(resolvedTheme);
+  const selected = codeTheme[resolvedTheme];
+  const options = useMemo<FileOptions<undefined, undefined>>(
+    () => ({ theme: renderTheme, themeType: resolvedTheme, preferredHighlighter: HIGHLIGHTER, disableFileHeader: true }),
+    [renderTheme, resolvedTheme],
+  );
+  useEffect(() => {
+    document.getElementById(`code-theme-${selected}`)?.scrollIntoView({ block: "nearest" });
+  }, [selected]);
+  const other = resolvedTheme === "dark" ? "light" : "dark";
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-zinc-500">
+        {theme === "system" ? `Your OS is in ${resolvedTheme} mode, so these are ${resolvedTheme} themes. ` : `Themes drawn for ${resolvedTheme} mode. `}
+        {codeThemesFor(other).find((t) => t.id === codeTheme[other])?.name} stays the {other} mode theme; both can change later in the gear of a report.
+      </p>
+      <div className="grid gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
+        <ul role="listbox" aria-label="Code theme" className="max-h-[380px] overflow-y-auto rounded-xl border border-[var(--border)] p-1">
+          {themes.map((t) => (
+            <li key={t.id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={t.id === selected}
+                id={`code-theme-${t.id}`}
+                onClick={() => setCodeTheme(resolvedTheme, t.id)}
+                className={cx(
+                  "flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm",
+                  t.id === selected ? "bg-blue-600/10 font-medium text-blue-700 dark:text-blue-300" : "hover:bg-zinc-500/[0.06]",
+                )}
+              >
+                {t.name}
+                {t.id === selected && <Check className="size-3.5" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="min-w-0 overflow-hidden rounded-xl border border-[var(--border)] text-[12.5px]">
+          <CodeFile file={{ name: "books.ts", contents: SAMPLE }} options={options} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Arrow keys move the code theme up and down the list.
+export const useCodeThemeKeys = (active: boolean) => {
+  const { resolvedTheme, codeTheme, setCodeTheme } = usePrefs();
+  return useCallback(
+    (e: KeyboardEvent) => {
+      if (!active || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return false;
+      const themes = codeThemesFor(resolvedTheme);
+      const i = themes.findIndex((t) => t.id === codeTheme[resolvedTheme]);
+      const next = themes[Math.max(0, Math.min(themes.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))];
+      if (next) setCodeTheme(resolvedTheme, next.id as BundledTheme);
+      return true;
+    },
+    [active, resolvedTheme, codeTheme, setCodeTheme],
+  );
+};
+
+export const finishSetup = () => {
+  markSetupDone();
+  window.location.assign(afterSetup());
+};
