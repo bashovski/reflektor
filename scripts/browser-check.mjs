@@ -104,7 +104,7 @@ try {
   const realOut = script("build.mjs", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)[1];
   review("open", "--report", realOut);
   await expectVisible(page.getByRole("heading", { name: /Save and list books in the library/ }), "the report after the draft");
-  await expectVisible(page.getByRole("button", { name: "Looks good, tell Claude" }), "Send once the report is ready");
+  await expectVisible(page.getByRole("button", { name: "LGTM" }), "Send once the report is ready");
 
   // The owner menu links to the owner's page, the inbox, and a new pull request filled in from the report.
   await page.getByRole("button", { name: /acme-labs/ }).click();

@@ -245,11 +245,11 @@ export const ReviewBar = () => {
                 type="button"
                 onClick={review.submit}
                 disabled={draft}
-                title={draft ? "Claude is still writing the notes. Your comments are saved meanwhile." : undefined}
+                title={draft ? "Claude is still writing the notes. Your comments are saved meanwhile." : comments.length ? undefined : "Looks good to me: tell Claude the review is done, with no comments."}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
               >
                 {draft ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-                {draft ? "Claude is writing the notes" : comments.length ? `Send ${comments.length} to Claude` : "Looks good, tell Claude"}
+                {draft ? "Claude is writing the notes" : comments.length ? `Send ${comments.length} to Claude` : "LGTM"}
               </button>
             </>
           ) : (
