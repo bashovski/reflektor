@@ -421,7 +421,7 @@ function inboxPage() {
   const phases = Object.keys(PHASES).filter((p) => all.some((r) => r.phase === p));
   const tags = Object.keys(TAGS).filter((t) => all.some((r) => r.tag === t));
   const toolbar = all.length
-    ? `<div class="bar"><span id="summary"></span><div class="tools">${menu(
+    ? `<div class="bar"><span class="left"><span id="summary"></span></span><div class="tools">${menu(
         "group",
         "layers",
         "Group",
@@ -441,6 +441,7 @@ body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif
 main{max-width:900px;margin:0 auto;padding:40px 16px}h1{font-size:20px;margin:0 0 4px}p{color:var(--muted);margin:0 0 20px}
 svg{width:14px;height:14px;flex:none}
 .bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}#summary{color:var(--muted);font-size:13px}
+.only{display:inline-flex;align-items:center;gap:2px;margin-left:10px;padding:1px 2px 1px 9px;border:1px solid var(--border);border-radius:999px;background:var(--surface);font-size:12px}.only a{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;color:var(--muted);text-decoration:none}.only a:hover{background:var(--hover);color:var(--text)}
 .tools{display:flex;gap:6px;flex-wrap:wrap}.dd{position:relative}
 .tool{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 9px 0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font:500 12px ui-sans-serif,system-ui,sans-serif;cursor:pointer}
 .tool:hover,.tool[aria-expanded=true]{background:color-mix(in srgb,var(--text) 6%,var(--surface))}.tool>svg{color:var(--muted)}.tool .k{color:var(--muted)}.tool b{font-weight:600}
@@ -499,7 +500,13 @@ const nameOf=(k)=>prefs.group==="owner"&&!k?"Local repos":k;
 const items=boxes.flatMap((b)=>b.rows).map((row)=>({row,title:row.dataset.title,repo:row.dataset.repo,branch:row.dataset.branch}));
 let fuse=null,hits=null;
 const search=()=>{const q=query.trim();hits=!q?null:new Set(fuse?fuse.search(q).map((x)=>x.item.row):items.filter((i)=>(i.title+" "+i.repo+" "+i.branch).toLowerCase().includes(q.toLowerCase())).map((i)=>i.row))};
-const matches=(r)=>(!prefs.phase.length||prefs.phase.includes(r.dataset.phase))&&(!prefs.tag.length||prefs.tag.includes(r.dataset.tag))&&(!hits||hits.has(r));
+// "View All Reports for <owner>" on a review page links here with ?owner=, to show only that owner's reviews.
+const onlyOwner=new URLSearchParams(location.search).get("owner");
+const left=document.querySelector(".bar .left");
+// It starts a fresh look at that owner, so a search left from earlier in this tab does not hide their reviews.
+if(onlyOwner!==null){query="";try{sessionStorage.removeItem("pr-report-inbox-q")}catch{}if(searchBox)searchBox.value=""}
+if(onlyOwner!==null&&left){const chip=make("span","only","Owner: "+(onlyOwner||"Local repos")),x=make("a","","\u00d7");x.href="/";x.title="Show every owner";x.setAttribute("aria-label","Show every owner");chip.append(x);left.append(chip)}
+const matches=(r)=>(onlyOwner===null||r.dataset.owner===onlyOwner)&&(!prefs.phase.length||prefs.phase.includes(r.dataset.phase))&&(!prefs.tag.length||prefs.tag.includes(r.dataset.tag))&&(!hits||hits.has(r));
 function heading(key,first,count){
   const h=make("h2","gh");
   if(prefs.group==="owner"||prefs.group==="repo"){

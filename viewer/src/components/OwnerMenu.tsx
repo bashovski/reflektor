@@ -36,7 +36,7 @@ const PR_STATES = {
   CLOSED: { label: "closed", icon: <GitPullRequestClosed className="text-red-600 dark:text-red-400" /> },
 };
 
-type Item = { key: string; href: string; external: boolean; icon: ReactNode; label: string; detail: string; warning?: string };
+type Item = { key: string; href: string; external: boolean; icon: ReactNode; label: ReactNode; detail: string; warning?: string };
 
 // The owner's avatar and name in the top bar. Clicking them opens links to the owner's page, the
 // inbox and the branch's pull request, each only when it applies.
@@ -56,7 +56,22 @@ export const OwnerMenu = () => {
       label: "Open Owner Page",
       detail: `${repo.owner} on ${web.forge ? FORGES[web.forge] : repo.host}`,
     });
-  if (window.__PR_REVIEW__) items.push({ key: "inbox", href: "/", external: false, icon: <Inbox />, label: "View All Reports", detail: "Every review on this machine" });
+  // The inbox, showing only this owner's reviews when there is an owner.
+  if (window.__PR_REVIEW__)
+    items.push({
+      key: "inbox",
+      href: repo.owner ? `/?owner=${encodeURIComponent(repo.owner)}` : "/",
+      external: false,
+      icon: <Inbox />,
+      label: repo.owner ? (
+        <>
+          View All Reports for <span className="text-zinc-500 dark:text-zinc-400">{repo.owner}</span>
+        </>
+      ) : (
+        "View All Reports"
+      ),
+      detail: "In the inbox on this machine",
+    });
 
   // A new pull request makes sense when the branch has none, or only a closed one.
   const onBranch = branch.head !== "HEAD" && branch.head !== branch.base;

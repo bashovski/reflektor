@@ -74,7 +74,8 @@ try {
   // The owner menu links to the owner's page, the inbox, and a new pull request filled in from the report.
   await page.getByRole("button", { name: /acme-labs/ }).click();
   await expectVisible(page.getByRole("menuitem", { name: /Open Owner Page/ }), "the owner page link");
-  await expectVisible(page.getByRole("menuitem", { name: /View All Reports/ }), "the inbox link");
+  const inboxLink = page.getByRole("menuitem", { name: /View All Reports for acme-labs/ });
+  if ((await expectVisible(inboxLink, "the inbox link for the owner")) && (await inboxLink.getAttribute("href")) !== "/?owner=acme-labs") fail("the inbox link does not ask for the owner's reviews only");
   const newPr = page.getByRole("menuitem", { name: /Open Pull Request.*feat\/books is not pushed yet/ });
   if (await expectVisible(newPr, "the new pull request link with the not-pushed warning")) {
     const href = await newPr.getAttribute("href");
@@ -129,7 +130,10 @@ try {
   await page.getByRole("button", { name: "Ask Claude to update the report" }).click();
   if (!review("wait", "--id", id).includes("asked for an updated report")) fail("the update request did not reach the agent");
 
-  // 8. The inbox groups by owner by default, and remembers another grouping after a reload.
+  // 8. The inbox shows one owner's reviews when asked, groups by owner by default, and remembers another grouping after a reload.
+  await page.goto(`http://127.0.0.1:${port}/?owner=someone-else`);
+  await expectVisible(page.getByText("Owner: someone-else"), "the owner filter");
+  await expectVisible(page.getByText("0 of 1 reviews"), "an owner filter that hides the other owners' reviews");
   await page.goto(`http://127.0.0.1:${port}/`);
   await expectVisible(page.getByRole("heading", { name: /acme-labs/ }), "the owner heading in the inbox");
   await page.getByRole("button", { name: /^Group/ }).click();
