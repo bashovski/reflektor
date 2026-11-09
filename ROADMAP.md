@@ -18,6 +18,7 @@
 - Draft page with the facts while Claude writes the report
 - Inbox archive, restore and delete; one report folder per branch
 - Inbox grouped by repo owner, with group, sort and filter menus, fuzzy search (Fuse.js), and colored type pills with icons
+- Owner menu in the review page: the owner's page, all reports, and the branch's pull request, or a new one filled in from the report
 - Project checks ask first when the branch has commits by someone else
 - Speed: diffs render only near the screen, code colored with WebAssembly lexers, the daemon serves the viewer as cached files and each report is only its data (44-file change: 2.4 s frozen and 161 MB before, under 0.3 s and 37 MB after)
 
@@ -39,4 +40,4 @@
 
 ## Before selling
 
-- Add a third-party notices file. The page bundles @pierre/diffs (Apache-2.0), the inbox serves Fuse.js (Apache-2.0), React, Tailwind and atom-material-icons (MIT), Lucide (ISC) and the Geist fonts (OFL-1.1). Apache-2.0 and MIT require shipping their license texts.
+- Add a third-party notices file. The page bundles @pierre/diffs (Apache-2.0), the inbox serves Fuse.js (Apache-2.0), React, Headless UI, Tailwind and atom-material-icons (MIT), Lucide (ISC) and the Geist fonts (OFL-1.1). Apache-2.0 and MIT require shipping their license texts.

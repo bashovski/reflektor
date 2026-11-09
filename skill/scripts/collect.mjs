@@ -108,34 +108,53 @@ const targetFor = (path) => targetGlobs.find(([, re]) => re.test(path))?.[0] ?? 
 
 const remoteName = (tryGit("remote") ?? "").split("\n").map((s) => s.trim()).filter(Boolean);
 const remote = remoteName.includes("origin") ? "origin" : remoteName[0];
-const identity = parseRemote(remote ? tryGit("remote", "get-url", remote) : null) ?? {
+const remoteUrl = remote ? tryGit("remote", "get-url", remote)?.trim() : null;
+const identity = parseRemote(remoteUrl) ?? {
   host: null,
   owner: null,
   name: basename(repoRoot),
 };
+// An SSH remote can name a Host alias from ~/.ssh/config (git@github-work:acme/app). ssh -G prints
+// the real host without connecting. Aliases have no dot; GitHub's and GitLab's SSH-over-443 hosts
+// map back to their web hosts.
+if (identity.host && !identity.host.includes(".") && remoteUrl && !/^https?:/.test(remoteUrl)) {
+  try {
+    const real = run("ssh", ["-G", identity.host], repoRoot, { timeout: 3000 }).match(/^hostname (\S+)$/m)?.[1];
+    if (real) identity.host = real.toLowerCase();
+  } catch {
+    // No ssh client: keep the name from the URL.
+  }
+}
+identity.host = { "ssh.github.com": "github.com", "altssh.gitlab.com": "gitlab.com" }[identity.host] ?? identity.host;
+
+// The repo on the web, for the page's owner and pull request links. Self-hosted GitLab and GitHub
+// Enterprise keep their URL layout, so the forge comes from the host name.
+const forge = /github/.test(identity.host ?? "") ? "github" : /gitlab/.test(identity.host ?? "") ? "gitlab" : /bitbucket/.test(identity.host ?? "") ? "bitbucket" : null;
+const web = identity.host && identity.owner ? { url: `https://${identity.host}/${identity.owner}/${identity.name}`, ownerUrl: `https://${identity.host}/${identity.owner}`, forge } : null;
 
 // ------------------------------------------------------------------ base branch
 
 const head = git("rev-parse", "--abbrev-ref", "HEAD").trim();
 const headSha = git("rev-parse", "HEAD").trim();
 
-let pr = null;
-function findOpenPr() {
-  if (!hasCommand("gh") || identity.host !== "github.com") return null;
+// The branch's pull request, through gh (github.com only), in any state. An open one sets the base
+// branch; the page links to it either way.
+function findPr() {
+  if (head === "HEAD" || identity.host !== "github.com" || !hasCommand("gh")) return null;
   try {
-    const json = run("gh", ["pr", "view", "--json", "number,url,title,baseRefName"]);
-    return JSON.parse(json);
+    return JSON.parse(run("gh", ["pr", "view", head, "--json", "number,url,title,baseRefName,state"], repoRoot, { timeout: 15_000 }));
   } catch {
     return null;
   }
 }
+const pr = findPr();
 
 let base;
 let baseSource;
 if (args.base) {
   base = args.base;
   baseSource = "argument";
-} else if ((pr = findOpenPr())) {
+} else if (pr?.state === "OPEN") {
   base = pr.baseRefName;
   baseSource = "open-pr";
 } else if (config?.base) {
@@ -164,6 +183,10 @@ if (args.fetch && remote) {
 const baseRef = remote && refExists(`${remote}/${base}`) ? `${remote}/${base}` : base;
 if (!refExists(baseRef)) throw new Error(`Base branch "${base}" does not exist locally or on ${remote}.`);
 const mergeBase = git("merge-base", "HEAD", baseRef).trim();
+
+// Whether the branch is on the remote, as of the last fetch or push, and how many commits are not.
+const remoteBranch = remote && head !== "HEAD" && refExists(`${remote}/${head}`) ? `${remote}/${head}` : null;
+const upstream = remoteBranch ? { ref: remoteBranch, ahead: Number(git("rev-list", "--count", `${remoteBranch}..HEAD`).trim()) } : null;
 
 // ------------------------------------------------------------------ scope
 
@@ -751,8 +774,8 @@ const data = {
   version: 1,
   generatedAt: new Date().toISOString(),
   // --no-fetch stays offline: an avatar downloaded before is still used.
-  repo: { ...identity, root: repoRoot, gitDir, avatar: await ownerAvatar(identity, { allowDownload: args.fetch }) },
-  branch: { head, headSha, snapshot, base, baseRef, baseSource, mergeBase, pr: pr ? { number: pr.number, url: pr.url, title: pr.title } : null },
+  repo: { ...identity, root: repoRoot, gitDir, web, avatar: await ownerAvatar(identity, { allowDownload: args.fetch }) },
+  branch: { head, headSha, snapshot, base, baseRef, baseSource, mergeBase, pr: pr ? { number: pr.number, url: pr.url, title: pr.title, state: pr.state } : null, upstream },
   scope: { mode, from, includesUncommitted: args.uncommitted, files: args.files ?? null },
   ...(sinceRound ? { sinceRound } : {}),
   commits,

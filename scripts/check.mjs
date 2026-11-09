@@ -39,6 +39,8 @@ try {
   if (!collected.includes("Safety checks: 1 high, 0 medium, 1 low")) fail("collect.mjs safety checks did not find the slug migration problems");
   const books = JSON.parse(readFileSync(join(repo, ".git/pr-report/feat-books/diff.json"), "utf8"));
   if (books.repo.avatar?.initials !== "AL" || books.repo.avatar.image !== null) fail(`acme-labs without a cached avatar should get initials AL: ${JSON.stringify(books.repo.avatar)}`);
+  if (books.repo.web?.ownerUrl !== "https://github.com/acme-labs" || books.repo.web.forge !== "github") fail(`collect.mjs did not find the repo's web links: ${JSON.stringify(books.repo.web)}`);
+  if (books.branch.upstream !== null) fail("feat/books is not on the remote, but collect.mjs says it is");
 
   // Edge cases in a second repo. The key-shaped value is built at runtime, so no literal secret is stored here.
   const edgeRepo = join(tmp, "edge");

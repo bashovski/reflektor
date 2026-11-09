@@ -2,8 +2,9 @@ import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal
 import { useChecks } from "../lib/checks";
 import { BASE_SOURCE, REVIEW, TAGS, TARGETS } from "../lib/meta";
 import { useReport } from "../lib/state";
+import { OwnerMenu } from "./OwnerMenu";
 import { PrDescription } from "./PrDescription";
-import { cx, Dot, LocCount, OwnerAvatar, Pill } from "./ui";
+import { cx, Dot, LocCount, Pill } from "./ui";
 
 export const TopBar = ({ onSettings }: { onSettings: () => void }) => {
   const { bundle } = useReport();
@@ -12,8 +13,7 @@ export const TopBar = ({ onSettings }: { onSettings: () => void }) => {
     <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg)]/85 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-3 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-2 text-sm">
-          <OwnerAvatar avatar={repo.avatar} className="size-6 text-[11px]" />
-          <span className="truncate text-zinc-500">{repo.owner}</span>
+          <OwnerMenu />
           {repo.owner && <span className="text-zinc-400">/</span>}
           <span className="truncate font-semibold">{repo.name}</span>
         </div>

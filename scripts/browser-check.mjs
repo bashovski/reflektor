@@ -71,6 +71,17 @@ try {
   await expectVisible(page.getByRole("heading", { name: /Save and list books in the library/ }), "the report after the draft");
   await expectVisible(page.getByRole("button", { name: "Looks good, tell Claude" }), "Send once the report is ready");
 
+  // The owner menu links to the owner's page, the inbox, and a new pull request filled in from the report.
+  await page.getByRole("button", { name: /acme-labs/ }).click();
+  await expectVisible(page.getByRole("menuitem", { name: /Open Owner Page/ }), "the owner page link");
+  await expectVisible(page.getByRole("menuitem", { name: /View All Reports/ }), "the inbox link");
+  const newPr = page.getByRole("menuitem", { name: /Open Pull Request.*feat\/books is not pushed yet/ });
+  if (await expectVisible(newPr, "the new pull request link with the not-pushed warning")) {
+    const href = await newPr.getAttribute("href");
+    if (!href?.startsWith("https://github.com/acme-labs/library/compare/main...feat/books?expand=1&title=")) fail(`the new pull request link does not point at GitHub's compare form: ${href}`);
+  }
+  await page.keyboard.press("Escape");
+
   // 3. Comments: one on the whole change, and "Fix this" on a risk.
   await page.getByRole("button", { name: "General comment" }).click();
   await page.getByPlaceholder("A comment about the whole change").fill("Rename slug to handle");
@@ -134,7 +145,7 @@ try {
 
   const unexpected = errors.filter((e) => !/favicon/.test(e));
   if (unexpected.length) fail(`errors in the page:\n${unexpected.join("\n")}`);
-  console.log("browser: draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, changed-code warning, inbox grouping and search all worked");
+  console.log("browser: draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, changed-code warning, inbox grouping and search all worked");
 } catch (e) {
   fail(e.stderr?.toString() || e.stack || e.message);
 } finally {

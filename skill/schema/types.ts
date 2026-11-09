@@ -30,6 +30,7 @@ export type DiffFile = {
 };
 
 export type BaseSource = "argument" | "open-pr" | "config" | "default-branch" | "guess";
+export type Forge = "github" | "gitlab" | "bitbucket";
 
 export type Commit = { sha: string; short: string; subject: string; author: string; date: string };
 
@@ -75,7 +76,16 @@ export type DiffData = {
   version: 1;
   generatedAt: string;
   // avatar is missing in reports collected before avatars existed.
-  repo: { host: string | null; owner: string | null; name: string; root: string; gitDir: string; avatar?: RepoAvatar };
+  repo: {
+    host: string | null;
+    owner: string | null;
+    name: string;
+    root: string;
+    gitDir: string;
+    // The repo and its owner on the web, when the remote names both. `forge` picks the pull request URL layout.
+    web?: { url: string; ownerUrl: string; forge: Forge | null } | null;
+    avatar?: RepoAvatar;
+  };
   branch: {
     head: string;
     headSha: string;
@@ -85,7 +95,10 @@ export type DiffData = {
     baseRef: string;
     baseSource: BaseSource;
     mergeBase: string;
-    pr: { number: number; url: string; title: string } | null;
+    // The branch's pull request on GitHub, in any state. Reports from before `state` count as open.
+    pr: { number: number; url: string; title: string; state?: "OPEN" | "CLOSED" | "MERGED" } | null;
+    // The branch on the remote as of the last fetch or push, and commits not pushed yet. Null when it is not on the remote.
+    upstream?: { ref: string; ahead: number } | null;
   };
   scope: { mode: "branch" | "since" | "files" | "since+files"; from: string; includesUncommitted: boolean; files: string[] | null };
   // collect.mjs --update: what changed since the round the reviewer sent. `from` is the snapshot
