@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 import type { BundledTheme } from "shiki/themes";
 import { type DiffStyle, type ThemeChoice, useReport } from "../lib/state";
 import { codeThemesFor, type ThemeMode } from "../lib/themes";
-import { cx, Kbd } from "./ui";
+import { cx, Kbd, MOD_KEY } from "./ui";
 
 export const SHORTCUTS = [
   ["j", "Next file"],
@@ -13,6 +13,7 @@ export const SHORTCUTS = [
   ["f", "Show the current file in full"],
   ["c", "Comment on the current file"],
   ["?", "Open these settings"],
+  [`${MOD_KEY}+Enter`, "Send the review to Claude"],
 ] as const;
 
 // A row of equal buttons, one of them chosen. Shared with the setup page.
@@ -126,7 +127,11 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
           <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
             {SHORTCUTS.map(([key, label]) => (
               <li key={key} className="flex items-center gap-2.5">
-                <Kbd name={key} />
+                <span className="inline-flex items-center gap-0.5">
+                  {key.split("+").map((k) => (
+                    <Kbd key={k} name={k} />
+                  ))}
+                </span>
                 <span className="text-zinc-600 dark:text-zinc-400">{label}</span>
               </li>
             ))}

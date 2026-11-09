@@ -27,14 +27,23 @@ import { SetupBanner } from "./SetupBanner";
 import { Sidebar } from "./Sidebar";
 
 const useShortcuts = (onHelp: () => void) => {
-  const { orderedFiles, current, setCurrent, toggleViewed, isFileOpen, setFileOpen, jumpTo, openModal, modal } = useReport();
-  const { openComposer, editable } = useReview();
+  const { orderedFiles, current, setCurrent, toggleViewed, isFileOpen, setFileOpen, jumpTo, openModal, modal, bundle } = useReport();
+  const { openComposer, editable, submit, sent, mode } = useReview();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || modal) return;
       const target = e.target as HTMLElement;
-      if (target.closest("input, textarea, select, [contenteditable]")) return;
+      const inField = Boolean(target.closest("input, textarea, select, [contenteditable]"));
+      // Ctrl+Enter (Cmd+Enter on a Mac) sends the review, like the button in the bar. A comment box takes the same
+      // keys to save its comment, so inside one the box wins.
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !inField && !modal) {
+        if (mode === "server" && !sent && !bundle.draft) {
+          e.preventDefault();
+          void submit();
+        }
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || modal || inField) return;
 
       const index = current ? orderedFiles.indexOf(current) : -1;
       const go = (i: number) => {
@@ -59,7 +68,7 @@ const useShortcuts = (onHelp: () => void) => {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [orderedFiles, current, setCurrent, toggleViewed, isFileOpen, setFileOpen, jumpTo, openModal, modal, onHelp, openComposer, editable]);
+  }, [orderedFiles, current, setCurrent, toggleViewed, isFileOpen, setFileOpen, jumpTo, openModal, modal, onHelp, openComposer, editable, submit, sent, mode, bundle.draft]);
 };
 
 const Warnings = () => {

@@ -7,7 +7,7 @@ import { useReport } from "../lib/state";
 import { Composer } from "./Comments";
 import { PlanPanel } from "./PlanPanel";
 import { RichText } from "./RichText";
-import { cx, Pill } from "./ui";
+import { cx, Kbd, KEY_LABELS, MOD_KEY, Pill } from "./ui";
 
 const REPORT_TARGET: CommentTarget = { type: "report" };
 
@@ -245,11 +245,24 @@ export const ReviewBar = () => {
                 type="button"
                 onClick={review.submit}
                 disabled={draft}
-                title={draft ? "Claude is still writing the notes. Your comments are saved meanwhile." : comments.length ? undefined : "Looks good to me: tell Claude the review is done, with no comments."}
+                title={
+                  draft
+                    ? "Claude is still writing the notes. Your comments are saved meanwhile."
+                    : comments.length
+                      ? `Send your comments to Claude (${KEY_LABELS[MOD_KEY]}+Enter)`
+                      : `Looks good to me: tell Claude the review is done, with no comments (${KEY_LABELS[MOD_KEY]}+Enter)`
+                }
                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
               >
                 {draft ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
                 {draft ? "Claude is writing the notes" : comments.length ? `Send ${comments.length} to Claude` : "LGTM"}
+                {!draft && (
+                  // aria-hidden keeps the button's name to its text; the keys are a hint for sighted users.
+                  <span className="ml-0.5 inline-flex items-center gap-0.5" aria-hidden>
+                    <Kbd name={MOD_KEY} className="h-[18px] min-w-[18px] border-white/25 bg-white/15 text-white shadow-none" />
+                    <Kbd name="Enter" className="h-[18px] min-w-[18px] border-white/25 bg-white/15 text-white shadow-none" />
+                  </span>
+                )}
               </button>
             </>
           ) : (

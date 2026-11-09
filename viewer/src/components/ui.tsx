@@ -30,6 +30,9 @@ export const KEY_LABELS: Record<string, string> = {
   " ": "Space",
 };
 
+// The modifier that pairs with Enter in shortcuts: Cmd on a Mac, Ctrl everywhere else.
+export const MOD_KEY = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "Meta" : "Control";
+
 // A key cap: a small rounded rectangle with a hairline border and a one-pixel ledge under it, the way
 // Linear draws shortcuts. `name` is the key as KeyboardEvent.key gives it ("Enter", "j", "?").
 export const Kbd = ({ name, className }: { name: string; className?: string }) => (

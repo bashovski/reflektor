@@ -141,7 +141,8 @@ try {
   await expectVisible(page.getByRole("button", { name: "Send 2 to Claude" }), "Send with two comments");
 
   // 4. Sent with no session listening: after 15 seconds the page says how to pick it up.
-  await page.getByRole("button", { name: "Send 2 to Claude" }).click();
+  // Ctrl+Enter sends, the same as the button.
+  await page.keyboard.press("Control+Enter");
   await expectVisible(page.getByText("Sent round 1 with 2 comments"), "the sent state");
   await expectVisible(page.getByText("No Claude session is listening for this review."), "the warning that no session listens", 25_000);
   await expectVisible(page.getByRole("button", { name: "/pr-report resume" }), "the resume command");
