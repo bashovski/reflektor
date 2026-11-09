@@ -22,7 +22,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const daemonScript = join(here, "daemon.mjs");
 const daemonFile = join(HOME, "daemon.json");
-const expectedVersion = createHash("sha1").update(readFileSync(daemonScript)).digest("hex").slice(0, 12);
+// Read from disk each time: a waiter that started before the skill was updated must take the new
+// daemon as current, not shut it down as out of date.
+const expectedVersion = () => createHash("sha1").update(readFileSync(daemonScript)).digest("hex").slice(0, 12);
 
 const [command, ...rest] = process.argv.slice(2);
 const args = {};
@@ -59,7 +61,7 @@ async function health(info) {
 async function ensureDaemon() {
   let info = readJson(daemonFile);
   let status = info && (await health(info));
-  if (status && status.version !== expectedVersion) {
+  if (status && status.version !== expectedVersion()) {
     // The skill was updated: replace the running daemon with the new code.
     await fetch(`http://127.0.0.1:${info.port}/api/shutdown`, { method: "POST", headers: { "x-admin-token": info.adminToken } }).catch(() => {});
     for (let i = 0; i < 30 && (await health(info)); i++) await sleep(100);
@@ -74,7 +76,7 @@ async function ensureDaemon() {
   for (let i = 0; i < 80; i++) {
     await sleep(100);
     info = readJson(daemonFile);
-    if (info && info.version === expectedVersion && (await health(info))) return info;
+    if (info && info.version === expectedVersion() && (await health(info))) return info;
   }
   throw new Error(`The daemon did not start. See ${join(HOME, "daemon.log")}`);
 }

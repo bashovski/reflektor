@@ -11,7 +11,7 @@
 
 import { execFile } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { connect } from "node:net";
 import { homedir } from "node:os";
@@ -41,9 +41,11 @@ const readJson = (file, fallback) => {
     return fallback;
   }
 };
+// The temp file carries the pid, so two processes writing the same file never move each other's.
 const writeJson = (file, value, mode) => {
-  writeFileSync(`${file}.tmp`, JSON.stringify(value, null, 2), mode ? { mode } : undefined);
-  replaceFile(`${file}.tmp`, file);
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(value, null, 2), mode ? { mode } : undefined);
+  replaceFile(tmp, file);
 };
 const now = () => new Date().toISOString();
 const pidAlive = (pid) => {
@@ -57,16 +59,27 @@ const pidAlive = (pid) => {
 
 // ------------------------------------------------------------------ single instance
 
+// The lock file holds its owner's pid. A daemon writes the pid just after creating the file, so an
+// empty lock a few seconds old at most belongs to a daemon starting right now. Treating it as stale
+// let two daemons start together when several sessions restarted the daemon at once.
+const lockOwner = () => {
+  try {
+    return { pid: Number(readFileSync(lockFile, "utf8")), age: Date.now() - statSync(lockFile).mtimeMs };
+  } catch {
+    return null;
+  }
+};
 function takeLock() {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      closeSync(openSync(lockFile, "wx"));
-      writeFileSync(lockFile, String(process.pid));
+      writeFileSync(lockFile, String(process.pid), { flag: "wx" });
       return true;
     } catch {
-      const owner = Number(readFileSync(lockFile, "utf8"));
-      if (owner && pidAlive(owner)) return false;
-      rmSync(lockFile, { force: true });
+      const owner = lockOwner();
+      if (!owner) continue;
+      if (owner.pid ? pidAlive(owner.pid) : owner.age < 5000) return false;
+      // Stale: its daemon is gone. Remove it only if it still names that daemon, not one that took it since.
+      if (lockOwner()?.pid === owner.pid) rmSync(lockFile, { force: true });
     }
   }
   return false;
@@ -1049,7 +1062,7 @@ async function listen(port, attempt = 0) {
 }
 
 const cleanup = () => {
-  rmSync(lockFile, { force: true });
+  if (lockOwner()?.pid === process.pid) rmSync(lockFile, { force: true });
   const info = readJson(daemonFile, {});
   if (info.pid === process.pid) rmSync(daemonFile, { force: true });
 };

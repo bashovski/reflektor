@@ -351,8 +351,8 @@ const save = (status) => {
     status === "running"
       ? { version: 1, status, pid: process.pid, startedAt, headSha, checks: checks.map((c) => c.name), results }
       : { version: 1, status, startedAt, ranAt: new Date().toISOString(), headSha, results };
-  writeFileSync(`${out}.tmp`, JSON.stringify(run, null, 2));
-  replaceFile(`${out}.tmp`, out);
+  writeFileSync(`${out}.${process.pid}.tmp`, JSON.stringify(run, null, 2));
+  replaceFile(`${out}.${process.pid}.tmp`, out);
 };
 mkdirSync(dirname(out), { recursive: true });
 save("running");

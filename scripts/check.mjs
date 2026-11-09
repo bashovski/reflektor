@@ -6,7 +6,7 @@
 // Usage: node scripts/check.mjs [--open]
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -175,6 +175,7 @@ try {
 
   await daemonFlow();
   updateFlow();
+  await concurrentStart();
 } catch (e) {
   fail(e.stderr?.toString() || e.message);
 } finally {
@@ -441,6 +442,35 @@ function updateFlow() {
   // collect prints the path with forward slashes on every OS (shellPath), so compare with those.
   if (!other.includes(".git/pr-report/feat-other/diff.json")) fail(`a second branch in the same checkout did not get its own report folder:\n${other.split("\n")[0]}`);
   console.log("next round: whole branch with the change since round 1, references moved once, PR description only from whole-branch builds");
+}
+
+// Several sessions can start the daemon at the same moment, as when the skill is updated while
+// waiters run. Exactly one daemon must come up, none may crash, and an empty lock file left by a
+// crash long ago must not block it.
+async function concurrentStart() {
+  const home = join(tmp, "concurrent-home");
+  mkdirSync(home, { recursive: true });
+  writeFileSync(join(home, "daemon.lock"), "");
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(join(home, "daemon.lock"), old, old);
+  const env = { ...process.env, PR_REPORT_HOME: home, PR_REPORT_PORT: String(5000 + Math.floor(Math.random() * 300)) };
+  const daemons = Array.from({ length: 6 }, () => {
+    const child = spawn("node", [join(root, "skill/scripts/daemon.mjs")], { env, stdio: ["ignore", "pipe", "pipe"] });
+    child.output = "";
+    child.stdout.on("data", (d) => (child.output += d));
+    child.stderr.on("data", (d) => (child.output += d));
+    return child;
+  });
+  for (let i = 0; i < 60 && daemons.filter((d) => d.exitCode === null).length > 1; i++) await sleep(100);
+  await sleep(500);
+  const running = daemons.filter((d) => d.exitCode === null);
+  const info = JSON.parse(readFileSync(join(home, "daemon.json"), "utf8"));
+  if (running.length !== 1 || running[0].pid !== info.pid) fail(`${running.length} daemons kept running after 6 started at once:\n${daemons.map((d) => d.output).join("")}`);
+  const crashed = daemons.find((d) => /Error|Assertion/.test(d.output));
+  if (crashed) fail(`a daemon crashed when 6 started at once:\n${crashed.output}`);
+  for (const d of running) d.kill();
+  await sleep(200);
+  console.log("concurrent start: one daemon out of 6 started at once, past an old empty lock");
 }
 
 if (failed) process.exitCode = 1;
