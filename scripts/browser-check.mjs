@@ -104,7 +104,7 @@ try {
   const realOut = script("build.mjs", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)[1];
   review("open", "--report", realOut);
   await expectVisible(page.getByRole("heading", { name: /Save and list books in the library/ }), "the report after the draft");
-  await expectVisible(page.getByRole("button", { name: "Looks good, tell Claude" }), "Send once the report is ready");
+  await expectVisible(page.getByRole("button", { name: "LGTM" }), "Send once the report is ready");
 
   // The owner menu links to the owner's page, the inbox, and a new pull request filled in from the report.
   await page.getByRole("button", { name: /acme-labs/ }).click();
@@ -141,7 +141,8 @@ try {
   await expectVisible(page.getByRole("button", { name: "Send 2 to Claude" }), "Send with two comments");
 
   // 4. Sent with no session listening: after 15 seconds the page says how to pick it up.
-  await page.getByRole("button", { name: "Send 2 to Claude" }).click();
+  // Ctrl+Enter sends, the same as the button.
+  await page.keyboard.press("Control+Enter");
   await expectVisible(page.getByText("Sent round 1 with 2 comments"), "the sent state");
   await expectVisible(page.getByText("No Claude session is listening for this review."), "the warning that no session listens", 25_000);
   await expectVisible(page.getByRole("button", { name: "/pr-report resume" }), "the resume command");
