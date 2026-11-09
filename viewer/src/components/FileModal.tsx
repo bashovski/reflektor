@@ -3,13 +3,13 @@ import { File as CodeFile, type FileDiffOptions, type FileOptions, MultiFileDiff
 import { X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useReport } from "../lib/state";
-import { DIFF_THEME, HIGHLIGHTER, toDiffInput } from "./FileCard";
+import { HIGHLIGHTER, toDiffInput } from "./FileCard";
 import { cx, FileIcon, LocCount } from "./ui";
 
 type Mode = "changes" | "file";
 
 export const FileModal = () => {
-  const { modal, openModal, branchFiles: filesByPath, bundle, resolvedTheme, diffStyle } = useReport();
+  const { modal, openModal, branchFiles: filesByPath, bundle, resolvedTheme, diffStyle, codeTheme } = useReport();
   const ref = useRef<HTMLDialogElement>(null);
   const [mode, setMode] = useState<Mode>("changes");
 
@@ -32,12 +32,12 @@ export const FileModal = () => {
   }, [modal, contextText, contents]);
 
   const diffOptions = useMemo<FileDiffOptions<undefined, undefined>>(
-    () => ({ theme: DIFF_THEME, themeType: resolvedTheme, preferredHighlighter: HIGHLIGHTER, diffStyle, disableFileHeader: true, expandUnchanged: true }),
-    [resolvedTheme, diffStyle],
+    () => ({ theme: codeTheme, themeType: resolvedTheme, preferredHighlighter: HIGHLIGHTER, diffStyle, disableFileHeader: true, expandUnchanged: true }),
+    [codeTheme, resolvedTheme, diffStyle],
   );
   const fileOptions = useMemo<FileOptions<undefined, undefined>>(
-    () => ({ theme: DIFF_THEME, themeType: resolvedTheme, preferredHighlighter: HIGHLIGHTER, disableFileHeader: true }),
-    [resolvedTheme],
+    () => ({ theme: codeTheme, themeType: resolvedTheme, preferredHighlighter: HIGHLIGHTER, disableFileHeader: true }),
+    [codeTheme, resolvedTheme],
   );
 
   const line = modal?.line;

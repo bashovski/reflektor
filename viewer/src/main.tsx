@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import type { Bundle } from "../../skill/schema/types";
 import { App } from "./components/App";
 import { fetchRound, LiveProvider, useLive } from "./lib/live";
+import { PreferencesProvider } from "./lib/prefs";
 import { RoundCtx } from "./lib/rounds";
 import "./index.css";
 
@@ -55,6 +56,8 @@ const Load = () => {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Load />
+    <PreferencesProvider>
+      <Load />
+    </PreferencesProvider>
   </StrictMode>,
 );

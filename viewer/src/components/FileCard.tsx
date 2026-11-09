@@ -40,8 +40,6 @@ const LineComment = ({ id }: { id: string }) => {
   ) : null;
 };
 
-// One Dark Pro for dark mode and its Atom sibling One Light for light mode, both bundled with the diff library.
-export const DIFF_THEME = { dark: "one-dark-pro", light: "one-light" } as const;
 // Highlights colors code with WebAssembly lexers, several times faster than Shiki's regex engine.
 export const HIGHLIGHTER = canUseWASM() ? "highlights" : "shiki-js";
 
@@ -106,7 +104,7 @@ const CoveragePill = ({ covered, uncovered }: { covered: number; uncovered: numb
 };
 
 export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
-  const { filesByPath, bundle, diffStyle, resolvedTheme, isViewed, toggleViewed, isFileOpen, setFileOpen, current, setCurrent, focus, openModal, view, sinceRound } =
+  const { filesByPath, bundle, diffStyle, resolvedTheme, codeTheme, isViewed, toggleViewed, isFileOpen, setFileOpen, current, setCurrent, focus, openModal, view, sinceRound } =
     useReport();
   const file = filesByPath.get(sectionFile.path)!;
   const path = file.path;
@@ -168,7 +166,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
 
   const options = useMemo<FileDiffOptions<AnnotationMeta, undefined>>(
     () => ({
-      theme: DIFF_THEME,
+      theme: codeTheme,
       themeType: resolvedTheme,
       preferredHighlighter: HIGHLIGHTER,
       diffStyle,
@@ -180,7 +178,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
       enableGutterUtility: editable,
       onGutterUtilityClick: (range: SelectedLineRange) => onGutter.current(range),
     }),
-    [resolvedTheme, diffStyle, uncoveredCss, editable],
+    [codeTheme, resolvedTheme, diffStyle, uncoveredCss, editable],
   );
 
   const focused = focus?.path === path && focus.line ? focus : null;
