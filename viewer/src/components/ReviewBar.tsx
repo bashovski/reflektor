@@ -1,4 +1,4 @@
-import { CircleCheck, ClipboardCopy, ListChecks, ListOrdered, Loader2, MessageCircleQuestion, MessageSquarePlus, Send, X } from "lucide-react";
+import { CircleCheck, ClipboardCopy, ListChecks, ListOrdered, Loader2, MessageCircleQuestion, MessageSquarePlus, Send, TriangleAlert, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CommentTarget, ReviewComment } from "../../../skill/schema/types";
 import { COMMENT_KINDS } from "../lib/meta";
@@ -10,6 +10,10 @@ import { RichText } from "./RichText";
 import { cx, Kbd, KEY_LABELS, MOD_KEY, Pill } from "./ui";
 
 const REPORT_TARGET: CommentTarget = { type: "report" };
+
+// The bar floats above the page instead of running edge to edge, so it reads as a control and not as a footer.
+const floating = "pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-3 sm:px-6";
+const panel = "pointer-events-auto w-full max-w-[1100px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 shadow-xl shadow-black/15 backdrop-blur";
 
 // Every risk, gap, flow error and unfinished plan item is a problem the reviewer should decide on.
 const useProblems = () => {
@@ -143,13 +147,14 @@ export const ReviewBar = () => {
     const Icon = review.phase === "planning" ? ListOrdered : review.phase === "done" || review.latestRound > round ? CircleCheck : Loader2;
 
     return (
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur">
-        {review.phase === "planning" && review.plan && review.latestRound === round && (
-          <div className="mx-auto max-h-[55vh] max-w-[1440px] overflow-auto border-b border-[var(--border)] px-4 py-3 sm:px-6">
-            <PlanPanel />
-          </div>
-        )}
-        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm sm:px-6">
+      <div className={floating}>
+        <div className={cx(panel, "rise")}>
+          {review.phase === "planning" && review.plan && review.latestRound === round && (
+            <div className="max-h-[55vh] overflow-auto border-b border-[var(--border)] px-4 py-3">
+              <PlanPanel />
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
           <Icon className={cx("size-4", Icon === Loader2 ? "animate-spin text-violet-500" : Icon === ListOrdered ? "text-violet-500" : "text-emerald-500")} />
           <span>{message}</span>
           {review.phase === "working" && total > 0 && (
@@ -161,6 +166,7 @@ export const ReviewBar = () => {
           {stale && <ResumeHint text="No update from Claude for 10 minutes. If its session ended," />}
           {!review.connected && <span className="text-xs text-red-600 dark:text-red-400">Not connected to the review server.</span>}
           {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
+          </div>
         </div>
       </div>
     );
@@ -172,9 +178,10 @@ export const ReviewBar = () => {
   };
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur">
+    <div className={floating}>
+      <div className={panel}>
       {(listOpen || composingGeneral) && (
-        <div className="mx-auto max-h-[45vh] max-w-[1440px] overflow-auto border-b border-[var(--border)] px-4 py-3 sm:px-6">
+        <div className="max-h-[45vh] overflow-auto border-b border-[var(--border)] px-4 py-3">
           {composingGeneral && <Composer target={REPORT_TARGET} placeholder="A comment about the whole change" />}
           {listOpen && (
             <ul className="space-y-1.5">
@@ -199,15 +206,18 @@ export const ReviewBar = () => {
           )}
         </div>
       )}
-      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 text-sm sm:px-6">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 text-sm">
+        {/* One chip for the risks and gaps: how many still wait for a decision. It also says when LGTM is honest. */}
         {problems.length > 0 && (
-          <span className="inline-flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-            <span className="font-semibold text-zinc-800 dark:text-zinc-200">{problems.length} problems:</span>
-            <span>{queued} to fix</span>
-            <span>·</span>
-            <span>{fine} fine</span>
-            <span>·</span>
-            <span className={cx(open > 0 && "font-medium text-amber-700 dark:text-amber-400")}>{open} not decided</span>
+          <span
+            title={`${problems.length} risks and gaps: ${queued} to fix, ${fine} fine, ${open} not decided`}
+            className={cx(
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset tabular-nums",
+              open > 0 ? "bg-amber-500/[0.08] text-amber-700 ring-amber-500/25 dark:text-amber-300" : "bg-emerald-500/[0.08] text-emerald-700 ring-emerald-500/25 dark:text-emerald-300",
+            )}
+          >
+            {open > 0 ? <TriangleAlert className="size-3.5" /> : <CircleCheck className="size-3.5" />}
+            {open > 0 ? `${open} of ${problems.length} ${problems.length === 1 ? "risk" : "risks"} not decided` : `All ${problems.length} ${problems.length === 1 ? "risk" : "risks"} decided`}
           </span>
         )}
         <button
@@ -240,7 +250,7 @@ export const ReviewBar = () => {
         <span className="ml-auto inline-flex items-center gap-3">
           {mode === "server" ? (
             <>
-              <span className="text-[11px] text-zinc-400">{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}</span>
+              <span className={cx("text-[11px] text-zinc-400", saveState === "saved" && "fade-out")}>{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}</span>
               <button
                 type="button"
                 onClick={review.submit}
@@ -280,6 +290,7 @@ export const ReviewBar = () => {
             </>
           )}
         </span>
+      </div>
       </div>
     </div>
   );
