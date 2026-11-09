@@ -87,6 +87,25 @@ try {
   if (edgeContracts.map((c) => c.name).join() !== "Status,LIMIT,api") fail(`unexpected contracts after the build: ${edgeContracts.map((c) => c.name).join()}`);
   if (!edgeContracts.find((c) => c.name === "api")?.generated) fail("a contract in a generated file was not marked generated");
 
+  // Base branch without a remote default or a config: the branch this one forked from, unless a
+  // common name exists. "old" forked earlier, "feat-copy" holds every commit of feat, so neither counts.
+  const basesRepo = join(tmp, "bases");
+  mkdirSync(basesRepo, { recursive: true });
+  const at = (date, cmd) => `GIT_AUTHOR_DATE="${date}" GIT_COMMITTER_DATE="${date}" git -c user.name=t -c user.email=t@t ${cmd}`;
+  run(bash, ["-c", [
+    `cd "${basesRepo}" && git init -q -b release`,
+    `echo one > a.txt && git add a.txt && ${at("2024-01-01T10:00:00", "commit -q -m one")}`,
+    `git checkout -qb old && echo old > old.txt && git add old.txt && ${at("2024-01-01T11:00:00", "commit -q -m old")}`,
+    `git checkout -q release && echo two > a.txt && git add a.txt && ${at("2024-01-02T10:00:00", "commit -q -m two")}`,
+    `git checkout -qb feat && echo three > a.txt && git add a.txt && ${at("2024-01-03T10:00:00", "commit -q -m three")}`,
+    `git checkout -qb feat-copy && echo four > b.txt && git add b.txt && ${at("2024-01-04T10:00:00", "commit -q -m four")}`,
+    `git checkout -q feat`,
+  ].join(" && ")]);
+  const collectBases = () => run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", basesRepo, "--no-fetch", "--out", join(tmp, "bases.json")], home);
+  if (!collectBases().includes("feat → release (guess)")) fail("collect.mjs did not pick the branch feat forked from as the base");
+  run(bash, ["-c", `cd "${basesRepo}" && git branch main release`]);
+  if (!collectBases().includes("feat → main (guess)")) fail("collect.mjs did not prefer a common branch name over the fork point");
+
   // Saved checks: worked out once per repo and reused, skipped when nothing they cover changed, out
   // of date when the file they came from changes or a command is missing.
   const checks = (...a) => run("node", [join(root, "skill/scripts/checks.mjs"), "--repo", edgeRepo, ...a], home);

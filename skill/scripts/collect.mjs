@@ -149,6 +149,33 @@ function findPr() {
 }
 const pr = findPr();
 
+// Branch names that are usually the one a PR goes into, tried in this order when the remote has no
+// default branch to ask.
+const COMMON_BASES = ["main", "master", "develop", "staging", "demo", "trunk"];
+
+// The branch this one most recently forked from: of every other branch, the one whose merge base
+// with HEAD is the newest commit. Another feature branch cut from the same spot ties with the real
+// base, so remote branches win ties, then the alphabet. A branch that already holds every commit of
+// HEAD is a copy or a descendant, not a base, so it is left out. Only the 50 most recently committed
+// branches are tried, to keep this quick in a repo with hundreds.
+function forkedFrom() {
+  const patterns = ["refs/heads", ...(remote ? [`refs/remotes/${remote}`] : [])];
+  const refs = (tryGit("for-each-ref", "--sort=-committerdate", "--count=50", "--format=%(refname:short)", ...patterns) ?? "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((ref) => ref && ref !== head && ref !== `${remote}/HEAD` && ref !== `${remote}/${head}`);
+  let best = null;
+  for (const ref of refs) {
+    const forkPoint = tryGit("merge-base", "HEAD", ref)?.trim();
+    if (!forkPoint || forkPoint === headSha) continue;
+    const time = Number(tryGit("show", "-s", "--format=%ct", forkPoint)?.trim() ?? 0);
+    const onRemote = Boolean(remote) && ref.startsWith(`${remote}/`);
+    const wins = !best || time > best.time || (time === best.time && (onRemote !== best.onRemote ? onRemote : ref < best.ref));
+    if (wins) best = { ref, time, onRemote };
+  }
+  return best ? best.ref.replace(`${remote}/`, "") : undefined;
+}
+
 let base;
 let baseSource;
 if (args.base) {
@@ -166,7 +193,7 @@ if (args.base) {
     base = symbolic.trim().replace(`${remote}/`, "");
     baseSource = "default-branch";
   } else {
-    base = ["main", "master", "develop", "trunk"].find((b) => refExists(b) || (remote && refExists(`${remote}/${b}`)));
+    base = COMMON_BASES.find((b) => refExists(b) || (remote && refExists(`${remote}/${b}`))) ?? forkedFrom();
     baseSource = "guess";
   }
 }
