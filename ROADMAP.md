@@ -19,6 +19,7 @@
 - Inbox archive, restore and delete; one report folder per branch
 - Inbox grouped by repo owner, with group, sort and filter menus, fuzzy search (Fuse.js), and colored type pills with icons
 - Owner menu in the review page: the owner's page, all reports, and the branch's pull request, or a new one filled in from the report
+- Live pull request state: told by the agent when it opens one, polled from GitHub with ETags while the page is open; a state pill in the header, a banner and done before-merge items on merge, a merged status in the inbox
 - Project checks ask first when the branch has commits by someone else
 - Speed: diffs render only near the screen, code colored with WebAssembly lexers, the daemon serves the viewer as cached files and each report is only its data (44-file change: 2.4 s frozen and 161 MB before, under 0.3 s and 37 MB after)
 

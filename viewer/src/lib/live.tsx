@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
-import type { Bundle, ChecksRun, CommentKind, LiveQuestion, Ref, ReviewComment } from "../../../skill/schema/types";
+import type { Bundle, ChecksRun, CommentKind, LiveQuestion, PrState, Ref, ReviewComment } from "../../../skill/schema/types";
 
 // Live state of a review, streamed from the pr-report daemon.
 //
@@ -25,6 +25,9 @@ export type AgentPlan = {
   createdAt: string;
   decision: { decision: "approve" | "changes"; note: string | null; at: string } | null;
 };
+// The branch's pull request as the daemon last saw it: told by the agent when it opens one, then
+// polled from GitHub while the page is open. `base` and `title` are null when only the URL is known.
+export type LivePr = { number: number; url: string; title: string | null; state: PrState; base: string | null; mergedAt: string | null; checkedAt: string };
 
 export type LiveState = {
   id: string;
@@ -42,6 +45,8 @@ export type LiveState = {
   // Code that changed after this round was built: files (up to 50 of fileCount), new commits, and
   // the branch now checked out when it is another one. Null while the code matches.
   drift: { files: string[]; fileCount: number; commits: number; branch: string | null } | null;
+  // Null when the daemon knows of no pull request; missing in states from an older daemon.
+  pr?: LivePr | null;
   // An agent waits for this review's events (review.mjs wait), and since when the oldest one waits.
   listening: boolean;
   undeliveredSince: string | null;

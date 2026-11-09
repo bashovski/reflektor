@@ -1,7 +1,9 @@
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
-import { ChevronDown, ExternalLink, GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestCreateArrow, Inbox } from "lucide-react";
+import { ChevronDown, ExternalLink, GitPullRequestCreateArrow, Inbox } from "lucide-react";
 import type { ReactNode } from "react";
 import type { DiffData, Forge } from "../../../skill/schema/types";
+import { PR_STATES } from "../lib/meta";
+import { usePr } from "../lib/pr";
 import { useReport } from "../lib/state";
 import { cx, OwnerAvatar } from "./ui";
 
@@ -30,12 +32,6 @@ function newPullRequestUrl(web: NonNullable<DiffData["repo"]["web"]>, base: stri
   return full && full.length > 8000 ? build(null) : full;
 }
 
-const PR_STATES = {
-  OPEN: { label: "open", icon: <GitPullRequest className="text-emerald-600 dark:text-emerald-400" /> },
-  MERGED: { label: "merged", icon: <GitMerge className="text-violet-600 dark:text-violet-400" /> },
-  CLOSED: { label: "closed", icon: <GitPullRequestClosed className="text-red-600 dark:text-red-400" /> },
-};
-
 type Item = { key: string; href: string; external: boolean; icon: ReactNode; label: ReactNode; detail: string; warning?: string };
 
 // The owner's avatar and name in the top bar. Clicking them opens links to the owner's page, the
@@ -44,7 +40,8 @@ export const OwnerMenu = () => {
   const { bundle } = useReport();
   const { repo, branch } = bundle.diff;
   const web = repo.web ?? null;
-  const pr = branch.pr;
+  // Live: a pull request opened or merged after the report was built counts.
+  const pr = usePr();
   const items: Item[] = [];
 
   if (web)
@@ -89,8 +86,16 @@ export const OwnerMenu = () => {
     });
   }
   if (pr) {
-    const state = PR_STATES[pr.state ?? "OPEN"];
-    items.push({ key: "pr", href: pr.url, external: true, icon: state.icon, label: "View Pull Request", detail: `#${pr.number}, ${state.label}: ${pr.title}` });
+    const state = PR_STATES[pr.state];
+    const Icon = state.icon;
+    items.push({
+      key: "pr",
+      href: pr.url,
+      external: true,
+      icon: <Icon className={state.className} />,
+      label: "View Pull Request",
+      detail: `#${pr.number}, ${state.label.toLowerCase()}${pr.title ? `: ${pr.title}` : ""}`,
+    });
   }
 
   const owner = (

@@ -1,9 +1,11 @@
 import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Inbox, Loader2, Settings } from "lucide-react";
 import { useChecks } from "../lib/checks";
 import { BASE_SOURCE, REVIEW, TAGS, TARGETS } from "../lib/meta";
+import { usePr } from "../lib/pr";
 import { useReport } from "../lib/state";
 import { OwnerMenu } from "./OwnerMenu";
 import { PrDescription } from "./PrDescription";
+import { PrStatePill } from "./PullRequest";
 import { cx, Dot, LocCount, Pill } from "./ui";
 
 export const TopBar = ({ onSettings }: { onSettings: () => void }) => {
@@ -45,6 +47,7 @@ export const Hero = () => {
   const { bundle, viewedCount } = useReport();
   const { diff, report } = bundle;
   const { branch, scope, stats, commits, coverage } = diff;
+  const pr = usePr();
 
   const failedChecks = useChecks()?.results.filter((r) => r.status !== "passed").length ?? 0;
   const levelCounts = report.sections.reduce(
@@ -85,9 +88,10 @@ export const Hero = () => {
             ))}
           </ol>
         </details>
-        {branch.pr && (
-          <a href={branch.pr.url} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
-            PR #{branch.pr.number}
+        {pr && (
+          <a href={pr.url} target="_blank" rel="noreferrer" title={pr.title ?? undefined} className="inline-flex items-center gap-1.5 underline-offset-2 hover:underline">
+            PR #{pr.number}
+            <PrStatePill state={pr.state} className="py-0 text-[11px]" />
           </a>
         )}
       </div>

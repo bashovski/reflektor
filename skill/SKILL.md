@@ -305,7 +305,14 @@ build.mjs also writes `pr-description.md` next to the report: the first line is 
 
 1. Ask first: opening a PR is visible to others.
 2. Use the repo's own tool: `gh pr create --title "<title>" --body-file <body file>` for GitHub, `glab mr create --title "<title>" --description "$(cat <body file>)"` for GitLab. Write the body without the title line to a temporary file first.
-3. Without a CLI for the host, give the user the file path; the report page also has a "PR description" button with copy buttons.
+3. On GitHub, tell the review page right after `gh pr create`, with the URL it printed:
+
+   ```bash
+   node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" pr --id <review id> --url <pull request url>
+   ```
+
+   The page then shows the pull request and follows it: when it is merged or closed on GitHub, the open page and the inbox say so without a new report. Skip this when the review was not opened through `review.mjs`.
+4. Without a CLI for the host, give the user the file path; the report page also has a "PR description" button with copy buttons.
 
 ## Pick up a review
 

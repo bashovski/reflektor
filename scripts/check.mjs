@@ -5,12 +5,13 @@
 //
 // Usage: node scripts/check.mjs [--open]
 
-import { execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gitBash } from "../skill/scripts/repo.mjs";
+import { githubPr, startGithubStub } from "./github-stub.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const tmp = mkdtempSync(join(tmpdir(), "pr-report-check-"));
@@ -203,11 +204,27 @@ async function checkAppAssets(base, page) {
 
 // ------------------------------------------------------------------ daemon flow
 // A whole review against a private daemon (own home folder and port), driven like an agent and a page.
+// GitHub is a local stub: the fake repo's remote is on github.com, so the daemon would otherwise ask
+// the real API about it.
 
 async function daemonFlow() {
-  const env = { PR_REPORT_HOME: join(tmp, "home"), PR_REPORT_PORT: String(4400 + Math.floor(Math.random() * 500)), PR_REPORT_DRIFT_SECONDS: "1" };
+  const github = await startGithubStub();
+  const env = {
+    PR_REPORT_HOME: join(tmp, "home"),
+    PR_REPORT_PORT: String(4400 + Math.floor(Math.random() * 500)),
+    PR_REPORT_DRIFT_SECONDS: "1",
+    PR_REPORT_GITHUB_API: github.url,
+    PR_REPORT_GITHUB_TOKEN: "stub-token",
+    PR_REPORT_PR_POLL_SECONDS: "1",
+  };
   const reviewDir = join(tmp, "review");
   const review = (...args) => run("node", [join(root, "skill/scripts/review.mjs"), ...args], env);
+  // For a command the daemon answers only after asking the GitHub stub, which lives in this process:
+  // a blocking call would keep the stub from answering.
+  const reviewAsync = (...args) =>
+    new Promise((resolveOut, reject) =>
+      execFile("node", [join(root, "skill/scripts/review.mjs"), ...args], { cwd: root, encoding: "utf8", env: { ...process.env, ...env } }, (e, stdout) => (e ? reject(e) : resolveOut(stdout))),
+    );
   const build = (out) =>
     run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
   try {
@@ -272,6 +289,59 @@ async function daemonFlow() {
     if (!review("wait", "--id", id).includes("asked for an updated report")) fail("wait did not report the request for an updated report");
     writeFileSync(edited, original);
     if (!(await driftIs((d) => d === null))) fail("undoing the edit did not clear the drift");
+
+    // The pull request, followed on GitHub (the stub) while the review is on screen: conditional
+    // requests, so an unchanged answer is a 304 that costs nothing against the rate limit.
+    await post("presence", { tab: "t1" });
+    const polls = () => github.requests.filter((q) => q.path === "/repos/acme-labs/library/pulls");
+    const pollsUntil = async (test, tries = 40) => {
+      for (let i = 0; i < tries; i++) {
+        if (test()) return true;
+        await sleep(200);
+      }
+      return false;
+    };
+    const prIs = async (test) => {
+      for (let i = 0; i < 40; i++) {
+        if (test((await state()).pr)) return true;
+        await sleep(200);
+      }
+      return false;
+    };
+    if (!(await pollsUntil(() => polls().some((q) => q.status === 304)))) fail("the daemon did not poll GitHub for the pull request with an ETag (no 304 answer)");
+    const firstPoll = polls()[0];
+    if (firstPoll.headers.authorization !== "Bearer stub-token" || firstPoll.headers.accept !== "application/vnd.github+json" || !firstPoll.headers["x-github-api-version"])
+      fail(`the pull request poll lacks GitHub's headers: ${JSON.stringify(firstPoll.headers)}`);
+    if (firstPoll.query.head !== "acme-labs:feat/books" || firstPoll.query.state !== "all" || firstPoll.query.per_page !== "1") fail(`the pull request poll asks for the wrong thing: ${JSON.stringify(firstPoll.query)}`);
+    if ((await state()).pr !== null) fail("a branch without a pull request shows one");
+    github.set([githubPr(7, "open")]);
+    if (!(await prIs((p) => p?.number === 7 && p.state === "OPEN" && p.base === "main" && p.mergedAt === null))) fail("a pull request opened on GitHub did not reach the page state");
+    const openInbox = await (await fetch(`${base}/`)).text();
+    if (!/<span class="pr" data-state="OPEN"[^>]*>.*?#7<\/span>/.test(openInbox)) fail("the inbox row has no chip for the open pull request");
+    // Rate limited: GitHub names a reset time, and the daemon asks nothing until then.
+    github.failNext(403, { "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(Math.ceil(Date.now() / 1000) + 5) });
+    if (!(await pollsUntil(() => polls().at(-1)?.status === 403))) fail("the rate limit answer was never served");
+    const limitedAt = polls().length;
+    await sleep(1500);
+    if (polls().length !== limitedAt) fail("the daemon kept polling GitHub after a 403 with a reset time");
+    if (!(await pollsUntil(() => polls().length > limitedAt, 30))) fail("the daemon did not poll again once the rate limit reset");
+    // The agent opened a pull request: review.mjs pr shows it at once, from the URL gh printed.
+    github.know(githubPr(8, "open"));
+    github.set([githubPr(8, "open"), githubPr(7, "closed")]);
+    const told = await reviewAsync("pr", "--id", id, "--url", "https://github.com/acme-labs/library/pull/8");
+    if (!told.includes("pull request #8 (open)")) fail(`review.mjs pr did not confirm the pull request:\n${told}`);
+    if ((await state()).pr?.number !== 8) fail("review.mjs pr did not put the pull request into the page state");
+    if (!github.requests.some((q) => q.path === "/repos/acme-labs/library/pulls/8")) fail("the daemon did not read the pull request the agent named");
+    // Merged on GitHub: the page and the inbox say so, and the daemon stops asking.
+    github.set([githubPr(8, "closed", "2026-11-09T12:00:00Z")]);
+    if (!(await prIs((p) => p?.state === "MERGED" && p.mergedAt === "2026-11-09T12:00:00Z"))) fail("a merge on GitHub did not reach the page state");
+    const mergedInbox = await (await fetch(`${base}/`)).text();
+    if (!mergedInbox.includes('data-phase="merged"') || !mergedInbox.includes(">Merged</span>") || !mergedInbox.includes('data-state="MERGED"')) fail("the inbox does not show the merged review as merged");
+    if (!mergedInbox.includes("<title>PR reports</title>")) fail("a merged review still counts as waiting on you in the inbox title");
+    const mergedAt = polls().length;
+    await sleep(1500);
+    if (polls().length !== mergedAt) fail("the daemon kept polling GitHub after the pull request was merged");
+    if (JSON.parse(readFileSync(join(reviewDir, "review-state.json"), "utf8")).pr?.state !== "MERGED") fail("the pull request is not saved with the review's state");
 
     // Project checks stream into the page as they run, finish or crash.
     const until = async (test) => {
@@ -361,6 +431,7 @@ async function daemonFlow() {
     await Promise.race([waiterExit, sleep(15_000)]);
     waiter.kill();
     if (!waited.includes("Live question q_2")) fail(`a waiter did not survive a daemon restart:\n${waited}`);
+    if ((await state()).pr?.state !== "MERGED") fail("the new daemon did not load the pull request from the saved state");
 
     build(join(reviewDir, "round3.json"));
     review("open", "--report", join(reviewDir, "round3.json"));
@@ -377,13 +448,16 @@ async function daemonFlow() {
     if (existsSync(reviewDir)) fail("deleting an archived review left its folder");
     if (run("git", ["-C", repo, "for-each-ref", "refs/pr-report/rounds/feat-books/"]).trim()) fail("deleting a review left its round refs");
     if (review("list").includes(id)) fail("a deleted review is still listed");
-    console.log("daemon flow: question, drift, live checks, sent review, resume, plan, status, round 2 finished without code changes, publishing again, waiting through a restart, empty round 3, archive and delete all worked");
+    console.log(
+      "daemon flow: question, drift, pull request polled with ETags, rate limit, told by the agent, merged, live checks, sent review, resume, plan, status, round 2 finished without code changes, publishing again, waiting through a restart, empty round 3, archive and delete all worked",
+    );
   } finally {
     try {
       review("stop");
     } catch {
       // Already stopped.
     }
+    github.close();
   }
 }
 
