@@ -15,7 +15,8 @@ export const SHORTCUTS = [
   ["?", "Open these settings"],
 ] as const;
 
-const Choice = <T extends string>({
+// A row of equal buttons, one of them chosen. Shared with the setup page.
+export const Choice = <T extends string>({
   value,
   onChange,
   options,
@@ -131,6 +132,12 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
             ))}
           </ul>
         </section>
+
+        {window.__PR_REVIEW__ && (
+          <a href="/setup" className="inline-block text-xs text-zinc-500 hover:underline">
+            Run the first-time setup again
+          </a>
+        )}
       </div>
     </dialog>
   );

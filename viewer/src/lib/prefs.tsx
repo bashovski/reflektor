@@ -1,6 +1,7 @@
+import { resolveTheme } from "@pierre/diffs";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { BundledTheme } from "shiki/themes";
-import { codeThemeFor, type ThemeMode } from "./themes";
+import { codeThemeFor, DEFAULT_CODE_THEME, HIGHLIGHTER, type ThemeMode } from "./themes";
 
 // What the reviewer set for themselves. It lives in this browser's localStorage, so every report
 // page, the setup page and the inbox agree. The inbox (daemon.mjs) and index.html read
@@ -53,8 +54,10 @@ export type Preferences = {
   resolvedTheme: ThemeMode;
   diffStyle: DiffStyle;
   setDiffStyle: (s: DiffStyle) => void;
-  // One code theme per mode. The diff renderer gets both and switches with resolvedTheme.
+  // One code theme per mode: the pick, for pickers, and the same pair once both themes are loaded,
+  // for the diff renderer, which switches between them with resolvedTheme.
   codeTheme: Record<ThemeMode, BundledTheme>;
+  renderTheme: Record<ThemeMode, BundledTheme>;
   setCodeTheme: (mode: ThemeMode, id: BundledTheme) => void;
 };
 
@@ -93,9 +96,25 @@ export const PreferencesProvider = ({ children }: { children: ReactNode }) => {
     storage.set(mode === "dark" ? PREF_KEYS.codeThemeDark : PREF_KEYS.codeThemeLight, id);
   }, []);
 
+  // The renderer only ever gets themes that are loaded: asked for one it has not loaded, it logs an
+  // error and draws again once the theme arrives. The defaults ship with the renderer, so they are
+  // the starting point; the picked pair takes over as soon as both of its themes are in.
+  const [renderTheme, setRenderTheme] = useState<Record<ThemeMode, BundledTheme>>(DEFAULT_CODE_THEME);
+  useEffect(() => {
+    let stale = false;
+    const apply = () => {
+      if (!stale) setRenderTheme(codeTheme);
+    };
+    // When a theme cannot load (offline, a chunk missing), the renderer gets it anyway and says so itself.
+    Promise.all([resolveTheme(codeTheme.dark, HIGHLIGHTER), resolveTheme(codeTheme.light, HIGHLIGHTER)]).then(apply, apply);
+    return () => {
+      stale = true;
+    };
+  }, [codeTheme]);
+
   const value = useMemo<Preferences>(
-    () => ({ theme, setTheme, resolvedTheme, diffStyle, setDiffStyle, codeTheme, setCodeTheme }),
-    [theme, setTheme, resolvedTheme, diffStyle, setDiffStyle, codeTheme, setCodeTheme],
+    () => ({ theme, setTheme, resolvedTheme, diffStyle, setDiffStyle, codeTheme, renderTheme, setCodeTheme }),
+    [theme, setTheme, resolvedTheme, diffStyle, setDiffStyle, codeTheme, renderTheme, setCodeTheme],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 };

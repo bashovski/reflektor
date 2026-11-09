@@ -1,4 +1,8 @@
+import { canUseWASM } from "@pierre/diffs";
 import { type BundledTheme, bundledThemesInfo } from "shiki/themes";
+
+// Highlights colors code with WebAssembly lexers, several times faster than Shiki's regex engine.
+export const HIGHLIGHTER = canUseWASM() ? "highlights" : "shiki-js";
 
 export type ThemeMode = "dark" | "light";
 export type CodeTheme = { id: BundledTheme; name: string; mode: ThemeMode };

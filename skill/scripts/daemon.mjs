@@ -425,7 +425,9 @@ const menu = (key, iconName, label, body) =>
 const choices = (name, legend, options) =>
   `<fieldset><legend>${legend}</legend>${options.map(([value, html]) => `<label><input type="${name === "group" || name === "sort" ? "radio" : "checkbox"}" name="${name}" value="${escapeHtml(value)}">${html}</label>`).join("")}</fieldset>`;
 
-function inboxPage() {
+// The inbox. `welcome` is set when the setup page hands over to it, so a first-timer is told they are
+// done and how to start; without it, an empty inbox just says how to start.
+function inboxPage(welcome = false) {
   const all = [...reviews.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const active = all.filter((r) => !r.archived);
   const archived = all.filter((r) => r.archived);
@@ -488,9 +490,12 @@ legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--m
 .row:hover .act,.act:focus-visible,.archived .act{opacity:1}.act:hover{color:var(--text)}.danger:hover{color:#dc2626;border-color:#dc2626}
 details{margin-top:28px}summary{cursor:pointer;color:var(--muted);margin-bottom:10px}
 @media (max-width:640px){.row>a{display:grid;grid-template-columns:1fr auto auto;gap:6px 10px;padding:12px}.tc{width:auto}.main{grid-column:1/-1;grid-row:2}time{min-width:0}}
-.empty{padding:32px;text-align:center;color:var(--muted)}.empty button{margin-left:6px;font:inherit;color:var(--text);background:none;border:0;text-decoration:underline;cursor:pointer}</style></head><body><main>
+.empty{padding:32px;text-align:center;color:var(--muted)}.empty button{margin-left:6px;font:inherit;color:var(--text);background:none;border:0;text-decoration:underline;cursor:pointer}
+.intro{padding:44px 24px}.intro h2{margin:0 0 8px;font-size:18px;color:var(--text)}.intro p{max-width:540px;margin:0 auto}
+code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--hover);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--text);white-space:nowrap}
+.cmds{list-style:none;margin:20px auto 0;padding:0;display:grid;gap:8px;max-width:480px;text-align:left}.cmds li{display:flex;align-items:center;gap:12px}.cmds code{flex:none;min-width:156px;text-align:center}</style></head><body><main>
 <h1>PR reports</h1><p>Every review on this machine. Open one to comment, ask questions and send it to Claude.</p>
-${toolbar}<div id="active" data-rows>${active.length ? `<div class="list">${active.map(inboxRow).join("")}</div>` : '<div class="list"><div class="empty">No reviews yet. Run /pr-report in a repo.</div></div>'}</div>
+${toolbar}<div id="active" data-rows>${active.length ? `<div class="list">${active.map(inboxRow).join("")}</div>` : `<div class="list">${emptyState(welcome, archived.length)}</div>`}</div>
 ${archived.length ? `<details><summary>Archived (${archived.length}): finished reviews after 3 quiet days, others after 14</summary><div class="archived" data-rows><div class="list">${archived.map(inboxRow).join("")}</div></div></details>` : ""}
 </main>
 <script>
@@ -603,6 +608,23 @@ const ASSET_TYPES = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
 };
+
+// What an inbox without open reviews shows: how to start, and a greeting when the setup page sent
+// the reader here. Once reviews exist, an empty inbox only points at the archive.
+function emptyState(welcome, archivedCount) {
+  if (archivedCount) return '<div class="empty">Nothing open. The archived reviews are below.</div>';
+  return `<div class="empty intro"><h2>${welcome ? "You're all set" : "No reviews yet"}</h2>
+<p>Open Claude Code in a repo, on a branch with changes, and type <code>/pr-report</code>. The report opens in a new tab, and every review on this machine shows up here.</p>
+<ul class="cmds"><li><code>/pr-report</code><span>compare with the PR base or the default branch</span></li><li><code>/pr-report develop</code><span>compare with another branch</span></li><li><code>/pr-report resume</code><span>pick a review up in a new Claude Code session</span></li></ul></div>`;
+}
+
+// First-run setup: the viewer at /setup, with the page token so it can ask the daemon about the
+// tools on this machine. The installer opens it after an install.
+function setupPage() {
+  return readFileSync(join(APP_DIR, "index.html"), "utf8")
+    .replace("<title>PR report</title>", () => "<title>Set up pr-report</title>")
+    .replace("</head>", () => `<script>window.__PR_SETUP__=${JSON.stringify({ token: pageToken })}</script></head>`);
+}
 
 function reviewPage(r, round) {
   const entry = r.rounds.find((x) => x.round === round) ?? r.rounds.at(-1);
@@ -749,14 +771,15 @@ async function handle(req, res, port) {
   const parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
   if (!url.pathname.endsWith("/next-event")) lastActivity = Date.now();
 
-  if (req.method === "GET" && url.pathname === "/") return send(res, 200, inboxPage(), "text/html; charset=utf-8");
+  if (req.method === "GET" && url.pathname === "/") return send(res, 200, inboxPage(url.searchParams.has("welcome")), "text/html; charset=utf-8");
   if (req.method === "GET" && url.pathname === "/fuse.mjs") {
     if (!FUSE_FILE) return send(res, 404, "Not found", "text/plain");
     res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=3600", "x-content-type-options": "nosniff" });
     return res.end(readFileSync(FUSE_FILE));
   }
-  if ((parts[0] === "r" || parts[0] === "app") && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
+  if (["r", "app", "setup"].includes(parts[0]) && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
   if (req.method === "GET" && parts[0] === "app" && parts[1] === "assets") return sendAsset(res, parts.slice(1));
+  if (req.method === "GET" && url.pathname === "/setup") return send(res, 200, setupPage(), "text/html; charset=utf-8");
   if (req.method === "GET" && parts[0] === "r" && parts[1]) {
     const r = reviews.get(parts[1]);
     const html = r && reviewPage(r, Number(url.searchParams.get("round")) || r.round);

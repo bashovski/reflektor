@@ -2,9 +2,11 @@ import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Bundle } from "../../skill/schema/types";
 import { App } from "./components/App";
+import { Setup } from "./components/Setup";
 import { fetchRound, LiveProvider, useLive } from "./lib/live";
 import { PreferencesProvider } from "./lib/prefs";
 import { RoundCtx } from "./lib/rounds";
+import { isSetupPage } from "./lib/setup";
 import "./index.css";
 
 const readBundle = (): Bundle | null => {
@@ -56,8 +58,6 @@ const Load = () => {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <PreferencesProvider>
-      <Load />
-    </PreferencesProvider>
+    <PreferencesProvider>{isSetupPage() ? <Setup /> : <Load />}</PreferencesProvider>
   </StrictMode>,
 );
