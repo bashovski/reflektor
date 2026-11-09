@@ -11,7 +11,7 @@
 
 import { execFile } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { connect } from "node:net";
 import { homedir } from "node:os";
@@ -19,6 +19,7 @@ import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { readChecksRun } from "./checks-run.mjs";
+import { replaceFile } from "./repo.mjs";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const FIRST_PORT = Number(process.env.PR_REPORT_PORT ?? 7337);
@@ -42,7 +43,7 @@ const readJson = (file, fallback) => {
 };
 const writeJson = (file, value, mode) => {
   writeFileSync(`${file}.tmp`, JSON.stringify(value, null, 2), mode ? { mode } : undefined);
-  renameSync(`${file}.tmp`, file);
+  replaceFile(`${file}.tmp`, file);
 };
 const now = () => new Date().toISOString();
 const pidAlive = (pid) => {
@@ -446,7 +447,8 @@ function sendAsset(res, parts) {
 const DRIFT_MS = Number(process.env.PR_REPORT_DRIFT_SECONDS ?? 15) * 1000;
 const run = promisify(execFile);
 const gitIn = (cwd, args, env) =>
-  run("git", ["-c", "core.quotePath=false", ...args], { cwd, env: env ?? process.env, maxBuffer: 16 * 1024 * 1024 }).then((x) => x.stdout.trim(), () => null);
+  // windowsHide: the daemon has no console on Windows, so each git call would flash a window.
+  run("git", ["-c", "core.quotePath=false", ...args], { cwd, env: env ?? process.env, maxBuffer: 16 * 1024 * 1024, windowsHide: true }).then((x) => x.stdout.trim(), () => null);
 
 // The repo and the code a round was built from, read once from its data file.
 function roundFacts(r) {

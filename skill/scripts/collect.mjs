@@ -15,7 +15,7 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { ownerAvatar } from "./avatar.mjs";
-import { globToRegExp, parseRemote, reportDir } from "./repo.mjs";
+import { globToRegExp, parseRemote, reportDir, shellPath } from "./repo.mjs";
 
 const MAX_BYTES = 512 * 1024;
 const MAX_LINES = 8000;
@@ -714,7 +714,7 @@ if (coverageFiles.length) {
     const { format, result } = parseCoverage(covFile);
     const modified = statSync(covFile).mtimeMs;
     const stale = modified < newestChange;
-    const shown = relative(repoRoot, covFile).startsWith("..") ? covFile : relative(repoRoot, covFile);
+    const shown = shellPath(relative(repoRoot, covFile).startsWith("..") ? covFile : relative(repoRoot, covFile));
     if (stale) warnings.push(`Coverage file ${shown} is older than the latest change; its numbers may be wrong.`);
     sources.push({ file: shown, format, modified: new Date(modified).toISOString(), stale });
     for (const [covPath, lines] of result) {
@@ -772,8 +772,8 @@ const data = {
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify(data, null, 2));
 
-console.log(`Diff file:   ${out}`);
-console.log(`Report file: ${reportFile}   (${carried ? "carried forward from the last round; update it" : "write report.json here"})`);
+console.log(`Diff file:   ${shellPath(out)}`);
+console.log(`Report file: ${shellPath(reportFile)}   (${carried ? "carried forward from the last round; update it" : "write report.json here"})`);
 console.log(`${identity.owner ?? ""}${identity.owner ? "/" : ""}${identity.name}  ${head} → ${base} (${baseSource})`);
 console.log(`${commits.length} commits, ${files.length} files, +${data.stats.additions} -${data.stats.deletions}, ${data.stats.uncommittedFiles} uncommitted`);
 // Groups line numbers into ranges: [3,4,5,9] -> "3-5, 9"

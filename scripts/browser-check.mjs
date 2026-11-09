@@ -13,6 +13,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gitBash } from "../skill/scripts/repo.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const { chromium } = createRequire(join(root, "viewer/package.json"))("playwright-core");
@@ -49,7 +50,7 @@ const browser = await chromium.launch({
 const errors = [];
 
 try {
-  run("bash", [join(root, "fixtures/make-books-repo.sh"), repo]);
+  run(gitBash() ?? "bash", [join(root, "fixtures/make-books-repo.sh"), repo]);
   script("collect.mjs", "--repo", repo, "--no-fetch");
   writeFileSync(join(data, "report.json"), readFileSync(join(root, "samples/report.json")));
 

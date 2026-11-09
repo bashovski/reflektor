@@ -20,6 +20,8 @@ It works with any language or stack. It only needs git and Node.js.
 
 The script builds the viewer and links `~/.claude/skills/pr-report` to this repo's `skill/` folder, so edits apply right away. Use `./install.sh --copy` to copy the folder instead.
 
+On Windows, run `node scripts/install.mjs` (or `--copy`) in PowerShell, cmd or Git Bash. The link is a directory junction, so it needs no admin rights. Claude Code on Windows runs commands in Git Bash, and so do the project checks.
+
 Then, in any git repo, ask Claude for a PR report or type:
 
 ```

@@ -16,6 +16,7 @@ import { existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { shellPath } from "./repo.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
@@ -68,7 +69,8 @@ async function ensureDaemon() {
 
   mkdirSync(HOME, { recursive: true });
   const log = openSync(join(HOME, "daemon.log"), "a");
-  spawn(process.execPath, [daemonScript], { detached: true, stdio: ["ignore", log, log], env: process.env }).unref();
+  // windowsHide: on Windows a detached process gets a console window of its own, and closing it would stop the daemon.
+  spawn(process.execPath, [daemonScript], { detached: true, stdio: ["ignore", log, log], env: process.env, windowsHide: true }).unref();
   for (let i = 0; i < 80; i++) {
     await sleep(100);
     info = readJson(daemonFile);
@@ -109,7 +111,7 @@ const describe = (t) => {
   }
 };
 
-const self = `node ${join(here, "review.mjs")}`;
+const self = `node "${shellPath(join(here, "review.mjs"))}"`;
 
 // What the reviewer did, and what the agent runs next. Printed by wait and resume.
 function explain(event, review) {
@@ -126,7 +128,7 @@ function explain(event, review) {
     console.log(`The reviewer finished round ${event.round} of ${review.id} with no comments. The review is done.`);
     console.log("Offer to open the PR (ask first).");
   } else if (event.type === "review-submitted") {
-    console.log(`Review for round ${event.round} of ${review.id} was sent with ${event.count} comments: ${event.file}`);
+    console.log(`Review for round ${event.round} of ${review.id} was sent with ${event.count} comments: ${shellPath(event.file)}`);
     console.log(`\nNext: read the file, then post your plan: ${self} plan --id ${review.id} --file <plan.json>`);
     console.log("Then run wait again in the background for the reviewer's decision.");
   } else if (event.type === "plan-decision" && event.decision.decision === "approve") {
@@ -217,7 +219,7 @@ if (command === "open") {
   console.log(`Picking up review ${review.id}, round ${review.round}: http://127.0.0.1:${info.port}/r/${review.id}\n`);
   if (event) explain(event, review);
   else if (review.phase === "working" && review.open.length) {
-    console.log(`The fix loop for round ${review.round} was cut off: ${review.comments - review.open.length} of ${review.comments} comments are handled. Review file: ${review.file}`);
+    console.log(`The fix loop for round ${review.round} was cut off: ${review.comments - review.open.length} of ${review.comments} comments are handled. Review file: ${shellPath(review.file)}`);
     console.log("Still open:");
     for (const c of review.open) console.log(`  ${c.id} (${c.kind ?? "no kind"}): ${c.text.split("\n")[0].slice(0, 120) || "(no text)"}`);
     console.log(`\nNext: read the review file and the plan (the page shows it), finish these comments with ${self} status, then rebuild and publish the next round.`);

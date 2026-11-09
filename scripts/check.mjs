@@ -10,12 +10,15 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gitBash } from "../skill/scripts/repo.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const tmp = mkdtempSync(join(tmpdir(), "pr-report-check-"));
 const repo = join(tmp, "books");
 const html = join(root, "samples", "books-report.html");
 
+// On Windows, the Git Bash that Claude Code uses, not the WSL one that "bash" can find first.
+const bash = gitBash() ?? "bash";
 const run = (cmd, args, env) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...env } });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -26,7 +29,7 @@ const fail = (message) => {
 };
 
 try {
-  run("bash", [join(root, "fixtures", "make-books-repo.sh"), repo]);
+  run(bash, [join(root, "fixtures", "make-books-repo.sh"), repo]);
 
   // A private home, so avatars come only from what this check puts in its cache.
   const home = { PR_REPORT_HOME: join(tmp, "collect-home") };
@@ -41,7 +44,7 @@ try {
   const edgeRepo = join(tmp, "edge");
   mkdirSync(join(edgeRepo, "gen"), { recursive: true });
   writeFileSync(join(edgeRepo, "status.ts"), "export enum Status { Draft, Archived }\nexport const LIMIT = 5;\n");
-  run("bash", ["-c", `cd "${edgeRepo}" && git init -q -b main && git add status.ts && git -c user.name=t -c user.email=t@t commit -q -m base && git checkout -qb feat && git remote add origin https://gitlab.com/edge-group/sub/edge.git`]);
+  run(bash, ["-c", `cd "${edgeRepo}" && git init -q -b main && git add status.ts && git -c user.name=t -c user.email=t@t commit -q -m base && git checkout -qb feat && git remote add origin https://gitlab.com/edge-group/sub/edge.git`]);
   writeFileSync(join(edgeRepo, "status.ts"), "export enum Status { Draft, Published }\nexport const LIMIT = 10;\n");
   // An avatar downloaded earlier: --no-fetch must still use it. A GitLab subgroup is one cache file.
   const cachedAvatar = join(home.PR_REPORT_HOME, "cache/avatars/gitlab.com/edge-group_sub");
@@ -105,7 +108,7 @@ try {
 
   // A commit by someone else: the checks would run their code, so they wait for the user's yes.
   writeFileSync(join(edgeRepo, "theirs.txt"), "from a teammate\n");
-  run("bash", ["-c", `cd "${edgeRepo}" && git add theirs.txt && git -c user.name=Pat -c user.email=pat@other.test commit -q -m theirs`]);
+  run(bash, ["-c", `cd "${edgeRepo}" && git add theirs.txt && git -c user.name=Pat -c user.email=pat@other.test commit -q -m theirs`]);
   if (!checks("--plan").includes("Ask the user before starting any checks: this branch has commits by Pat <pat@other.test>")) fail("--plan did not ask first about another author's commits");
   try {
     checks("--run", "x=echo ran", "--out", savedRun);

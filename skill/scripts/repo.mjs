@@ -1,8 +1,41 @@
 // Small helpers shared by the scripts: which repo this is, where its report files go, and path globs.
 
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync } from "node:fs";
 import { basename, join } from "node:path";
+
+// A path as the agent types it into a command. Claude Code on Windows runs commands in Git Bash,
+// where a backslash escapes the next character, so paths are shown with forward slashes there.
+export const shellPath = (p) => (process.platform === "win32" ? p.replaceAll("\\", "/") : p);
+
+// The bash that Claude Code on Windows runs commands in: CLAUDE_CODE_GIT_BASH_PATH, or the one that
+// comes with Git for Windows, found from git itself. Never the WSL bash in System32, which runs Linux.
+export function gitBash() {
+  if (process.platform !== "win32") return null;
+  const found = [process.env.CLAUDE_CODE_GIT_BASH_PATH];
+  try {
+    // <git>/mingw64/libexec/git-core, so <git> is three folders up.
+    const git = join(execFileSync("git", ["--exec-path"], { encoding: "utf8", windowsHide: true }).trim(), "..", "..", "..");
+    found.push(join(git, "bin", "bash.exe"), join(git, "usr", "bin", "bash.exe"));
+  } catch {
+    // No git on the PATH.
+  }
+  return found.find((p) => p && existsSync(p)) ?? null;
+}
+
+// Moves a finished temp file into place. On Windows a rename onto a file that another process has
+// open for a moment (the daemon reading it, a virus scanner) can fail, so it tries again briefly.
+export function replaceFile(from, to) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return renameSync(from, to);
+    } catch (e) {
+      if (attempt >= 20 || !["EPERM", "EBUSY", "EACCES"].includes(e.code)) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+    }
+  }
+}
 
 // A branch name as one file name: "feat/books" -> "feat-books".
 export const branchSlug = (branch) => branch.replace(/[^\w.-]+/g, "-");

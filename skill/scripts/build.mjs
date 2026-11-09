@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readChecksRun } from "./checks-run.mjs";
+import { shellPath } from "./repo.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -567,13 +568,13 @@ if (diff.branch.snapshot) {
 }
 
 const steps = report.flows.flatMap((f) => f.steps);
-console.log(`Wrote ${out}`);
-if (htmlOut) console.log(`Standalone page: ${htmlOut}`);
+console.log(`Wrote ${shellPath(out)}`);
+if (htmlOut) console.log(`Standalone page: ${shellPath(htmlOut)}`);
 console.log(
   `${report.sections.length} sections, ${diff.files.length} files, ${steps.filter((st) => st.verified).length}/${steps.length} flow steps verified, ${warnings.length} warnings`,
 );
 console.log("Saved this run for --since last (refs/pr-report/last)");
-if (prText) console.log(`PR description: ${prFile} (first line is the title)`);
+if (prText) console.log(`PR description: ${shellPath(prFile)} (first line is the title)`);
 if (diff.sinceRound) {
   const n = diff.sinceRound.files.length;
   console.log(`Round ${round} shows the whole branch; ${n} ${n === 1 ? "file" : "files"} changed since round ${diff.sinceRound.round}.`);

@@ -2,7 +2,7 @@
 name: pr-report
 description: Builds a visual HTML review report for the current branch or PR against its base branch, with a plain-English title and summary, review order, highlights, request flows, GitHub-style diffs with notes, and test coverage of new lines. The user can comment in the report and send the comments back for fixing. Use when the user asks for a PR report, a review report, a summary of branch changes for review, or wants to review changes before opening a PR. Works with any language or stack.
 argument-hint: "[base-branch] [--since last] [--session] [resume]"
-allowed-tools: Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/review.mjs *)
+allowed-tools: Bash(node "${CLAUDE_SKILL_DIR}/scripts/collect.mjs" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/build.mjs" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/review.mjs *)
 ---
 
 # PR report
@@ -62,7 +62,7 @@ Start the project's own lint, typecheck and test commands now, so the report sho
 First ask which checks this repo has:
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo . --plan
+node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" --repo . --plan
 ```
 
 It prints the commands and where they come from: `checks` in `.pr-report.json` (shared with the team), or the ones saved for this repo in `~/.pr-report/repos/` from an earlier report. It also lists checks it skips because nothing they cover changed.
@@ -70,7 +70,7 @@ It prints the commands and where they come from: `checks` in `.pr-report.json` (
 **When it lists commands and says to start them,** start them in the background. In Claude Code, use the Bash tool with `run_in_background`:
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo .
+node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" --repo .
 ```
 
 **When it says to ask the user first,** the branch has commits by someone else, such as a teammate's PR, and the checks would run their code. Ask in one line, naming the authors it lists. On a yes, add `--trust` to the background command; it remembers those authors for this repo. On a no, skip the checks and say so in the report's testing gaps.
@@ -81,10 +81,11 @@ node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo .
 2. Give the test command the coverage flag from step 2, so one run gives both the result and the coverage file.
 3. In a monorepo, make one check per package, limited to its folder with `--when`, so a report only runs the packages it changed.
 4. Never install anything, and ask first if a command needs services or looks slow.
-5. Save them, naming the files they came from so a later change to those files marks them out of date:
+5. Write them for bash, the same as for the Bash tool. On Windows they run in Git Bash.
+6. Save them, naming the files they came from so a later change to those files marks them out of date:
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs --repo . --save --source "<where they came from, in a few words>" --from <file>... \
+node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" --repo . --save --source "<where they came from, in a few words>" --from <file>... \
   --run "lint=<command>" --run "typecheck=<command>" --run "tests=<command>" [--when "tests=apps/api/**,packages/shared/**"]
 ```
 
@@ -95,7 +96,7 @@ In your final message, list the checks you saved, and say that `checks.mjs --for
 ## 3. Collect
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs --repo . [--base <branch>] [--since last] [--files a,b] [--coverage <file>]...
+node "${CLAUDE_SKILL_DIR}/scripts/collect.mjs" --repo . [--base <branch>] [--since last] [--files a,b] [--coverage <file>]...
 ```
 
 It writes diff.json into the repo's git folder and prints:
@@ -120,8 +121,8 @@ Do not read diff.json. It holds full file contents. Read the changes with the pr
 Publish the facts now, so the user can read the diffs and watch the checks while you write the report:
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/build.mjs --diff <diff file> --draft
-node ${CLAUDE_SKILL_DIR}/scripts/review.mjs open --report <json file from build> --open
+node "${CLAUDE_SKILL_DIR}/scripts/build.mjs" --diff <diff file> --draft
+node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" open --report <json file from build> --open
 ```
 
 After `collect --update` in a later round, add `--report <report file>` to the build, so the draft shows the carried report. The page says Claude is still writing the notes and holds back sending until the real report replaces it. Do not start the waiter yet, and say nothing to the user until step 7.
@@ -208,7 +209,7 @@ Line numbers refer to the new version of a file. Use `"side": "old"` only for de
 ## 6. Build
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/build.mjs --diff <diff file> --report <report file>
+node "${CLAUDE_SKILL_DIR}/scripts/build.mjs" --diff <diff file> --report <report file>
 ```
 
 It writes the report data, `<branch>-<sha>-r<round>.json`, next to the report file and records the run for `--since last`. Fix every `warning:` line by editing report.json and building again, at most two rounds. Mention anything left. `note:` lines need no report change (for example a stale coverage file, or project checks still running), but tell the user when they matter. Build without waiting for the checks.
@@ -218,13 +219,13 @@ It writes the report data, `<branch>-<sha>-r<round>.json`, next to the report fi
 Publish the report to the pr-report daemon. It is one local server for every review on this machine (`http://127.0.0.1:7337`, with an inbox of all reviews at `/`), and `review.mjs` starts it when it is not running. It replaces the draft from step 3b in the open tab:
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/review.mjs open --report <json file from build> --open
+node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" open --report <json file from build> --open
 ```
 
 It prints the review address and the review id, and opens the browser unless a tab already shows this review (open tabs get a banner for each new round instead). Then start the waiter as a background process. In Claude Code, use the Bash tool with `run_in_background`:
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/review.mjs wait --id <review id>
+node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" wait --id <review id>
 ```
 
 Tell the user, in a few lines:
@@ -237,7 +238,7 @@ Do not paste the report into the chat. End your turn and do not poll: the waiter
 **A live question:** read the code it points at and answer in 1 to 4 short sentences or a short list, following the style guide. Answer only: do not change code. If the answer shows something should change, say so and suggest a comment or "Fix this".
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/review.mjs answer --id <review id> --question <question id> --text "<answer>" [--ref path:line]
+node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" answer --id <review id> --question <question id> --text "<answer>" [--ref path:line]
 ```
 
 **A sent review:** go to the fix loop. **A review sent with no comments:** the review is done; offer to open the PR (step 9).
@@ -269,7 +270,7 @@ The reviewer follows along in the page: your plan and your progress on each comm
 3. **Post the plan** and wait for the decision. Write a plan file, then:
 
    ```bash
-   node ${CLAUDE_SKILL_DIR}/scripts/review.mjs plan --id <review id> --file <plan.json>
+   node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" plan --id <review id> --file <plan.json>
    ```
 
    The file: `{ "steps": [{ "comments": ["<comment id>"], "where": "book.service.ts:19", "kind": "fix" | "question" | "nit", "action": "<what you will do>" }], "note": "<optional>" }`. Every comment belongs to at least one step. Start the waiter again. The reviewer approves in the page (and can change a step's kind or skip it) or asks for a new plan. If the user approves in the chat instead, go ahead.
@@ -278,7 +279,7 @@ The reviewer follows along in the page: your plan and your progress on each comm
 4. **Make the changes,** reporting each comment as you go:
 
    ```bash
-   node ${CLAUDE_SKILL_DIR}/scripts/review.mjs status --id <review id> --comment <comment id> --status working|fixed|answered|wontfix|noted --text "<one line>" [--ref path:line]
+   node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" status --id <review id> --comment <comment id> --status working|fixed|answered|wontfix|noted --text "<one line>" [--ref path:line]
    ```
 
    Mark a comment `working` when you start it and give the final status when done. If you think a requested fix is wrong, do not make it; use `wontfix` and say why.
@@ -287,7 +288,7 @@ The reviewer follows along in the page: your plan and your progress on each comm
 5. **Rebuild for the next round.** Every round shows the whole branch, so the reviewer approves what will be merged; the page can also show only what changed since the round they sent.
 
    ```bash
-   node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs --repo . --update [--base <branch>] [--coverage <file>]...
+   node "${CLAUDE_SKILL_DIR}/scripts/collect.mjs" --repo . --update [--base <branch>] [--coverage <file>]...
    ```
 
    It collects the whole branch again, plus what changed since the round the reviewer sent, and carries report.json forward: its line references move to where those lines are now. Update that report.json; do not write a new one:
@@ -311,7 +312,7 @@ build.mjs also writes `pr-description.md` next to the report: the first line is 
 A review outlives the session that made it: the page tells the user to run `/pr-report resume` when no session listens for it. In the repo of the review:
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/review.mjs resume --repo .
+node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" resume --repo .
 ```
 
 It finds this branch's review (or pass `--id`) and prints what waits for you, the same way the waiter does: a sent review, a plan decision, a question, or a fix loop that was cut off, with the comments still open. Follow it from there; for a cut-off fix loop, comments that already have a final status are done. When nothing waits for you, it says to start the waiter.

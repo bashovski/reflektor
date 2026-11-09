@@ -22,10 +22,10 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { globToRegExp, parseRemote, repoKey, reportDir } from "./repo.mjs";
+import { gitBash, globToRegExp, parseRemote, replaceFile, repoKey, reportDir, shellPath } from "./repo.mjs";
 
 const MAX_OUTPUT = 400 * 1024;
 const TAIL_LINES = 80;
@@ -84,7 +84,7 @@ const running = (run) => run?.status === "running" && alive(run.pid);
 function printResults(results) {
   const count = (s) => results.filter((r) => r.status === s).length;
   console.log(`\nProject checks: ${count("passed")} passed, ${count("failed")} failed, ${count("timeout")} timed out`);
-  console.log(`Wrote ${out}`);
+  console.log(`Wrote ${shellPath(out)}`);
   for (const r of results.filter((r) => r.status !== "passed")) {
     console.log(`\n--- ${r.name} (${r.status}), last lines:`);
     console.log(r.outputTail.split("\n").slice(-15).join("\n"));
@@ -247,7 +247,7 @@ if (args.mode === "plan") {
   };
   if (!picked.source) {
     console.log("No checks for this repo yet. Work them out once (the CI config first, then the project's own files), then save them:");
-    console.log(`  node ${process.argv[1]} --repo ${root} --save --source "<where they came from>" --from <file>... --run "name=command"... [--when "name=glob,glob"]`);
+    console.log(`  node "${shellPath(process.argv[1])}" --repo "${root}" --save --source "<where they came from>" --from <file>... --run "name=command"... [--when "name=glob,glob"]`);
     askFirst();
     process.exit(0);
   }
@@ -260,7 +260,7 @@ if (args.mode === "plan") {
   } else if (picked.saved?.broken) {
     console.log(`\nLast run, ${picked.saved.broken.check} could not run (${picked.saved.broken.reason}). Work them out again and save them with --save.`);
   } else if (run.length && !strangers.length) {
-    console.log(`\nStart them in the background: node ${process.argv[1]} --repo ${root}`);
+    console.log(`\nStart them in the background: node "${shellPath(process.argv[1])}" --repo "${root}"`);
   }
   askFirst();
   process.exit(0);
@@ -292,12 +292,17 @@ if (picked.changed?.length) console.log(`warning: ${picked.changed.join(", ")} c
 
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
 
+// Claude Code on Windows runs commands in Git Bash, so the checks it saves are bash commands: they run
+// in that bash, or in cmd.exe when there is none. Elsewhere they run in sh, in a process group of their
+// own so a timeout can stop everything they started.
+const windows = process.platform === "win32";
+const shell = windows ? (gitBash() ?? true) : true;
+
 function runCheck({ name, command, timeout }) {
   const limit = (timeout ?? args.timeout) * 1000;
   const started = Date.now();
   return new Promise((done) => {
-    const shell = process.platform === "win32" ? ["cmd", ["/c", command]] : ["sh", ["-c", command]];
-    const child = spawn(shell[0], shell[1], { cwd: root, env: { ...process.env, CI: "1", FORCE_COLOR: "0" }, detached: process.platform !== "win32" });
+    const child = spawn(command, { shell, cwd: root, env: { ...process.env, CI: "1", FORCE_COLOR: "0" }, detached: !windows, windowsHide: true });
     let output = "";
     const collect = (chunk) => {
       output += chunk.toString("utf8");
@@ -308,15 +313,19 @@ function runCheck({ name, command, timeout }) {
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      try {
-        process.kill(process.platform === "win32" ? child.pid : -child.pid, "SIGKILL");
-      } catch {
-        child.kill("SIGKILL");
+      // On Windows only taskkill /T reaches the whole tree: the shell, the package manager and the test runner under it.
+      if (windows) spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore", windowsHide: true });
+      else {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          child.kill("SIGKILL");
+        }
       }
     }, limit);
     child.on("close", (code) => {
       clearTimeout(timer);
-      const lines = stripAnsi(output).trimEnd().split("\n");
+      const lines = stripAnsi(output).trimEnd().split(/\r?\n/);
       done({
         name,
         command,
@@ -343,7 +352,7 @@ const save = (status) => {
       ? { version: 1, status, pid: process.pid, startedAt, headSha, checks: checks.map((c) => c.name), results }
       : { version: 1, status, startedAt, ranAt: new Date().toISOString(), headSha, results };
   writeFileSync(`${out}.tmp`, JSON.stringify(run, null, 2));
-  renameSync(`${out}.tmp`, out);
+  replaceFile(`${out}.tmp`, out);
 };
 mkdirSync(dirname(out), { recursive: true });
 save("running");
