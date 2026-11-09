@@ -660,6 +660,40 @@ const gitIn = (cwd, args, env) =>
   // windowsHide: the daemon has no console on Windows, so each git call would flash a window.
   run("git", ["-c", "core.quotePath=false", ...args], { cwd, env: env ?? process.env, maxBuffer: 16 * 1024 * 1024, windowsHide: true }).then((x) => x.stdout.trim(), () => null);
 
+// ------------------------------------------------------------------ tools on this machine
+
+// The setup page asks which of the GitHub and GitLab command lines are installed and logged in.
+// Each answer is two fixed commands with a short timeout; nothing from the request reaches them.
+// The answer is kept for two seconds, since several tabs may ask at once.
+const tool = async (cmd, args) => {
+  try {
+    const { stdout, stderr } = await run(cmd, args, { timeout: 8000, windowsHide: true, env: process.env });
+    return { ok: true, text: `${stdout}\n${stderr}` };
+  } catch (e) {
+    return { ok: false, text: `${e.stdout ?? ""}\n${e.stderr ?? ""}` };
+  }
+};
+async function toolState(cmd, accountPattern) {
+  const version = await tool(cmd, ["--version"]);
+  if (!version.ok) return { installed: false, version: null, loggedIn: false, account: null, host: null };
+  // "gh version 2.92.0 (2026-04-28)", "glab 1.50.0 (2025-01-01)".
+  const number = version.text.match(/\d+\.\d+\.\d+/)?.[0] ?? null;
+  // "auth status" exits 0 only when logged in. Its text names the host on a line of its own and the
+  // account on the "Logged in" line.
+  const auth = await tool(cmd, ["auth", "status"]);
+  const host = auth.text.match(/^\s*([a-z0-9-]+(?:\.[a-z0-9-]+)+)\s*$/im)?.[1] ?? null;
+  const account = auth.text.match(accountPattern)?.[1] ?? null;
+  return { installed: true, version: number, loggedIn: auth.ok, account, host };
+}
+let toolsCache = null;
+async function toolsReport() {
+  if (toolsCache && Date.now() - toolsCache.at < 2000) return toolsCache.report;
+  const [gh, glab] = await Promise.all([toolState("gh", /Logged in to \S+ account (\S+)/), toolState("glab", /Logged in to \S+ as (\S+)/)]);
+  const report = { gh, glab, checkedAt: now() };
+  toolsCache = { at: Date.now(), report };
+  return report;
+}
+
 // The repo and the code a round was built from, read once from its data file.
 function roundFacts(r) {
   const entry = r.rounds.find((x) => x.round === r.round);
@@ -787,6 +821,12 @@ async function handle(req, res, port) {
   }
 
   if (parts[0] !== "api") return send(res, 404, { error: "not found" });
+
+  // ---------- setup page: the tools on this machine, page token
+  if (req.method === "GET" && parts[1] === "setup" && parts[2] === "tools") {
+    if (!same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
+    return send(res, 200, await toolsReport());
+  }
 
   // ---------- agent API (review.mjs), admin token
   const admin = same(req.headers["x-admin-token"], adminToken);

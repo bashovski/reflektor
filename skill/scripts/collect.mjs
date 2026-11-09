@@ -137,15 +137,23 @@ const web = identity.host && identity.owner ? { url: `https://${identity.host}/$
 const head = git("rev-parse", "--abbrev-ref", "HEAD").trim();
 const headSha = git("rev-parse", "HEAD").trim();
 
-// The branch's pull request, through gh (github.com only), in any state. An open one sets the base
-// branch; the page links to it either way.
+// The branch's pull request through gh (github.com only), or its merge request through glab
+// (GitLab), in any state. An open one sets the base branch; the page links to it either way.
 function findPr() {
-  if (head === "HEAD" || identity.host !== "github.com" || !hasCommand("gh")) return null;
+  if (head === "HEAD") return null;
   try {
-    return JSON.parse(run("gh", ["pr", "view", head, "--json", "number,url,title,baseRefName,state"], repoRoot, { timeout: 15_000 }));
+    if (identity.host === "github.com" && hasCommand("gh")) {
+      return JSON.parse(run("gh", ["pr", "view", head, "--json", "number,url,title,baseRefName,state"], repoRoot, { timeout: 15_000 }));
+    }
+    if (forge === "gitlab" && hasCommand("glab")) {
+      const mr = JSON.parse(run("glab", ["mr", "view", head, "--output", "json"], repoRoot, { timeout: 15_000 }));
+      // glab says "opened", "merged" or "closed"; the page expects gh's upper-case words.
+      return { number: mr.iid, url: mr.web_url, title: mr.title, baseRefName: mr.target_branch, state: mr.state === "opened" ? "OPEN" : String(mr.state).toUpperCase() };
+    }
   } catch {
-    return null;
+    // No pull request for this branch, or the tool is not logged in.
   }
+  return null;
 }
 const pr = findPr();
 
