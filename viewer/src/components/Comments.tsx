@@ -212,7 +212,7 @@ export const QuickActions = ({
   if (decided) {
     return (
       <div className="mt-1">
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex flex-wrap items-center justify-end gap-1">
           <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
             <Check className="size-3.5" />
             {decided.kind === "accepted"
@@ -252,19 +252,25 @@ export const QuickActions = ({
     );
   }
 
+  // The decision sits at the right edge as one control, so a row reads as text on the left and a choice on the right.
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1">
-      <button type="button" className={cx(button, "bg-blue-600/10 text-blue-700 hover:bg-blue-600/20 dark:text-blue-300")} onClick={() => add(target, { kind: "fix" })}>
-        <Wrench className="size-3.5" /> {labels?.fix ?? (variant === "todo" ? "Do this" : "Fix this")}
-      </button>
-      {variant === "problem" && (
-        <button type="button" className={ghost} onClick={() => add(target, { kind: "accepted" })}>
-          <Check className="size-3.5" /> {labels?.fine ?? "It's fine"}
-        </button>
-      )}
+    <div className="mt-1.5 flex flex-wrap items-center justify-end gap-2">
       <button type="button" className={ghost} onClick={comment()}>
         <MessageSquarePlus className="size-3.5" /> Comment
       </button>
+      <span className="inline-flex overflow-hidden rounded-md border border-[var(--border)] text-xs font-medium">
+        <button type="button" className="inline-flex items-center gap-1 px-2.5 py-1 text-blue-700 hover:bg-blue-600/10 dark:text-blue-300" onClick={() => add(target, { kind: "fix" })}>
+          <Wrench className="size-3.5" /> {labels?.fix ?? (variant === "todo" ? "Do this" : "Fix this")}
+        </button>
+        {variant === "problem" && (
+          <>
+            <span aria-hidden className="w-px bg-[var(--border)]" />
+            <button type="button" className="inline-flex items-center gap-1 px-2.5 py-1 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400" onClick={() => add(target, { kind: "accepted" })}>
+              <Check className="size-3.5" /> {labels?.fine ?? "It's fine"}
+            </button>
+          </>
+        )}
+      </span>
     </div>
   );
 };
