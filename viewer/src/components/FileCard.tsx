@@ -40,7 +40,8 @@ const LineComment = ({ id }: { id: string }) => {
   ) : null;
 };
 
-export const DIFF_THEME = { dark: "pierre-dark", light: "pierre-light" } as const;
+// One Dark Pro for dark mode and its Atom sibling One Light for light mode, both bundled with the diff library.
+export const DIFF_THEME = { dark: "one-dark-pro", light: "one-light" } as const;
 // Highlights colors code with WebAssembly lexers, several times faster than Shiki's regex engine.
 export const HIGHLIGHTER = canUseWASM() ? "highlights" : "shiki-js";
 
