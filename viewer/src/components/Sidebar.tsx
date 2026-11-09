@@ -1,7 +1,7 @@
 import { Braces, Check, FlaskConical, Route } from "lucide-react";
 import { REVIEW, SECTIONS } from "../lib/meta";
 import { sectionDomId, useReport } from "../lib/state";
-import { cx } from "./ui";
+import { cx, Kbd } from "./ui";
 
 export const Sidebar = () => {
   const { bundle, isViewed, viewedCount, setSectionOpen, shownSections } = useReport();
@@ -86,10 +86,23 @@ export const Sidebar = () => {
         </a>
       )}
 
-      <p className="px-2 text-xs leading-relaxed text-zinc-400">
-        <kbd className="font-mono">j</kbd>/<kbd className="font-mono">k</kbd> next file, <kbd className="font-mono">v</kbd> viewed,{" "}
-        <kbd className="font-mono">f</kbd> full file, <kbd className="font-mono">?</kbd> settings
-      </p>
+      <ul className="flex flex-wrap gap-x-3 gap-y-1.5 px-2 text-xs text-zinc-400">
+        {(
+          [
+            [["j", "k"], "next file"],
+            [["v"], "viewed"],
+            [["f"], "full file"],
+            [["?"], "settings"],
+          ] as const
+        ).map(([keys, label]) => (
+          <li key={label} className="inline-flex items-center gap-1">
+            {keys.map((k) => (
+              <Kbd key={k} name={k} />
+            ))}
+            <span className="ml-0.5">{label}</span>
+          </li>
+        ))}
+      </ul>
     </nav>
   );
 };

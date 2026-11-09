@@ -1,7 +1,7 @@
 import { Monitor, Moon, Sun, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 import { type DiffStyle, type ThemeChoice, useReport } from "../lib/state";
-import { cx } from "./ui";
+import { cx, Kbd } from "./ui";
 
 export const SHORTCUTS = [
   ["j", "Next file"],
@@ -97,7 +97,7 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
           <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
             {SHORTCUTS.map(([key, label]) => (
               <li key={key} className="flex items-center gap-2.5">
-                <kbd className="inline-flex min-w-6 justify-center rounded border border-[var(--border)] bg-zinc-500/10 px-1.5 font-mono text-xs">{key}</kbd>
+                <Kbd name={key} />
                 <span className="text-zinc-600 dark:text-zinc-400">{label}</span>
               </li>
             ))}
