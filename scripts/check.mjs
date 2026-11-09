@@ -243,6 +243,15 @@ async function daemonFlow() {
     if (!page.includes("<title>feat/books · library</title>")) fail("the review page does not carry the branch · repo title");
     if (page.length > 20_000) fail(`the review page is ${page.length} bytes; it should load the app and its data, not carry them`);
     await checkAppAssets(base, page);
+    // A failing command prints its reason and exits 1. Before, the error threw out of main() after a fetch, which aborted Node
+    // on Windows and printed a stack trace everywhere else.
+    try {
+      review("open", "--report", join(reviewDir, "missing.json"));
+      fail("review.mjs open with a missing report did not fail");
+    } catch (e) {
+      const err = String(e.stderr ?? "");
+      if (e.status !== 1 || !err.includes("report file not found") || err.includes("Assertion failed") || err.includes("    at ")) fail(`a failing review.mjs command did not end cleanly (exit ${e.status}):\n${err}`);
+    }
     const post = (path, body) =>
       fetch(`${base}${config.api}/${path}`, { method: "POST", headers: { "x-review-token": config.token, "content-type": "application/json" }, body: JSON.stringify(body) });
     const state = async () => {

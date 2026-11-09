@@ -301,4 +301,12 @@ async function main() {
   }
 }
 
-await main();
+// A failure (a missing file, an answer the daemon refused) must not throw out of main(): an uncaught error after a
+// fetch exits the way process.exit did, and on Windows that aborts Node with the libuv assertion from nodejs/node#56645.
+// So the reason is printed and the process ends on its own with exit code 1.
+try {
+  await main();
+} catch (e) {
+  console.error(e instanceof Error ? e.message : String(e));
+  process.exitCode = 1;
+}
