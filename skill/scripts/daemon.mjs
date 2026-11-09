@@ -485,25 +485,26 @@ function inboxPage(welcome = false) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <script>(()=>{let saved="system";const read=(v)=>{try{saved=JSON.parse(v??'"system"')}catch{saved="system"}};read(localStorage.getItem("pr-report:theme"));const mq=matchMedia("(prefers-color-scheme: dark)");const apply=()=>{document.documentElement.dataset.theme=saved==="dark"||saved==="light"?saved:mq.matches?"dark":"light"};apply();mq.addEventListener("change",apply);addEventListener("storage",(e)=>{if(e.key==="pr-report:theme"){read(e.newValue);apply()}})})()</script>
 <title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}PR reports</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}">${FUSE_FILE ? '<link rel="modulepreload" href="/fuse.mjs">' : ""}<style>
+${FONT_CSS}
 :root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--hover:color-mix(in srgb,var(--text) 5%,transparent);color-scheme:light}
 :root[data-theme=dark]{--bg:#09090b;--surface:#111113;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;color-scheme:dark}
-body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif,system-ui,sans-serif}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Geist Variable",ui-sans-serif,system-ui,sans-serif}
 main{max-width:900px;margin:0 auto;padding:40px 16px}h1{font-size:20px;margin:0 0 4px}p{color:var(--muted);margin:0 0 20px}
 svg{width:14px;height:14px;flex:none}
 .bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}#summary{color:var(--muted);font-size:13px}
 .only{display:inline-flex;align-items:center;gap:2px;margin-left:10px;padding:1px 2px 1px 9px;border:1px solid var(--border);border-radius:999px;background:var(--surface);font-size:12px}.only a{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;color:var(--muted);text-decoration:none}.only a:hover{background:var(--hover);color:var(--text)}
 .tools{display:flex;gap:6px;flex-wrap:wrap}.dd{position:relative}
-.tool{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 9px 0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font:500 12px ui-sans-serif,system-ui,sans-serif;cursor:pointer}
+.tool{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 9px 0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font:500 12px "Geist Variable",ui-sans-serif,system-ui,sans-serif;cursor:pointer}
 .tool:hover,.tool[aria-expanded=true]{background:color-mix(in srgb,var(--text) 6%,var(--surface))}.tool>svg{color:var(--muted)}.tool .k{color:var(--muted)}.tool b{font-weight:600}
 .tool b:empty{display:none}.badge{background:var(--text);color:var(--bg);border-radius:999px;padding:0 6px;font-size:10px;line-height:16px}
 .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:10;min-width:210px;max-width:calc(100vw - 32px);padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgb(0 0 0/.14)}
 fieldset{border:0;margin:0;padding:0}fieldset+fieldset{margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
 legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
 .menu label{clear:both;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap}.menu label:hover{background:var(--hover)}
-.menu input{margin:0;accent-color:var(--text)}.clear{width:100%;margin-top:6px;padding:6px 8px;border:0;border-top:1px solid var(--border);background:none;color:var(--muted);font:500 12px ui-sans-serif,system-ui,sans-serif;text-align:left;cursor:pointer}.clear:hover{color:var(--text)}
+.menu input{margin:0;accent-color:var(--text)}.clear{width:100%;margin-top:6px;padding:6px 8px;border:0;border-top:1px solid var(--border);background:none;color:var(--muted);font:500 12px "Geist Variable",ui-sans-serif,system-ui,sans-serif;text-align:left;cursor:pointer}.clear:hover{color:var(--text)}
 .dot{width:8px;height:8px;border-radius:50%;flex:none}
 .menu .search{margin-bottom:6px;padding:0 8px;height:32px;border:1px solid var(--border);border-radius:7px;cursor:text;color:var(--muted)}.menu .search:hover{background:none}.menu .search:focus-within{border-color:var(--muted)}
-.search input{flex:1;min-width:0;border:0;outline:0;background:none;color:var(--text);font:13px ui-sans-serif,system-ui,sans-serif}
+.search input{flex:1;min-width:0;border:0;outline:0;background:none;color:var(--text);font:13px "Geist Variable",ui-sans-serif,system-ui,sans-serif}
 .group+.group{margin-top:22px}.gh{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:13px;font-weight:600}
 .gh .av{width:20px;height:20px;border-radius:5px;font-size:9px}.count{color:var(--muted);font-weight:500;font-size:12px}
 .av.local{background:#71717a}.av.local svg{width:12px;height:12px}
@@ -511,19 +512,19 @@ legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--m
 .row{display:flex;align-items:center;border-top:1px solid var(--border);padding-right:12px}.row:first-child{border-top:0}
 .row>a{flex:1;min-width:0;display:flex;gap:12px;align-items:center;padding:12px 16px;color:inherit;text-decoration:none}
 .row:hover{background:var(--hover)}
-.tc{flex:none;width:98px}.tag{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px 0 7px;border-radius:999px;color:#fff;font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.03em;white-space:nowrap}.tag svg{width:12px;height:12px;stroke-width:2.4}
+.tc{flex:none;width:98px}.tag{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px 0 7px;border-radius:999px;color:#fff;font:600 11px/1 "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.03em;white-space:nowrap}.tag svg{width:12px;height:12px;stroke-width:2.4}
 .main{flex:1;min-width:0;display:flex;flex-direction:column}.title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta,time{color:var(--muted);font-size:12px}.meta{display:flex;align-items:center;gap:6px;min-width:0}
 [data-group=owner] .meta .av,[data-group=owner] .owner,[data-group=repo] .meta .av,[data-group=repo] .repo{display:none}
-.av{width:16px;height:16px;flex:none;border-radius:4px;object-fit:cover;display:inline-grid;place-items:center;color:#fff;font:600 8px/1 ui-sans-serif,system-ui,sans-serif}.phase{font-size:12px;font-weight:600;white-space:nowrap}time{min-width:64px;text-align:right;white-space:nowrap}
-.pr{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 6px 0 5px;border:1px solid color-mix(in srgb,currentColor 35%,transparent);border-radius:999px;font:600 11px/1 ui-sans-serif,system-ui,sans-serif;white-space:nowrap}.pr svg{width:11px;height:11px;stroke-width:2.4}
-.act{cursor:pointer;font:500 12px ui-sans-serif,system-ui,sans-serif;color:var(--muted);background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;margin-left:6px;opacity:0}
+.av{width:16px;height:16px;flex:none;border-radius:4px;object-fit:cover;display:inline-grid;place-items:center;color:#fff;font:600 8px/1 "Geist Variable",ui-sans-serif,system-ui,sans-serif}.phase{font-size:12px;font-weight:600;white-space:nowrap}time{min-width:64px;text-align:right;white-space:nowrap}
+.pr{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 6px 0 5px;border:1px solid color-mix(in srgb,currentColor 35%,transparent);border-radius:999px;font:600 11px/1 "Geist Variable",ui-sans-serif,system-ui,sans-serif;white-space:nowrap}.pr svg{width:11px;height:11px;stroke-width:2.4}
+.act{cursor:pointer;font:500 12px "Geist Variable",ui-sans-serif,system-ui,sans-serif;color:var(--muted);background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;margin-left:6px;opacity:0}
 .row:hover .act,.act:focus-visible,.archived .act{opacity:1}.act:hover{color:var(--text)}.danger:hover{color:#dc2626;border-color:#dc2626}
 details{margin-top:28px}summary{cursor:pointer;color:var(--muted);margin-bottom:10px}
 @media (max-width:640px){.row>a{display:grid;grid-template-columns:1fr auto auto;gap:6px 10px;padding:12px}.tc{width:auto}.main{grid-column:1/-1;grid-row:2}time{min-width:0}}
 .empty{padding:32px;text-align:center;color:var(--muted)}.empty button{margin-left:6px;font:inherit;color:var(--text);background:none;border:0;text-decoration:underline;cursor:pointer}
 .intro{padding:44px 24px}.intro h2{margin:0 0 8px;font-size:18px;color:var(--text)}.intro p{max-width:540px;margin:0 auto}
-code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--hover);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--text);white-space:nowrap}
+code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--hover);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--text);white-space:nowrap}
 .cmds{list-style:none;margin:20px auto 0;padding:0;display:grid;gap:8px;max-width:480px;text-align:left}.cmds li{display:flex;align-items:center;gap:12px}.cmds code{flex:none;min-width:156px;text-align:center}
 .hint{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font-size:13px}.hint[hidden]{display:none}.hint a{color:inherit;font-weight:600}.hint button{margin-left:auto;padding:2px 6px;border:0;background:none;color:var(--muted);font:inherit;cursor:pointer}.hint button:hover{color:var(--text)}</style></head><body><main>
 <h1>PR reports</h1><p>Every review on this machine. Open one to comment, ask questions and send it to Claude.</p>
@@ -634,6 +635,18 @@ const APP_DIR = [join(here, "../assets/app"), join(here, "../../viewer/dist/app"
 // Fuse.js for the inbox search: copied next to the app by install.mjs, or read from the viewer's
 // packages in a checkout that is not built. Without it the inbox falls back to a plain substring match.
 const FUSE_FILE = [join(here, "../assets/fuse.mjs"), join(here, "../../viewer/node_modules/fuse.js/dist/fuse.basic.min.mjs")].find((f) => existsSync(f));
+
+// The inbox uses the page's fonts, Geist and Geist Mono, from the font files in the viewer build; without a build it
+// falls back to the system fonts the way it always did.
+const FONT_CSS = (() => {
+  const dir = APP_DIR && join(APP_DIR, "assets");
+  const files = dir && existsSync(dir) ? readdirSync(dir) : [];
+  const face = (family, prefix) => {
+    const file = files.find((f) => f.startsWith(prefix) && f.endsWith(".woff2"));
+    return file ? `@font-face{font-family:"${family}";src:url(/app/assets/${file}) format("woff2");font-weight:100 900;font-display:swap}` : "";
+  };
+  return face("Geist Variable", "geist-latin-wght-normal-") + face("Geist Mono Variable", "geist-mono-latin-wght-normal-");
+})();
 const ASSET_TYPES = {
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
