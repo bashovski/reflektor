@@ -5,6 +5,7 @@
 //   node scripts/install.mjs          link ~/.claude/skills/pr-report to this repo's skill/ folder (edits apply right away)
 //   node scripts/install.mjs --copy   copy skill/ instead; use this if a Claude Code update removed the link
 //   node scripts/install.mjs --build  only build the viewer into skill/assets/
+//   node scripts/install.mjs --no-open  do not open the setup page in the browser after a first install
 //
 // On Windows the link is a directory junction, which needs no admin rights or Developer Mode.
 
@@ -22,6 +23,8 @@ const fail = (message) => {
   process.exit(1);
 };
 if (Number(process.versions.node.split(".")[0]) < 18) fail("Node.js 18 or newer is required");
+// Every report starts with git. Finding out here beats a failed first /pr-report.
+if (spawnSync("git", ["--version"], { stdio: "ignore" }).status !== 0) fail("git is required. Install it from https://git-scm.com, then run this again.");
 
 // pnpm and npm are .cmd files on Windows, which only start through a shell. The commands are fixed
 // strings, so nothing from outside reaches the shell.
@@ -77,4 +80,18 @@ if (mode === "link") symlinkSync(source, target, "junction");
 else cpSync(source, target, { recursive: true });
 
 console.log(`Installed pr-report (${mode}): ${target}`);
-console.log("Try it in any repo: /pr-report");
+
+// A first install ends in the browser: the setup page checks the tools on this machine and picks how
+// reports look. review.mjs starts the review daemon for it, from the installed skill, the same way a
+// report does. A later install (an update) keeps the daemon and the browser alone.
+const setupScript = join(target, "scripts", "review.mjs");
+if (existing === null && !process.argv.includes("--no-open")) {
+  const r = spawnSync(process.execPath, [setupScript, "setup"], { encoding: "utf8" });
+  if (r.status === 0) console.log(r.stdout.trim());
+  else console.log(`Could not open the setup page (${(r.stderr || r.stdout).trim()}). Open it later with: node "${setupScript}" setup`);
+} else {
+  console.log(`Setup page (your tools, light or dark, code theme): node "${setupScript}" setup`);
+}
+console.log("");
+console.log("Next: open Claude Code in a repo, on a branch with changes, and type /pr-report.");
+console.log("If Claude does not know /pr-report, start a new Claude Code session. If the skill goes missing after a Claude Code update, run this installer again or use --copy.");
