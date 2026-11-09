@@ -34,10 +34,10 @@ const node = (script) => {
   if (r.status !== 0) fail(`${script} failed\n${r.stdout ?? ""}${r.stderr ?? ""}`);
 };
 
-console.log("Building the viewer...");
 const viewer = join(root, "viewer");
 const assets = join(root, "skill", "assets");
 const pnpm = spawnSync("pnpm --version", { shell: true, stdio: "ignore" }).status === 0;
+console.log(`Building the viewer with ${pnpm ? "pnpm" : "npm, since pnpm was not found"}...`);
 sh(pnpm ? "pnpm install --frozen-lockfile" : "npm install", viewer);
 node(join(root, "scripts", "build-icons.mjs"));
 sh(pnpm ? "pnpm build" : "npm run build", viewer);
