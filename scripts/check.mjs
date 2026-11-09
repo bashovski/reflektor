@@ -437,10 +437,10 @@ function updateFlow() {
   console.log("next round: whole branch with the change since round 1, references moved once, PR description only from whole-branch builds");
 }
 
-if (failed) process.exit(1);
-console.log(`check passed: ${html}`);
+if (failed) process.exitCode = 1;
+else console.log(`check passed: ${html}`);
 
-if (process.argv.includes("--open")) {
+if (!failed && process.argv.includes("--open")) {
   const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
   spawn(opener, [html], { detached: true, stdio: "ignore" }).unref();
 }
