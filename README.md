@@ -108,7 +108,7 @@ An optional `.pr-report.json` in a repo's root sets the base branch, which paths
 
 ## Credits
 
-File type icons come from [atom-material-icons](https://www.npmjs.com/package/atom-material-icons) by Elior Boukhobza "Mallowigi", MIT License. Product logos in the icons belong to their owners. The inbox search uses [Fuse.js](https://www.fusejs.io) by Kiro Risk, Apache License 2.0.
+File type icons come from [atom-material-icons](https://www.npmjs.com/package/atom-material-icons) by Elior Boukhobza "Mallowigi", MIT License. Product logos in the icons belong to their owners. The inbox search uses [Fuse.js](https://www.fusejs.io) by Kiro Risk, Apache License 2.0. The license text of everything bundled is in [skill/THIRD-PARTY-NOTICES.md](skill/THIRD-PARTY-NOTICES.md), written by `scripts/build-notices.mjs` from the installed packages.
 
 ## Known issues
 

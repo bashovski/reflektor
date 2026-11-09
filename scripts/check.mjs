@@ -32,6 +32,22 @@ const fail = (message) => {
 try {
   run(bash, [join(root, "fixtures", "make-books-repo.sh"), repo]);
 
+  // The PR type pill is drawn twice, by the viewer (TAGS in meta.ts) and by the inbox (TAGS in daemon.mjs), from two lists
+  // that cannot share code: the daemon uses Node built-ins only. So the lists are compared here instead.
+  // The third-party notices file ships with the skill and must name every package the viewer bundles.
+  const notices = readFileSync(join(root, "skill/THIRD-PARTY-NOTICES.md"), "utf8");
+  for (const dep of Object.keys(JSON.parse(readFileSync(join(root, "viewer/package.json"), "utf8")).dependencies))
+    if (!notices.includes(`## ${dep} `)) fail(`THIRD-PARTY-NOTICES.md does not cover ${dep}; run node scripts/build-notices.mjs`);
+
+  const lucideName = (icon) => icon[0].toLowerCase() + icon.slice(1);
+  const viewerTags = Object.fromEntries(
+    [...readFileSync(join(root, "viewer/src/lib/meta.ts"), "utf8").matchAll(/^\s+([A-Z]+): \{ color: "(#[0-9a-f]{6})", icon: (\w+) \}/gm)].map(([, tag, color, icon]) => [tag, `${color} ${lucideName(icon)}`]),
+  );
+  const inboxTags = Object.fromEntries([...readFileSync(join(root, "skill/scripts/daemon.mjs"), "utf8").matchAll(/^\s+([A-Z]+): \["(#[0-9a-f]{6})", "(\w+)"\]/gm)].map(([, tag, color, icon]) => [tag, `${color} ${icon}`]));
+  if (Object.keys(viewerTags).length < 7 || Object.keys(inboxTags).length < 7) fail(`could not read both tag lists (viewer ${Object.keys(viewerTags).length}, inbox ${Object.keys(inboxTags).length})`);
+  for (const tag of new Set([...Object.keys(viewerTags), ...Object.keys(inboxTags)]))
+    if (viewerTags[tag] !== inboxTags[tag]) fail(`the tag lists differ for ${tag}: viewer has ${viewerTags[tag] ?? "nothing"}, the inbox has ${inboxTags[tag] ?? "nothing"}`);
+
   // A private home, so avatars come only from what this check puts in its cache.
   const home = { PR_REPORT_HOME: join(tmp, "collect-home") };
   const collected = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"], home);
@@ -261,6 +277,15 @@ async function daemonFlow() {
     if (!page.includes("<title>feat/books · library</title>")) fail("the review page does not carry the branch · repo title");
     if (page.length > 20_000) fail(`the review page is ${page.length} bytes; it should load the app and its data, not carry them`);
     await checkAppAssets(base, page);
+    // A failing command prints its reason and exits 1. Before, the error threw out of main() after a fetch, which aborted Node
+    // on Windows and printed a stack trace everywhere else.
+    try {
+      review("open", "--report", join(reviewDir, "missing.json"));
+      fail("review.mjs open with a missing report did not fail");
+    } catch (e) {
+      const err = String(e.stderr ?? "");
+      if (e.status !== 1 || !err.includes("report file not found") || err.includes("Assertion failed") || err.includes("    at ")) fail(`a failing review.mjs command did not end cleanly (exit ${e.status}):\n${err}`);
+    }
     const post = (path, body) =>
       fetch(`${base}${config.api}/${path}`, { method: "POST", headers: { "x-review-token": config.token, "content-type": "application/json" }, body: JSON.stringify(body) });
     const state = async () => {
