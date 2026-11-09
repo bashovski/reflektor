@@ -148,5 +148,5 @@ try {
   rmSync(tmp, { recursive: true, force: true });
 }
 
-if (failed) process.exit(1);
-console.log("browser check passed");
+if (failed) process.exitCode = 1;
+else console.log("browser check passed");

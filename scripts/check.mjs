@@ -436,14 +436,15 @@ function updateFlow() {
   // Another branch in the same checkout gets its own report folder, so their rounds stay apart.
   run("git", ["-C", repo, "checkout", "-q", "-b", "feat/other"]);
   const other = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"]);
-  if (!other.includes(join(".git", "pr-report", "feat-other", "diff.json"))) fail(`a second branch in the same checkout did not get its own report folder:\n${other.split("\n")[0]}`);
+  // collect prints the path with forward slashes on every OS (shellPath), so compare with those.
+  if (!other.includes(".git/pr-report/feat-other/diff.json")) fail(`a second branch in the same checkout did not get its own report folder:\n${other.split("\n")[0]}`);
   console.log("next round: whole branch with the change since round 1, references moved once, PR description only from whole-branch builds");
 }
 
-if (failed) process.exit(1);
-console.log(`check passed: ${html}`);
+if (failed) process.exitCode = 1;
+else console.log(`check passed: ${html}`);
 
-if (process.argv.includes("--open")) {
+if (!failed && process.argv.includes("--open")) {
   const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
   spawn(opener, [html], { detached: true, stdio: "ignore" }).unref();
 }
