@@ -1,4 +1,4 @@
-import { canUseWASM, type FileContents } from "@pierre/diffs";
+import type { FileContents } from "@pierre/diffs";
 import { type DiffLineAnnotation, type FileDiffOptions, MultiFileDiff, type SelectedLineRange } from "@pierre/diffs/react";
 import { ChevronRight, FlaskConical, Maximize2, MessageSquarePlus, MessageSquareText, ShieldAlert } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -6,6 +6,7 @@ import type { CommentTarget, DiffFile, Finding, SectionFile } from "../../../ski
 import { FILE_STATUS, SEVERITY } from "../lib/meta";
 import { useReview } from "../lib/review";
 import { fileDomId, useReport } from "../lib/state";
+import { HIGHLIGHTER } from "../lib/themes";
 import { CommentItem, Composer, QuestionThread, TargetComments } from "./Comments";
 import { RichText } from "./RichText";
 import { cx, DiffBar, FileIcon, IconButton, LocCount, Pill } from "./ui";
@@ -40,10 +41,6 @@ const LineComment = ({ id }: { id: string }) => {
   ) : null;
 };
 
-// One Dark Pro for dark mode and its Atom sibling One Light for light mode, both bundled with the diff library.
-export const DIFF_THEME = { dark: "one-dark-pro", light: "one-light" } as const;
-// Highlights colors code with WebAssembly lexers, several times faster than Shiki's regex engine.
-export const HIGHLIGHTER = canUseWASM() ? "highlights" : "shiki-js";
 
 export type DiffInput =
   | { oldFile: FileContents; newFile: FileContents }
@@ -106,7 +103,7 @@ const CoveragePill = ({ covered, uncovered }: { covered: number; uncovered: numb
 };
 
 export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
-  const { filesByPath, bundle, diffStyle, resolvedTheme, isViewed, toggleViewed, isFileOpen, setFileOpen, current, setCurrent, focus, openModal, view, sinceRound } =
+  const { filesByPath, bundle, diffStyle, resolvedTheme, renderTheme, isViewed, toggleViewed, isFileOpen, setFileOpen, current, setCurrent, focus, openModal, view, sinceRound } =
     useReport();
   const file = filesByPath.get(sectionFile.path)!;
   const path = file.path;
@@ -168,7 +165,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
 
   const options = useMemo<FileDiffOptions<AnnotationMeta, undefined>>(
     () => ({
-      theme: DIFF_THEME,
+      theme: renderTheme,
       themeType: resolvedTheme,
       preferredHighlighter: HIGHLIGHTER,
       diffStyle,
@@ -180,7 +177,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
       enableGutterUtility: editable,
       onGutterUtilityClick: (range: SelectedLineRange) => onGutter.current(range),
     }),
-    [resolvedTheme, diffStyle, uncoveredCss, editable],
+    [renderTheme, resolvedTheme, diffStyle, uncoveredCss, editable],
   );
 
   const focused = focus?.path === path && focus.line ? focus : null;

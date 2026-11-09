@@ -8,6 +8,7 @@
 //   status  --id <review> --comment <id> --status working|fixed|answered|wontfix|noted [--text <t>] [--ref path:line]
 //   resume  [--id <review>] [--repo .]   pick up a review in a new session: what is waiting, and what to do
 //   list                                  every review the daemon knows
+//   setup   [--no-open]                   open the first-run setup page (tools, light or dark, code theme)
 //   stop                                  stop the daemon
 
 import { execFileSync, spawn } from "node:child_process";
@@ -48,6 +49,11 @@ const parseRef = (value) => {
   return { path, line: line ? Number(line) : undefined };
 };
 const textArg = () => (args["text-file"] ? readFileSync(args["text-file"], "utf8") : typeof args.text === "string" ? args.text : null);
+// The default browser, detached so this command can end right away.
+const openInBrowser = (url) => {
+  const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
+  spawn(opener, [url], { detached: true, stdio: "ignore" }).unref();
+};
 
 async function health(info) {
   try {
@@ -172,8 +178,7 @@ async function main() {
     console.log(`Review id: ${data.id} (round ${data.round})`);
     if (data.republished) console.log(`Round ${data.round} was already published. It now uses this build; comments, plan and progress are kept.`);
     if (args.open && data.tabs === 0) {
-      const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
-      spawn(opener, [data.url], { detached: true, stdio: "ignore" }).unref();
+      openInBrowser(data.url);
       console.log("Opened it in the browser.");
     } else if (data.tabs > 0) {
       console.log(
@@ -183,6 +188,17 @@ async function main() {
       );
     }
     console.log(`Next: run in the background: ${self} wait --id ${data.id}`);
+  } else if (command === "setup") {
+    // The first-run page: the tools on this machine, light or dark, and a code theme. The installer
+    // runs this after a first install; it works any time by hand too.
+    const info = await ensureDaemon();
+    const url = `http://127.0.0.1:${info.port}/setup`;
+    if (args["no-open"]) console.log(`Setup page: ${url}`);
+    else {
+      openInBrowser(url);
+      console.log(`Opened the setup page in your browser: ${url}`);
+    }
+    console.log(`Inbox of every review: http://127.0.0.1:${info.port}/`);
   } else if (command === "wait") {
     need("id");
     let info = await ensureDaemon();
@@ -280,7 +296,7 @@ async function main() {
       console.log("Stopped the daemon.");
     }
   } else {
-    console.log("Usage: review.mjs open|wait|resume|answer|plan|status|list|stop (see the top of this file)");
+    console.log("Usage: review.mjs open|wait|resume|answer|plan|status|list|setup|stop (see the top of this file)");
     process.exit(2);
   }
 }

@@ -137,17 +137,52 @@ const web = identity.host && identity.owner ? { url: `https://${identity.host}/$
 const head = git("rev-parse", "--abbrev-ref", "HEAD").trim();
 const headSha = git("rev-parse", "HEAD").trim();
 
-// The branch's pull request, through gh (github.com only), in any state. An open one sets the base
-// branch; the page links to it either way.
+// The branch's pull request through gh (github.com only), or its merge request through glab
+// (GitLab), in any state. An open one sets the base branch; the page links to it either way.
 function findPr() {
-  if (head === "HEAD" || identity.host !== "github.com" || !hasCommand("gh")) return null;
+  if (head === "HEAD") return null;
   try {
-    return JSON.parse(run("gh", ["pr", "view", head, "--json", "number,url,title,baseRefName,state"], repoRoot, { timeout: 15_000 }));
+    if (identity.host === "github.com" && hasCommand("gh")) {
+      return JSON.parse(run("gh", ["pr", "view", head, "--json", "number,url,title,baseRefName,state"], repoRoot, { timeout: 15_000 }));
+    }
+    if (forge === "gitlab" && hasCommand("glab")) {
+      const mr = JSON.parse(run("glab", ["mr", "view", head, "--output", "json"], repoRoot, { timeout: 15_000 }));
+      // glab says "opened", "merged" or "closed"; the page expects gh's upper-case words.
+      return { number: mr.iid, url: mr.web_url, title: mr.title, baseRefName: mr.target_branch, state: mr.state === "opened" ? "OPEN" : String(mr.state).toUpperCase() };
+    }
   } catch {
-    return null;
+    // No pull request for this branch, or the tool is not logged in.
   }
+  return null;
 }
 const pr = findPr();
+
+// Branch names that are usually the one a PR goes into, tried in this order when the remote has no
+// default branch to ask.
+const COMMON_BASES = ["main", "master", "develop", "staging", "demo", "trunk"];
+
+// The branch this one most recently forked from: of every other branch, the one whose merge base
+// with HEAD is the newest commit. Another feature branch cut from the same spot ties with the real
+// base, so remote branches win ties, then the alphabet. A branch that already holds every commit of
+// HEAD is a copy or a descendant, not a base, so it is left out. Only the 50 most recently committed
+// branches are tried, to keep this quick in a repo with hundreds.
+function forkedFrom() {
+  const patterns = ["refs/heads", ...(remote ? [`refs/remotes/${remote}`] : [])];
+  const refs = (tryGit("for-each-ref", "--sort=-committerdate", "--count=50", "--format=%(refname:short)", ...patterns) ?? "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((ref) => ref && ref !== head && ref !== `${remote}/HEAD` && ref !== `${remote}/${head}`);
+  let best = null;
+  for (const ref of refs) {
+    const forkPoint = tryGit("merge-base", "HEAD", ref)?.trim();
+    if (!forkPoint || forkPoint === headSha) continue;
+    const time = Number(tryGit("show", "-s", "--format=%ct", forkPoint)?.trim() ?? 0);
+    const onRemote = Boolean(remote) && ref.startsWith(`${remote}/`);
+    const wins = !best || time > best.time || (time === best.time && (onRemote !== best.onRemote ? onRemote : ref < best.ref));
+    if (wins) best = { ref, time, onRemote };
+  }
+  return best ? best.ref.replace(`${remote}/`, "") : undefined;
+}
 
 let base;
 let baseSource;
@@ -166,7 +201,7 @@ if (args.base) {
     base = symbolic.trim().replace(`${remote}/`, "");
     baseSource = "default-branch";
   } else {
-    base = ["main", "master", "develop", "trunk"].find((b) => refExists(b) || (remote && refExists(`${remote}/${b}`)));
+    base = COMMON_BASES.find((b) => refExists(b) || (remote && refExists(`${remote}/${b}`))) ?? forkedFrom();
     baseSource = "guess";
   }
 }

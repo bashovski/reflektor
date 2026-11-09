@@ -1,8 +1,8 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Bundle, DiffFile, Ref, Section } from "../../../skill/schema/types";
+import { type Preferences, storage, usePrefs } from "./prefs";
 
-export type ThemeChoice = "system" | "light" | "dark";
-export type DiffStyle = "unified" | "split";
+export type { DiffStyle, ThemeChoice } from "./prefs";
 export type Focus = { path: string; line?: number; side?: "new" | "old"; at: number };
 export type ModalTarget = { path: string; line?: number; side?: "new" | "old" };
 // "branch": the whole branch against its base. "round": only what changed since the round the
@@ -12,7 +12,8 @@ export type DiffView = "branch" | "round";
 // for files whose change was undone since the round gets the index after the last section.
 export type ShownSection = { section: Section; index: number; paths: string[] };
 
-type ReportState = {
+// The report's state, plus the reviewer's preferences (theme, diff style, code theme) from lib/prefs.
+type ReportState = Preferences & {
   bundle: Bundle;
   // The files of the current view, and of the whole branch.
   filesByPath: Map<string, DiffFile>;
@@ -24,11 +25,6 @@ type ReportState = {
   // The round the "round" view compares with, and the paths that changed since; null without one.
   sinceRound: { round: number; paths: Set<string> } | null;
   shownSections: ShownSection[];
-  theme: ThemeChoice;
-  setTheme: (t: ThemeChoice) => void;
-  resolvedTheme: "light" | "dark";
-  diffStyle: DiffStyle;
-  setDiffStyle: (s: DiffStyle) => void;
   isViewed: (path: string) => boolean;
   toggleViewed: (path: string) => void;
   viewedCount: number;
@@ -66,38 +62,9 @@ const fnv1a = (text: string) => {
 
 const contentHash = (file: DiffFile) => fnv1a(`${file.oldContent ?? ""}\u0000${file.newContent ?? ""}\u0000${file.status}`);
 
-const storage = {
-  get<T>(key: string, fallback: T): T {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? (JSON.parse(raw) as T) : fallback;
-    } catch {
-      return fallback;
-    }
-  },
-  set(key: string, value: unknown) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      // Storage can be blocked for file:// pages; state then lasts for this tab only.
-    }
-  },
-};
-
-const useSystemDark = () => {
-  const query = "(prefers-color-scheme: dark)";
-  const [dark, setDark] = useState(() => window.matchMedia(query).matches);
-  useEffect(() => {
-    const mq = window.matchMedia(query);
-    const onChange = () => setDark(mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-  return dark;
-};
-
 export const ReportProvider = ({ bundle, children }: { bundle: Bundle; children: ReactNode }) => {
   const repoKey = `pr-report:${bundle.diff.repo.owner ?? ""}/${bundle.diff.repo.name}`;
+  const prefs = usePrefs();
 
   const branchFiles = useMemo(() => new Map(bundle.diff.files.map((f) => [f.path, f])), [bundle]);
   const roundFiles = useMemo(() => new Map((bundle.diff.sinceRound?.files ?? []).map((f) => [f.path, f])), [bundle]);
@@ -148,23 +115,6 @@ export const ReportProvider = ({ bundle, children }: { bundle: Bundle; children:
     }
     return { sectionOfFile: map, orderedFiles: order, shownSections: shown };
   }, [bundle, filesByPath, roundFiles, view]);
-
-  const [theme, setThemeState] = useState<ThemeChoice>(() => storage.get("pr-report:theme", "system"));
-  const systemDark = useSystemDark();
-  const resolvedTheme = theme === "system" ? (systemDark ? "dark" : "light") : theme;
-  useEffect(() => {
-    document.documentElement.dataset.theme = resolvedTheme;
-  }, [resolvedTheme]);
-  const setTheme = useCallback((t: ThemeChoice) => {
-    setThemeState(t);
-    storage.set("pr-report:theme", t);
-  }, []);
-
-  const [diffStyle, setDiffStyleState] = useState<DiffStyle>(() => storage.get("pr-report:diff-style", "unified"));
-  const setDiffStyle = useCallback((s: DiffStyle) => {
-    setDiffStyleState(s);
-    storage.set("pr-report:diff-style", s);
-  }, []);
 
   const [viewedMap, setViewedMap] = useState<Record<string, string>>(() => storage.get(`${repoKey}:viewed`, {}));
   const isViewed = useCallback((path: string) => viewedMap[path] !== undefined && viewedMap[path] === hashes.get(path), [viewedMap, hashes]);
@@ -250,6 +200,7 @@ export const ReportProvider = ({ bundle, children }: { bundle: Bundle; children:
   }, [focus]);
 
   const value: ReportState = {
+    ...prefs,
     bundle,
     filesByPath,
     branchFiles,
@@ -259,11 +210,6 @@ export const ReportProvider = ({ bundle, children }: { bundle: Bundle; children:
     setView,
     sinceRound,
     shownSections,
-    theme,
-    setTheme,
-    resolvedTheme,
-    diffStyle,
-    setDiffStyle,
     isViewed,
     toggleViewed,
     viewedCount,

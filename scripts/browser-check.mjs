@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Browser check: drives a whole review through the real page in headless Chrome, with a private
 // daemon, the fake books repo and review.mjs playing the agent. Covers what scripts/check.mjs cannot
-// see from the API: the draft page, comments and Send, the warning when no session listens, the plan,
-// progress, the next round with its "since round 1" view, and the warning about changed code.
+// see from the API: the first-run setup page, the draft page, comments and Send, the warning when no
+// session listens, the plan, progress, the next round with its "since round 1" view, the warning about
+// changed code, and the offer of the setup to a browser that skipped it.
 //
 // Uses the installed Google Chrome (or PR_REPORT_CHROME=<path>), so no browser is downloaded.
 // Usage: node scripts/browser-check.mjs [--headed]
@@ -55,13 +56,34 @@ try {
   script("collect.mjs", "--repo", repo, "--no-fetch");
   writeFileSync(join(data, "report.json"), readFileSync(join(root, "samples/report.json")));
 
-  // 1. The draft opens first: the facts, with sending held back.
-  const draftOut = script("build.mjs", "--diff", join(data, "diff.json"), "--draft").match(/Wrote (\S+)/)[1];
-  const id = review("open", "--report", draftOut).match(/Review id: (\S+)/)[1];
+  // 0. First-run setup, the way the installer opens it: before any review exists. Enter moves on,
+  // the picks are saved for this browser, and the inbox greets the reader when setup ends. The rest
+  // of the check then runs in dark mode with GitHub Dark, a theme the renderer has to load first.
+  review("setup", "--no-open");
   const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8"));
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  await page.goto(`http://127.0.0.1:${port}/setup`);
+  await expectVisible(page.getByRole("heading", { name: "Welcome to pr-report" }), "the setup page");
+  await page.keyboard.press("Enter");
+  await expectVisible(page.getByRole("heading", { name: "Your tools" }), "the tools step");
+  await expectVisible(page.getByText(/Logged in|not logged in|Not installed/).first(), "what the daemon found out about gh and glab", 15_000);
+  await page.keyboard.press("Enter");
+  await expectVisible(page.getByRole("heading", { name: "Light or dark?" }), "the theme step");
+  await page.getByRole("button", { name: "Dark Always dark" }).click();
+  await page.keyboard.press("Enter");
+  await expectVisible(page.getByRole("heading", { name: "Pick a code theme" }), "the code theme step");
+  await page.getByRole("option", { name: "GitHub Dark", exact: true }).click();
+  await expectVisible(page.getByRole("option", { name: "GitHub Dark", exact: true, selected: true }), "the picked code theme");
+  await page.keyboard.press("Enter");
+  await expectVisible(page.getByRole("heading", { name: "You're all set" }), "the inbox greeting after setup");
+  const saved = await page.evaluate(() => ["pr-report:setup", "pr-report:theme", "pr-report:code-theme-dark"].map((k) => localStorage.getItem(k)));
+  if (!saved[0] || saved[1] !== '"dark"' || saved[2] !== '"github-dark"') fail(`setup did not save its choices: ${saved.join(" ")}`);
+
+  // 1. The draft opens first: the facts, with sending held back.
+  const draftOut = script("build.mjs", "--diff", join(data, "diff.json"), "--draft").match(/Wrote (\S+)/)[1];
+  const id = review("open", "--report", draftOut).match(/Review id: (\S+)/)[1];
   await page.goto(`http://127.0.0.1:${port}/r/${id}`);
   await expectVisible(page.getByText("Claude is reading the change and writing the notes"), "the draft notice");
   if (!(await page.getByRole("button", { name: "Claude is writing the notes" }).isDisabled())) fail("Send is not held back on a draft");
@@ -162,9 +184,18 @@ try {
   await page.getByRole("textbox", { name: "Search reviews" }).fill("libary");
   await expectVisible(page.getByRole("heading", { name: /Waiting on you/ }), "a fuzzy search match");
 
+  // 9. A browser that skipped the setup is offered it once, above a report and on the inbox.
+  await page.evaluate(() => localStorage.removeItem("pr-report:setup"));
+  await page.goto(`http://127.0.0.1:${port}/r/${id}`);
+  await expectVisible(page.getByRole("link", { name: "Set up pr-report" }), "the setup offer above a report");
+  await page.getByRole("button", { name: "Not now" }).click();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expectVisible(page.getByRole("heading", { name: "PR reports" }), "the inbox again");
+  if (await page.locator("#setup-hint").isVisible()) fail("the inbox offers the setup again after Not now");
+
   const unexpected = errors.filter((e) => !/favicon/.test(e));
   if (unexpected.length) fail(`errors in the page:\n${unexpected.join("\n")}`);
-  console.log("browser: draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, user menu, changed-code warning, inbox grouping and search all worked");
+  console.log("browser: setup page, draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, user menu, changed-code warning, inbox grouping and search, and the setup offer all worked");
 } catch (e) {
   fail(e.stderr?.toString() || e.stack || e.message);
 } finally {
