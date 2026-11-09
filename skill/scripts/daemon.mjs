@@ -371,7 +371,8 @@ const ICONS = {
 const icon = (name) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
 
-// Report tags: the colors of viewer/src/lib/meta.ts, with a white icon in the pill.
+// Report tags: the same colors and Lucide icons as TAGS in viewer/src/lib/meta.ts, which draws the review page's
+// pill (TagPill in viewer/src/components/ui.tsx). A change to one list needs the same change to the other.
 const TAGS = {
   HOTFIX: ["#dc2626", "flame"],
   SECURITY: ["#be123c", "shieldCheck"],

@@ -1,6 +1,7 @@
 import { FileText } from "lucide-react";
 import { type ButtonHTMLAttributes, type ReactNode, useMemo } from "react";
-import type { Ref, RepoAvatar } from "../../../skill/schema/types";
+import type { Ref, RepoAvatar, Tag } from "../../../skill/schema/types";
+import { TAGS } from "../lib/meta";
 import { useReport } from "../lib/state";
 
 export const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(" ");
@@ -12,6 +13,20 @@ export const Pill = ({ className, children }: { className: string; children: Rea
 );
 
 export const Dot = ({ className }: { className: string }) => <span className={cx("size-1.5 shrink-0 rounded-full", className)} />;
+
+// The PR type, drawn the same way as in the inbox (tagPill in skill/scripts/daemon.mjs): a colored pill with a white icon.
+export const TagPill = ({ tag, className }: { tag: Tag; className?: string }) => {
+  const { color, icon: Icon } = TAGS[tag];
+  return (
+    <span
+      className={cx("inline-flex h-[22px] items-center gap-[5px] rounded-full pr-[9px] pl-[7px] font-mono text-[11px] font-semibold tracking-[0.03em] whitespace-nowrap text-white", className)}
+      style={{ background: color }}
+    >
+      <Icon className="size-3" strokeWidth={2.4} aria-hidden="true" />
+      {tag}
+    </span>
+  );
+};
 
 export const LocCount = ({ additions, deletions, className }: { additions: number; deletions: number; className?: string }) => (
   <span className={cx("font-mono text-xs tabular-nums", className)}>

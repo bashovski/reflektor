@@ -1,10 +1,10 @@
 import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Inbox, Loader2, Settings } from "lucide-react";
 import { useChecks } from "../lib/checks";
-import { BASE_SOURCE, REVIEW, TAGS, TARGETS } from "../lib/meta";
+import { BASE_SOURCE, REVIEW, TARGETS } from "../lib/meta";
 import { useReport } from "../lib/state";
 import { OwnerMenu } from "./OwnerMenu";
 import { PrDescription } from "./PrDescription";
-import { cx, Dot, LocCount, Pill } from "./ui";
+import { cx, Dot, LocCount, Pill, TagPill } from "./ui";
 
 export const TopBar = ({ onSettings }: { onSettings: () => void }) => {
   const { bundle } = useReport();
@@ -95,9 +95,7 @@ export const Hero = () => {
       <div className="space-y-3">
         <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-balance">
           {!bundle.draft && (
-            <span className={cx("mr-2.5 inline-block translate-y-[-3px] rounded-md px-2 py-0.5 align-middle font-mono text-xs font-semibold tracking-wide", TAGS[report.tag])}>
-              {report.tag}
-            </span>
+            <TagPill tag={report.tag} className="mr-2.5 translate-y-[-3px] align-middle" />
           )}
           {report.title}
         </h1>
