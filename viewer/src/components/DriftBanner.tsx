@@ -1,15 +1,18 @@
 import { RefreshCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
+import { useMerged } from "../lib/pr";
 import { useReview } from "../lib/review";
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 // The daemon checks open reviews for code that changed after their report was built. The page says
 // so, since the notes and line numbers may no longer match, and can ask the agent for an update.
+// Not once the pull request is merged: the code is meant to move on then, and an update is moot.
 export const DriftBanner = () => {
   const { drift, phase, mode, requestRefresh } = useReview();
+  const merged = useMerged();
   const [asked, setAsked] = useState(false);
-  if (mode !== "server" || !drift || (phase !== "reviewing" && phase !== "done")) return null;
+  if (mode !== "server" || !drift || merged || (phase !== "reviewing" && phase !== "done")) return null;
 
   const shown = drift.files.slice(0, 3).map((p) => p.split("/").at(-1));
   const more = drift.fileCount - shown.length;

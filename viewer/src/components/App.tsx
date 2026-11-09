@@ -18,6 +18,7 @@ import { HelpDialog } from "./Help";
 import { PlanCheck } from "./PlanCheck";
 import { PreviousReview } from "./PreviousReview";
 import { ProjectChecks } from "./ProjectChecks";
+import { MergedBanner } from "./PullRequest";
 import { ReviewBar } from "./ReviewBar";
 import { RoundBanner } from "./RoundBanner";
 import { Sections } from "./Sections";
@@ -111,6 +112,7 @@ const Layout = () => {
       <TopBar onSettings={() => setSettings(true)} onHelp={() => setHelp(true)} />
       <SetupBanner />
       <RoundBanner />
+      <MergedBanner />
       <DriftBanner />
       <div className="mx-auto grid max-w-[1440px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="hidden lg:block">

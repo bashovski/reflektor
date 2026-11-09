@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { setFavicon, type TabIcon } from "./favicon";
 import { type LiveState, useLive } from "./live";
+import { useMerged } from "./pr";
 import { useReview } from "./review";
 import { useReport } from "./state";
 
@@ -16,6 +17,8 @@ function newsBetween(before: LiveState, after: LiveState): string | null {
   if (after.round > before.round) return `Round ${after.round} ready`;
   if (after.phase === "planning" && before.phase !== "planning") return "Plan ready";
   if (after.phase === "done" && before.phase !== "done") return "Review finished";
+  if (after.pr?.state === "MERGED" && before.pr?.state !== "MERGED") return "Pull request merged";
+  if (after.pr && !before.pr) return `Pull request #${after.pr.number} opened`;
   const answered = (s: LiveState) => s.questions.filter((q) => q.answer).length;
   if (answered(after) > answered(before)) return "Claude answered";
   if (before.checks?.status === "running" && after.checks && after.checks.status !== "running") {
@@ -55,13 +58,15 @@ function useNewsWhileAway() {
 export function useTab() {
   const { bundle } = useReport();
   const { phase, latestRound, round } = useReview();
+  const merged = useMerged();
   const news = useNewsWhileAway();
 
   const base = `${bundle.diff.branch.head} · ${bundle.diff.repo.name}${round > 1 ? ` · round ${round}` : ""}`;
   const newer = latestRound > round;
-  const prefix = newer ? `Round ${latestRound} ready · ` : phase === "planning" ? "Plan ready · " : phase === "done" ? "✓ " : "";
+  // A merged pull request ends the review whatever round it was in.
+  const prefix = newer ? `Round ${latestRound} ready · ` : merged ? "Merged · " : phase === "planning" ? "Plan ready · " : phase === "done" ? "✓ " : "";
   const title = prefix + base;
-  const icon: TabIcon = newer ? "review" : phase === "planning" ? "plan" : phase === "done" ? "done" : phase === "sent" || phase === "working" ? "working" : "review";
+  const icon: TabIcon = newer ? "review" : merged || phase === "done" ? "done" : phase === "planning" ? "plan" : phase === "sent" || phase === "working" ? "working" : "review";
 
   useEffect(() => setFavicon(icon, news.count > 0), [icon, news.count]);
 

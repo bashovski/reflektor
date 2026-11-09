@@ -6,6 +6,7 @@
 //   answer  --id <review> --question <id> (--text <t> | --text-file <f>) [--ref path:line]
 //   plan    --id <review> --file <plan.json>
 //   status  --id <review> --comment <id> --status working|fixed|answered|wontfix|noted [--text <t>] [--ref path:line]
+//   pr      --id <review> --url <pull request url> [--title <t>]   show the pull request you just opened; the page follows it from there
 //   resume  [--id <review>] [--repo .]   pick up a review in a new session: what is waiting, and what to do
 //   list                                  every review the daemon knows
 //   setup   [--no-open]                   open the first-run setup page (tools, light or dark, code theme)
@@ -282,11 +283,16 @@ async function main() {
       console.log(`\nEvery comment is handled and none changed code, so round ${data.round} is finished. The page shows the review as done.`);
       console.log("Skip the rebuild. Tell the user, and offer to open the PR (ask first).");
     }
+  } else if (command === "pr") {
+    need("id", "url");
+    const info = await ensureDaemon();
+    const { data } = await api(info, "POST", `/api/r/${encodeURIComponent(args.id)}/pr`, { url: args.url, title: typeof args.title === "string" ? args.title : undefined });
+    console.log(`The page shows pull request #${data.pr.number} (${data.pr.state.toLowerCase()}) and follows it: when it is merged on GitHub, the page says so.`);
   } else if (command === "list") {
     const info = await ensureDaemon();
     const { data } = await api(info, "GET", "/api/reviews");
     if (!data.reviews.length) console.log("No reviews yet.");
-    for (const r of data.reviews) console.log(`${r.id.padEnd(36)} round ${String(r.round).padEnd(3)} ${r.phase.padEnd(10)} ${r.url}`);
+    for (const r of data.reviews) console.log(`${r.id.padEnd(36)} round ${String(r.round).padEnd(3)} ${(r.pr?.state === "MERGED" ? "merged" : r.phase).padEnd(10)} ${r.url}`);
     console.log(`\nInbox: http://127.0.0.1:${info.port}/`);
   } else if (command === "stop") {
     const info = readJson(daemonFile);
@@ -296,7 +302,7 @@ async function main() {
       console.log("Stopped the daemon.");
     }
   } else {
-    console.log("Usage: review.mjs open|wait|resume|answer|plan|status|list|setup|stop (see the top of this file)");
+    console.log("Usage: review.mjs open|wait|resume|answer|plan|status|pr|list|setup|stop (see the top of this file)");
     process.exit(2);
   }
 }

@@ -15,6 +15,9 @@ import {
   Flame,
   FlaskConical,
   Folder,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
   Info,
   KeyRound,
   Lightbulb,
@@ -43,6 +46,7 @@ import type {
   FlowDetailKind,
   FlowStep,
   HighlightKind,
+  PrState,
   ReplyStatus,
   ReviewLevel,
   SectionKind,
@@ -178,6 +182,14 @@ export const FILE_STATUS = {
   deleted: { label: "Deleted", className: "text-red-600 dark:text-red-400" },
   renamed: { label: "Renamed", className: "text-sky-600 dark:text-sky-400" },
 } as const;
+
+// Pull request states, as GitHub colors them. The inbox in skill/scripts/daemon.mjs uses the same
+// colors and icons (PR_STATES there). `className` colors an icon, `pill` a label.
+export const PR_STATES: Record<PrState, { label: string; icon: LucideIcon; className: string; pill: string }> = {
+  OPEN: { label: "Open", icon: GitPullRequest, className: "text-emerald-600 dark:text-emerald-400", pill: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300" },
+  MERGED: { label: "Merged", icon: GitMerge, className: "text-violet-600 dark:text-violet-400", pill: "bg-violet-500/10 text-violet-700 ring-violet-500/30 dark:text-violet-300" },
+  CLOSED: { label: "Closed", icon: GitPullRequestClosed, className: "text-red-600 dark:text-red-400", pill: "bg-red-500/10 text-red-700 ring-red-500/30 dark:text-red-300" },
+};
 
 export const BASE_SOURCE: Record<BaseSource, string> = {
   argument: "you picked it",
