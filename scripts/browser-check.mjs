@@ -20,7 +20,8 @@ const { chromium } = createRequire(join(root, "viewer/package.json"))("playwrigh
 const tmp = mkdtempSync(join(tmpdir(), "pr-report-browser-"));
 const repo = join(tmp, "books");
 const data = join(repo, ".git/pr-report/feat-books");
-const env = { ...process.env, PR_REPORT_HOME: join(tmp, "home"), PR_REPORT_PORT: String(4900 + Math.floor(Math.random() * 400)), PR_REPORT_DRIFT_SECONDS: "1" };
+// GH_CONFIG_DIR points at nothing, so gh has no login and the user menu shows the repo's git identity.
+const env = { ...process.env, PR_REPORT_HOME: join(tmp, "home"), PR_REPORT_PORT: String(4900 + Math.floor(Math.random() * 400)), PR_REPORT_DRIFT_SECONDS: "1", GH_CONFIG_DIR: join(tmp, "gh-config") };
 
 const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
 const script = (name, ...args) => run("node", [join(root, "skill/scripts", name), ...args]);
@@ -82,6 +83,20 @@ try {
     if (!href?.startsWith("https://github.com/acme-labs/library/compare/main...feat/books?expand=1&title=")) fail(`the new pull request link does not point at GitHub's compare form: ${href}`);
   }
   await page.keyboard.press("Escape");
+
+  // The user menu: who is reading (the repo's git identity here), help, the cache, and the daemon's status.
+  await page.getByRole("button", { name: "Your account and the daemon" }).click();
+  await expectVisible(page.getByText("Sample Dev"), "the reader's name in the user menu");
+  await expectVisible(page.getByText(/from git config/), "where the identity came from");
+  await expectVisible(page.getByText(/Daemon up/), "the daemon status");
+  await page.getByRole("menuitem", { name: "Help" }).click();
+  await expectVisible(page.getByRole("heading", { name: "How to review" }), "the help dialog");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Your account and the daemon" }).click();
+  await page.getByRole("menuitem", { name: "Purge daemon cache" }).click();
+  await page.getByRole("button", { name: "Purge", exact: true }).click();
+  await expectVisible(page.getByText(/Removed \d+ cached/), "the purge result");
+  await page.getByRole("button", { name: "Close" }).click();
 
   // 3. Comments: one on the whole change, and "Fix this" on a risk.
   await page.getByRole("button", { name: "General comment" }).click();
@@ -149,7 +164,7 @@ try {
 
   const unexpected = errors.filter((e) => !/favicon/.test(e));
   if (unexpected.length) fail(`errors in the page:\n${unexpected.join("\n")}`);
-  console.log("browser: draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, changed-code warning, inbox grouping and search all worked");
+  console.log("browser: draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, user menu, changed-code warning, inbox grouping and search all worked");
 } catch (e) {
   fail(e.stderr?.toString() || e.stack || e.message);
 } finally {

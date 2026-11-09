@@ -14,6 +14,7 @@ import { FileModal } from "./FileModal";
 import { Findings } from "./Findings";
 import { Flows } from "./Flows";
 import { Hero, TopBar } from "./Header";
+import { HelpDialog } from "./Help";
 import { PlanCheck } from "./PlanCheck";
 import { PreviousReview } from "./PreviousReview";
 import { ProjectChecks } from "./ProjectChecks";
@@ -99,13 +100,14 @@ const WindowVirtualizer = ({ children }: { children: ReactNode }) => {
 
 const Layout = () => {
   const [settings, setSettings] = useState(false);
+  const [help, setHelp] = useState(false);
   useShortcuts(() => setSettings(true));
   const { bundle } = useReport();
   useTab();
 
   return (
     <>
-      <TopBar onSettings={() => setSettings(true)} />
+      <TopBar onSettings={() => setSettings(true)} onHelp={() => setHelp(true)} />
       <RoundBanner />
       <DriftBanner />
       <div className="mx-auto grid max-w-[1440px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)]">
@@ -133,6 +135,7 @@ const Layout = () => {
       <ReviewBar />
       <FileModal />
       <SettingsDialog open={settings} onClose={() => setSettings(false)} />
+      <HelpDialog open={help} onClose={() => setHelp(false)} />
     </>
   );
 };
