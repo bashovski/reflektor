@@ -45,6 +45,8 @@ mkdirSync(assets, { recursive: true });
 rmSync(join(assets, "app"), { recursive: true, force: true });
 cpSync(join(viewer, "dist", "app"), join(assets, "app"), { recursive: true });
 cpSync(join(viewer, "dist", "standalone", "index.html"), join(assets, "viewer.html"));
+// The inbox search (served by the daemon at /fuse.mjs).
+cpSync(join(viewer, "node_modules", "fuse.js", "dist", "fuse.basic.min.mjs"), join(assets, "fuse.mjs"));
 if (mode === "build") {
   console.log(`Built ${assets}`);
   process.exit(0);

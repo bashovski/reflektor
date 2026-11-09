@@ -239,6 +239,7 @@ async function daemonFlow() {
     if (!inbox.includes("<title>(1) PR reports</title>")) fail("the inbox title does not count the review waiting on you");
     if (!inbox.includes('data-owner="acme-labs"')) fail("the inbox rows do not carry the owner they are grouped by");
     if (!/<span class="tag" style="background:#[0-9a-f]{6}"><svg /.test(inbox)) fail("the inbox tag has no color or icon");
+    if (!inbox.includes('name="q"') || !(await (await fetch(`${base}/fuse.mjs`)).text()).includes("Fuse.js")) fail("the inbox search or its Fuse.js file is missing");
 
     const round1 = await (await fetch(`${base}${config.api}/bundle?round=1`, { headers: { "x-review-token": config.token } })).json();
     if (!round1?.report?.title) fail("the daemon did not return round 1's report data as an object");

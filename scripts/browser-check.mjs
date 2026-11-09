@@ -125,10 +125,16 @@ try {
   await page.getByRole("radio", { name: "Status" }).check();
   await page.reload();
   await expectVisible(page.getByRole("heading", { name: /Waiting on you/ }), "the status grouping after a reload");
+  // Search sits in the filter menu and forgives typos.
+  await page.getByRole("button", { name: /^Filter/ }).click();
+  await page.getByRole("textbox", { name: "Search reviews" }).fill("zzzz");
+  await expectVisible(page.getByText("No reviews match these filters."), "the empty search result");
+  await page.getByRole("textbox", { name: "Search reviews" }).fill("libary");
+  await expectVisible(page.getByRole("heading", { name: /Waiting on you/ }), "a fuzzy search match");
 
   const unexpected = errors.filter((e) => !/favicon/.test(e));
   if (unexpected.length) fail(`errors in the page:\n${unexpected.join("\n")}`);
-  console.log("browser: draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, changed-code warning, inbox grouping all worked");
+  console.log("browser: draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, changed-code warning, inbox grouping and search all worked");
 } catch (e) {
   fail(e.stderr?.toString() || e.stack || e.message);
 } finally {

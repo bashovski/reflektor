@@ -353,6 +353,7 @@ const ICONS = {
   sort: '<path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/>',
   filter: '<path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
+  search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
 };
 const icon = (name) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
@@ -395,7 +396,7 @@ function inboxRow(r) {
   const actions = r.archived
     ? `<button class="act" data-act="restore" data-id="${id}">Restore</button><button class="act danger" data-act="delete" data-id="${id}" data-size="${megabytes(sizeOf(r))}">Delete</button>`
     : `<button class="act" data-act="archive" data-id="${id}" title="Move to Archived">Archive</button>`;
-  const data = { owner, repo: r.repo, phase: r.phase, tag: r.tag ?? "", updated: r.updatedAt, title: r.title ?? r.branch };
+  const data = { owner, repo: r.repo, branch: r.branch, phase: r.phase, tag: r.tag ?? "", updated: r.updatedAt, title: r.title ?? r.branch };
   return `<div class="row" ${Object.entries(data).map(([k, v]) => `data-${k}="${escapeHtml(v)}"`).join(" ")}><a href="/r/${encodeURIComponent(r.id)}">
       <span class="tc">${tagPill(r.tag)}</span>
       <span class="main"><span class="title">${escapeHtml(r.title ?? r.branch)}</span>
@@ -429,11 +430,11 @@ function inboxPage() {
         "filter",
         "filter",
         "Filter",
-        `${choices("phase", "Status", phases.map((p) => [p, `<span class="dot" style="background:${PHASES[p][1]}"></span>${PHASES[p][0]}`]))}${choices("tag", "Type", tags.map((t) => [t, tagPill(t)]))}<button type="button" class="clear">Clear filters</button>`,
+        `<label class="search">${icon("search")}<input type="text" name="q" placeholder="Search title, repo or branch" aria-label="Search reviews" autocomplete="off" spellcheck="false"></label>${choices("phase", "Status", phases.map((p) => [p, `<span class="dot" style="background:${PHASES[p][1]}"></span>${PHASES[p][0]}`]))}${choices("tag", "Type", tags.map((t) => [t, tagPill(t)]))}<button type="button" class="clear">Clear filters</button>`,
       )}</div></div>`
     : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}PR reports</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}"><style>
+<title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}PR reports</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}">${FUSE_FILE ? '<link rel="modulepreload" href="/fuse.mjs">' : ""}<style>
 :root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--hover:color-mix(in srgb,var(--text) 5%,transparent);color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#09090b;--surface:#111113;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa}}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif,system-ui,sans-serif}
@@ -450,6 +451,8 @@ legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--m
 .menu label{clear:both;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap}.menu label:hover{background:var(--hover)}
 .menu input{margin:0;accent-color:var(--text)}.clear{width:100%;margin-top:6px;padding:6px 8px;border:0;border-top:1px solid var(--border);background:none;color:var(--muted);font:500 12px ui-sans-serif,system-ui,sans-serif;text-align:left;cursor:pointer}.clear:hover{color:var(--text)}
 .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.menu .search{margin-bottom:6px;padding:0 8px;height:32px;border:1px solid var(--border);border-radius:7px;cursor:text;color:var(--muted)}.menu .search:hover{background:none}.menu .search:focus-within{border-color:var(--muted)}
+.search input{flex:1;min-width:0;border:0;outline:0;background:none;color:var(--text);font:13px ui-sans-serif,system-ui,sans-serif}
 .group+.group{margin-top:22px}.gh{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:13px;font-weight:600}
 .gh .av{width:20px;height:20px;border-radius:5px;font-size:9px}.count{color:var(--muted);font-weight:500;font-size:12px}
 .av.local{background:#71717a}.av.local svg{width:12px;height:12px}
@@ -483,13 +486,20 @@ for(const k of ["phase","tag"])if(Array.isArray(saved[k]))prefs[k]=saved[k]}catc
 // A saved filter for a status or tag no review has any more would hide everything with nothing to untick.
 for(const k of ["phase","tag"]){const offered=[...document.querySelectorAll("input[name="+k+"]")].map((i)=>i.value);prefs[k]=prefs[k].filter((v)=>offered.includes(v))}
 const save=()=>{try{localStorage.setItem("pr-report-inbox",JSON.stringify(prefs))}catch{}};
+// The search lasts for this tab, through the reloads that new events cause, but not into the next visit.
+let query="";try{query=sessionStorage.getItem("pr-report-inbox-q")||""}catch{}
+const searchBox=document.querySelector("input[name=q]");if(searchBox)searchBox.value=query;
 const make=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 const boxes=[...document.querySelectorAll("[data-rows]")].map((box)=>({box,rows:[...box.querySelectorAll(".row")]}));
 const at=(r)=>r.dataset.updated,rank=(list,k)=>{const i=list.indexOf(k);return i<0?list.length:i};
 const SORTS={activity:(a,b)=>at(b).localeCompare(at(a)),waiting:(a,b)=>WAITING.includes(b.dataset.phase)-WAITING.includes(a.dataset.phase)||at(b).localeCompare(at(a)),title:(a,b)=>a.dataset.title.localeCompare(b.dataset.title,undefined,{sensitivity:"base"})};
 const KEYS={owner:(r)=>r.dataset.owner,repo:(r)=>r.dataset.repo,status:(r)=>r.dataset.phase,type:(r)=>r.dataset.tag,none:()=>""};
 const nameOf=(k)=>prefs.group==="owner"&&!k?"Local repos":k;
-const matches=(r)=>(!prefs.phase.length||prefs.phase.includes(r.dataset.phase))&&(!prefs.tag.length||prefs.tag.includes(r.dataset.tag));
+// Fuzzy search with Fuse.js over title, repo and branch. Until it loads, or if it cannot, a plain substring match.
+const items=boxes.flatMap((b)=>b.rows).map((row)=>({row,title:row.dataset.title,repo:row.dataset.repo,branch:row.dataset.branch}));
+let fuse=null,hits=null;
+const search=()=>{const q=query.trim();hits=!q?null:new Set(fuse?fuse.search(q).map((x)=>x.item.row):items.filter((i)=>(i.title+" "+i.repo+" "+i.branch).toLowerCase().includes(q.toLowerCase())).map((i)=>i.row))};
+const matches=(r)=>(!prefs.phase.length||prefs.phase.includes(r.dataset.phase))&&(!prefs.tag.length||prefs.tag.includes(r.dataset.tag))&&(!hits||hits.has(r));
 function heading(key,first,count){
   const h=make("h2","gh");
   if(prefs.group==="owner"||prefs.group==="repo"){
@@ -516,22 +526,27 @@ function render(){
   const active=boxes[0].rows,visible=active.filter(matches),shown=visible.length,waiting=visible.filter((r)=>WAITING.includes(r.dataset.phase)).length;
   const summary=document.getElementById("summary");
   if(summary)summary.textContent=(shown===active.length?active.length+" "+(active.length===1?"review":"reviews"):shown+" of "+active.length+" reviews")+(waiting?", "+waiting+" waiting on you":"");
-  for(const i of document.querySelectorAll(".menu input"))i.checked=i.type==="radio"?prefs[i.name]===i.value:prefs[i.name].includes(i.value);
+  for(const i of document.querySelectorAll(".menu input[type=radio],.menu input[type=checkbox]"))i.checked=i.type==="radio"?prefs[i.name]===i.value:prefs[i.name].includes(i.value);
   for(const k of ["group","sort"]){const b=document.querySelector("[data-label="+k+"]");if(b)b.textContent=LABELS[k][prefs[k]]}
-  const n=prefs.phase.length+prefs.tag.length,f=document.querySelector("[data-label=filter]");
+  const n=prefs.phase.length+prefs.tag.length+(query.trim()?1:0),f=document.querySelector("[data-label=filter]");
   if(f){f.textContent=n?String(n):"";f.className=n?"badge":""}
 }
-render();
+search();render();
+import("/fuse.mjs").then(({default:Fuse})=>{fuse=new Fuse(items,{keys:[{name:"title",weight:2},"repo","branch"],threshold:0.35,ignoreLocation:true});search();render()}).catch(()=>{});
+const setQuery=(q)=>{query=q;try{sessionStorage.setItem("pr-report-inbox-q",q)}catch{}search();render()};
+document.addEventListener("input",(e)=>{if(e.target===searchBox)setQuery(searchBox.value)});
 // Menus: one open at a time; a click outside or Escape closes them.
 const dds=[...document.querySelectorAll(".dd")],openMenu=()=>dds.find((d)=>!d.querySelector(".menu").hidden);
-const toggle=(dd,open)=>{dd.querySelector(".menu").hidden=!open;dd.querySelector(".tool").setAttribute("aria-expanded",String(open))};
+const toggle=(dd,open)=>{dd.querySelector(".menu").hidden=!open;dd.querySelector(".tool").setAttribute("aria-expanded",String(open));if(open&&dd.contains(searchBox))searchBox.focus()};
 let reloadLater=false;
 document.addEventListener("click",(e)=>{
   const dd=e.target.closest(".dd");for(const d of dds)if(d!==dd)toggle(d,false);
   if(dd&&e.target.closest(".tool"))toggle(dd,dd.querySelector(".menu").hidden);
-  if(e.target.closest(".clear,.clear-all")){prefs.phase=[];prefs.tag=[];save();render()}
+  if(e.target.closest(".clear,.clear-all")){prefs.phase=[];prefs.tag=[];save();if(searchBox)searchBox.value="";setQuery("")}
   if(reloadLater&&!openMenu())location.reload();
 });
+// "/" opens the filter menu at the search box, as on GitHub.
+document.addEventListener("keydown",(e)=>{if(e.key!=="/"||e.metaKey||e.ctrlKey||e.altKey||e.target.closest("input,textarea")||!searchBox)return;e.preventDefault();for(const d of dds)toggle(d,d.contains(searchBox))});
 document.addEventListener("keydown",(e)=>{const d=openMenu();if(e.key==="Escape"&&d){toggle(d,false);d.querySelector(".tool").focus();if(reloadLater)location.reload()}});
 document.addEventListener("change",(e)=>{const i=e.target;if(!(i.name in prefs))return;
   if(i.type==="radio"){prefs[i.name]=i.value;toggle(i.closest(".dd"),false)}else prefs[i.name]=[...document.querySelectorAll("input[name="+i.name+"]:checked")].map((x)=>x.value);
@@ -551,6 +566,9 @@ if(!res.ok)alert((await res.json().catch(()=>({}))).error||"Could not do that");
 // The viewer's app build. Every review page is the same app; it loads its round's data from the API.
 const here = dirname(fileURLToPath(import.meta.url));
 const APP_DIR = [join(here, "../assets/app"), join(here, "../../viewer/dist/app")].find((d) => existsSync(join(d, "index.html")));
+// Fuse.js for the inbox search: copied next to the app by install.mjs, or read from the viewer's
+// packages in a checkout that is not built. Without it the inbox falls back to a plain substring match.
+const FUSE_FILE = [join(here, "../assets/fuse.mjs"), join(here, "../../viewer/node_modules/fuse.js/dist/fuse.basic.min.mjs")].find((f) => existsSync(f));
 const ASSET_TYPES = {
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -707,6 +725,11 @@ async function handle(req, res, port) {
   if (!url.pathname.endsWith("/next-event")) lastActivity = Date.now();
 
   if (req.method === "GET" && url.pathname === "/") return send(res, 200, inboxPage(), "text/html; charset=utf-8");
+  if (req.method === "GET" && url.pathname === "/fuse.mjs") {
+    if (!FUSE_FILE) return send(res, 404, "Not found", "text/plain");
+    res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=3600", "x-content-type-options": "nosniff" });
+    return res.end(readFileSync(FUSE_FILE));
+  }
   if ((parts[0] === "r" || parts[0] === "app") && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
   if (req.method === "GET" && parts[0] === "app" && parts[1] === "assets") return sendAsset(res, parts.slice(1));
   if (req.method === "GET" && parts[0] === "r" && parts[1]) {
