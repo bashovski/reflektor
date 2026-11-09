@@ -17,6 +17,7 @@
 - Drift warning: the page lists files changed after the report was built and can ask Claude for an update
 - Draft page with the facts while Claude writes the report
 - Inbox archive, restore and delete; one report folder per branch
+- Inbox grouped by repo owner, with group, sort and filter menus, and colored type pills with icons
 - Project checks ask first when the branch has commits by someone else
 - Speed: diffs render only near the screen, code colored with WebAssembly lexers, the daemon serves the viewer as cached files and each report is only its data (44-file change: 2.4 s frozen and 161 MB before, under 0.3 s and 37 MB after)
 

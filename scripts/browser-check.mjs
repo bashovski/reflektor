@@ -118,9 +118,17 @@ try {
   await page.getByRole("button", { name: "Ask Claude to update the report" }).click();
   if (!review("wait", "--id", id).includes("asked for an updated report")) fail("the update request did not reach the agent");
 
+  // 8. The inbox groups by owner by default, and remembers another grouping after a reload.
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expectVisible(page.getByRole("heading", { name: /acme-labs/ }), "the owner heading in the inbox");
+  await page.getByRole("button", { name: /^Group/ }).click();
+  await page.getByRole("radio", { name: "Status" }).check();
+  await page.reload();
+  await expectVisible(page.getByRole("heading", { name: /Waiting on you/ }), "the status grouping after a reload");
+
   const unexpected = errors.filter((e) => !/favicon/.test(e));
   if (unexpected.length) fail(`errors in the page:\n${unexpected.join("\n")}`);
-  console.log("browser: draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, changed-code warning all worked");
+  console.log("browser: draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, changed-code warning, inbox grouping all worked");
 } catch (e) {
   fail(e.stderr?.toString() || e.stack || e.message);
 } finally {

@@ -49,7 +49,7 @@ The report data is written to `<git folder>/pr-report/<branch>/` (usually `.git/
 
    A review outlives the Claude session that made it. When you send something and no session is listening, the page says so and gives you `/pr-report resume` to type in a new one. When the code changes after a report was built, the page lists the files and can ask Claude to update the report.
 
-   The inbox archives finished reviews after 3 quiet days and others after 14. You can archive and restore by hand, and delete an archived review's files.
+   The inbox groups reviews by repo owner, with the owner's avatar above each group. Its toolbar groups by repo, status or type instead, sorts by activity, waiting on you or title, and filters by status and type; the browser remembers the choice. It archives finished reviews after 3 quiet days and others after 14. You can archive and restore by hand, and delete an archived review's files.
 
    The daemon serves the viewer as normal files the browser caches (about 1.3 MB on first visit). Each report is only its JSON data. Diffs render the lines near the screen only, and code is colored with WebAssembly lexers, so a 40-file change opens in well under a second.
 

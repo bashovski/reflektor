@@ -326,12 +326,50 @@ function avatarHtml(avatar) {
   return `<span class="av" style="background:${color}">${escapeHtml(String(avatar.initials ?? "").slice(0, 2))}</span>`;
 }
 
+// Ordered as the status groups show them: the two that wait on you first.
 const PHASES = {
   reviewing: ["Waiting on you", "#b45309"],
-  sent: ["Sent to Claude", "#2563eb"],
   planning: ["Plan ready", "#7c3aed"],
+  sent: ["Sent to Claude", "#2563eb"],
   working: ["Claude working", "#2563eb"],
   done: ["Done", "#059669"],
+};
+
+// Lucide icons (ISC license), drawn in the text color.
+const ICONS = {
+  flame: '<path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"/>',
+  shieldCheck:
+    '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  sparkles:
+    '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/>',
+  bug: '<path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/>',
+  zap: '<path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z"/>',
+  blocks: '<path d="M10 22V7a1 1 0 0 0-1-1H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 0 0-1-1H2"/><rect x="14" y="2" width="8" height="8" rx="1"/>',
+  wrench:
+    '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  layers:
+    '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/>',
+  sort: '<path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/>',
+  filter: '<path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/>',
+  chevron: '<path d="m6 9 6 6 6-6"/>',
+};
+const icon = (name) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+
+// Report tags: the colors of viewer/src/lib/meta.ts, with a white icon in the pill.
+const TAGS = {
+  HOTFIX: ["#dc2626", "flame"],
+  SECURITY: ["#be123c", "shieldCheck"],
+  FEATURE: ["#7c3aed", "sparkles"],
+  FIX: ["#0284c7", "bug"],
+  PERF: ["#0d9488", "zap"],
+  REFACTOR: ["#475569", "blocks"],
+  CHORE: ["#71717a", "wrench"],
+};
+const tagPill = (tag) => {
+  const [color, name] = TAGS[tag] ?? ["#71717a", null];
+  return `<span class="tag" style="background:${color}">${name ? icon(name) : ""}${escapeHtml(tag ?? "")}</span>`;
 };
 
 // The review icon from viewer/src/lib/favicon.ts in gray, with a red dot while a review waits on you.
@@ -345,20 +383,32 @@ const inboxIcon = (dot) =>
 
 const megabytes = (bytes) => (bytes < 100_000 ? `${Math.max(1, Math.round(bytes / 1000))} KB` : `${(bytes / 1_000_000).toFixed(1)} MB`);
 
+// "acme-labs" for acme-labs/library, "group/sub" for a GitLab subgroup, "" for a repo without a remote.
+const ownerOf = (repo) => (repo.includes("/") ? repo.slice(0, repo.lastIndexOf("/")) : "");
+
+// One review. The data attributes are what the page groups, sorts and filters by.
 function inboxRow(r) {
   const [label, color] = r.archived ? ["Archived", "#71717a"] : (PHASES[r.phase] ?? [r.phase, "#71717a"]);
   const waiting = r.questions.filter((q) => !q.answer).length;
   const id = escapeHtml(r.id);
+  const owner = ownerOf(r.repo);
   const actions = r.archived
     ? `<button class="act" data-act="restore" data-id="${id}">Restore</button><button class="act danger" data-act="delete" data-id="${id}" data-size="${megabytes(sizeOf(r))}">Delete</button>`
     : `<button class="act" data-act="archive" data-id="${id}" title="Move to Archived">Archive</button>`;
-  return `<div class="row"><a href="/r/${encodeURIComponent(r.id)}">
-      <span class="tag">${escapeHtml(r.tag ?? "")}</span>
+  const data = { owner, repo: r.repo, phase: r.phase, tag: r.tag ?? "", updated: r.updatedAt, title: r.title ?? r.branch };
+  return `<div class="row" ${Object.entries(data).map(([k, v]) => `data-${k}="${escapeHtml(v)}"`).join(" ")}><a href="/r/${encodeURIComponent(r.id)}">
+      <span class="tc">${tagPill(r.tag)}</span>
       <span class="main"><span class="title">${escapeHtml(r.title ?? r.branch)}</span>
-      <span class="meta">${avatarHtml(r.avatar)}<span>${escapeHtml(r.repo)} · ${escapeHtml(r.branch)} · round ${r.round}${waiting ? ` · ${waiting} question${waiting === 1 ? "" : "s"} waiting` : ""}</span></span></span>
+      <span class="meta">${avatarHtml(r.avatar)}<span><span class="repo">${owner ? `<span class="owner">${escapeHtml(owner)}/</span>` : ""}${escapeHtml(r.repo.slice(owner ? owner.length + 1 : 0))} · </span>${escapeHtml(r.branch)} · round ${r.round}${waiting ? ` · ${waiting} question${waiting === 1 ? "" : "s"} waiting` : ""}</span></span></span>
       <span class="phase" style="color:${color}">${label}</span>
       <time data-at="${r.updatedAt}"></time></a>${actions}</div>`;
 }
+
+// A toolbar menu: a button that opens a list of radios or checkboxes.
+const menu = (key, iconName, label, body) =>
+  `<div class="dd"><button type="button" class="tool" aria-haspopup="true" aria-expanded="false">${icon(iconName)}<span class="k">${label}</span><b data-label="${key}"></b>${icon("chevron")}</button><div class="menu" hidden>${body}</div></div>`;
+const choices = (name, legend, options) =>
+  `<fieldset><legend>${legend}</legend>${options.map(([value, html]) => `<label><input type="${name === "group" || name === "sort" ? "radio" : "checkbox"}" name="${name}" value="${escapeHtml(value)}">${html}</label>`).join("")}</fieldset>`;
 
 function inboxPage() {
   const all = [...reviews.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -366,35 +416,130 @@ function inboxPage() {
   const archived = all.filter((r) => r.archived);
   // Reviews that need the reviewer: their turn to review, or a plan to approve.
   const waitingOnYou = active.filter((r) => r.phase === "reviewing" || r.phase === "planning").length;
+  // Filters offer only the statuses and tags some review has.
+  const phases = Object.keys(PHASES).filter((p) => all.some((r) => r.phase === p));
+  const tags = Object.keys(TAGS).filter((t) => all.some((r) => r.tag === t));
+  const toolbar = all.length
+    ? `<div class="bar"><span id="summary"></span><div class="tools">${menu(
+        "group",
+        "layers",
+        "Group",
+        choices("group", "Group by", [["owner", "Owner"], ["repo", "Repo"], ["status", "Status"], ["type", "Type"], ["none", "No groups"]]),
+      )}${menu("sort", "sort", "Sort", choices("sort", "Sort by", [["activity", "Recent activity"], ["waiting", "Waiting on you first"], ["title", "Title, A to Z"]]))}${menu(
+        "filter",
+        "filter",
+        "Filter",
+        `${choices("phase", "Status", phases.map((p) => [p, `<span class="dot" style="background:${PHASES[p][1]}"></span>${PHASES[p][0]}`]))}${choices("tag", "Type", tags.map((t) => [t, tagPill(t)]))}<button type="button" class="clear">Clear filters</button>`,
+      )}</div></div>`
+    : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}PR reports</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}"><style>
-:root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;color-scheme:light dark}
+:root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--hover:color-mix(in srgb,var(--text) 5%,transparent);color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#09090b;--surface:#111113;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa}}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif,system-ui,sans-serif}
-main{max-width:900px;margin:0 auto;padding:40px 16px}h1{font-size:20px;margin:0 0 4px}p{color:var(--muted);margin:0 0 24px}
+main{max-width:900px;margin:0 auto;padding:40px 16px}h1{font-size:20px;margin:0 0 4px}p{color:var(--muted);margin:0 0 20px}
+svg{width:14px;height:14px;flex:none}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}#summary{color:var(--muted);font-size:13px}
+.tools{display:flex;gap:6px;flex-wrap:wrap}.dd{position:relative}
+.tool{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 9px 0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font:500 12px ui-sans-serif,system-ui,sans-serif;cursor:pointer}
+.tool:hover,.tool[aria-expanded=true]{background:color-mix(in srgb,var(--text) 6%,var(--surface))}.tool>svg{color:var(--muted)}.tool .k{color:var(--muted)}.tool b{font-weight:600}
+.tool b:empty{display:none}.badge{background:var(--text);color:var(--bg);border-radius:999px;padding:0 6px;font-size:10px;line-height:16px}
+.menu{position:absolute;right:0;top:calc(100% + 6px);z-index:10;min-width:210px;max-width:calc(100vw - 32px);padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgb(0 0 0/.14)}
+fieldset{border:0;margin:0;padding:0}fieldset+fieldset{margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
+legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.menu label{clear:both;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap}.menu label:hover{background:var(--hover)}
+.menu input{margin:0;accent-color:var(--text)}.clear{width:100%;margin-top:6px;padding:6px 8px;border:0;border-top:1px solid var(--border);background:none;color:var(--muted);font:500 12px ui-sans-serif,system-ui,sans-serif;text-align:left;cursor:pointer}.clear:hover{color:var(--text)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.group+.group{margin-top:22px}.gh{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:13px;font-weight:600}
+.gh .av{width:20px;height:20px;border-radius:5px;font-size:9px}.count{color:var(--muted);font-weight:500;font-size:12px}
+.av.local{background:#71717a}.av.local svg{width:12px;height:12px}
 .list{border:1px solid var(--border);border-radius:12px;background:var(--surface);overflow:hidden}
 .row{display:flex;align-items:center;border-top:1px solid var(--border);padding-right:12px}.row:first-child{border-top:0}
 .row>a{flex:1;min-width:0;display:flex;gap:12px;align-items:center;padding:12px 16px;color:inherit;text-decoration:none}
-.row:hover{background:color-mix(in srgb,var(--text) 4%,transparent)}
-.tag{font:600 11px ui-monospace,monospace;padding:2px 6px;border-radius:6px;background:color-mix(in srgb,var(--text) 8%,transparent);min-width:64px;text-align:center}
+.row:hover{background:var(--hover)}
+.tc{flex:none;width:98px}.tag{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px 0 7px;border-radius:999px;color:#fff;font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.03em;white-space:nowrap}.tag svg{width:12px;height:12px;stroke-width:2.4}
 .main{flex:1;min-width:0;display:flex;flex-direction:column}.title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta,time{color:var(--muted);font-size:12px}.meta{display:flex;align-items:center;gap:6px;min-width:0}
-.av{width:16px;height:16px;flex:none;border-radius:4px;object-fit:cover;display:inline-grid;place-items:center;color:#fff;font:600 8px/1 ui-sans-serif,system-ui,sans-serif}.phase{font-size:12px;font-weight:600;white-space:nowrap}time{min-width:64px;text-align:right}
+[data-group=owner] .meta .av,[data-group=owner] .owner,[data-group=repo] .meta .av,[data-group=repo] .repo{display:none}
+.av{width:16px;height:16px;flex:none;border-radius:4px;object-fit:cover;display:inline-grid;place-items:center;color:#fff;font:600 8px/1 ui-sans-serif,system-ui,sans-serif}.phase{font-size:12px;font-weight:600;white-space:nowrap}time{min-width:64px;text-align:right;white-space:nowrap}
 .act{cursor:pointer;font:500 12px ui-sans-serif,system-ui,sans-serif;color:var(--muted);background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;margin-left:6px;opacity:0}
 .row:hover .act,.act:focus-visible,.archived .act{opacity:1}.act:hover{color:var(--text)}.danger:hover{color:#dc2626;border-color:#dc2626}
-details{margin-top:24px}summary{cursor:pointer;color:var(--muted);margin-bottom:8px}
-.empty{padding:32px;text-align:center;color:var(--muted)}</style></head><body><main>
+details{margin-top:28px}summary{cursor:pointer;color:var(--muted);margin-bottom:10px}
+@media (max-width:640px){.row>a{display:grid;grid-template-columns:1fr auto auto;gap:6px 10px;padding:12px}.tc{width:auto}.main{grid-column:1/-1;grid-row:2}time{min-width:0}}
+.empty{padding:32px;text-align:center;color:var(--muted)}.empty button{margin-left:6px;font:inherit;color:var(--text);background:none;border:0;text-decoration:underline;cursor:pointer}</style></head><body><main>
 <h1>PR reports</h1><p>Every review on this machine. Open one to comment, ask questions and send it to Claude.</p>
-<div class="list">${active.map(inboxRow).join("") || '<div class="empty">No reviews yet. Run /pr-report in a repo.</div>'}</div>
-${archived.length ? `<details><summary>Archived (${archived.length}): finished reviews after 3 quiet days, others after 14</summary><div class="list archived">${archived.map(inboxRow).join("")}</div></details>` : ""}
+${toolbar}<div id="active" data-rows>${active.length ? `<div class="list">${active.map(inboxRow).join("")}</div>` : '<div class="list"><div class="empty">No reviews yet. Run /pr-report in a repo.</div></div>'}</div>
+${archived.length ? `<details><summary>Archived (${archived.length}): finished reviews after 3 quiet days, others after 14</summary><div class="archived" data-rows><div class="list">${archived.map(inboxRow).join("")}</div></div></details>` : ""}
 </main>
 <script>
 const ago=(t)=>{const s=(Date.now()-Date.parse(t))/1000;return s<60?"now":s<3600?Math.round(s/60)+" min ago":s<86400?Math.round(s/3600)+" h ago":Math.round(s/86400)+" d ago"};
 for(const el of document.querySelectorAll("time"))el.textContent=ago(el.dataset.at);
+const PHASES=${JSON.stringify(PHASES)},TAGS=${JSON.stringify(Object.keys(TAGS))},WAITING=["reviewing","planning"],FOLDER=${JSON.stringify(icon("folder"))};
+const LABELS={group:{owner:"Owner",repo:"Repo",status:"Status",type:"Type",none:"None"},sort:{activity:"Recent activity",waiting:"Waiting on you",title:"Title"}};
+// Group, sort and filter happen here, on the rows the server sent. The choice is remembered in this browser.
+let prefs={group:"owner",sort:"activity",phase:[],tag:[]};
+try{const saved=JSON.parse(localStorage.getItem("pr-report-inbox")||"{}");if(LABELS.group[saved.group])prefs.group=saved.group;if(LABELS.sort[saved.sort])prefs.sort=saved.sort;
+for(const k of ["phase","tag"])if(Array.isArray(saved[k]))prefs[k]=saved[k]}catch{}
+// A saved filter for a status or tag no review has any more would hide everything with nothing to untick.
+for(const k of ["phase","tag"]){const offered=[...document.querySelectorAll("input[name="+k+"]")].map((i)=>i.value);prefs[k]=prefs[k].filter((v)=>offered.includes(v))}
+const save=()=>{try{localStorage.setItem("pr-report-inbox",JSON.stringify(prefs))}catch{}};
+const make=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
+const boxes=[...document.querySelectorAll("[data-rows]")].map((box)=>({box,rows:[...box.querySelectorAll(".row")]}));
+const at=(r)=>r.dataset.updated,rank=(list,k)=>{const i=list.indexOf(k);return i<0?list.length:i};
+const SORTS={activity:(a,b)=>at(b).localeCompare(at(a)),waiting:(a,b)=>WAITING.includes(b.dataset.phase)-WAITING.includes(a.dataset.phase)||at(b).localeCompare(at(a)),title:(a,b)=>a.dataset.title.localeCompare(b.dataset.title,undefined,{sensitivity:"base"})};
+const KEYS={owner:(r)=>r.dataset.owner,repo:(r)=>r.dataset.repo,status:(r)=>r.dataset.phase,type:(r)=>r.dataset.tag,none:()=>""};
+const nameOf=(k)=>prefs.group==="owner"&&!k?"Local repos":k;
+const matches=(r)=>(!prefs.phase.length||prefs.phase.includes(r.dataset.phase))&&(!prefs.tag.length||prefs.tag.includes(r.dataset.tag));
+function heading(key,first,count){
+  const h=make("h2","gh");
+  if(prefs.group==="owner"||prefs.group==="repo"){
+    let av=first.querySelector(".av")?.cloneNode(true);
+    if(prefs.group==="owner"&&!key){av=make("span","av local");av.innerHTML=FOLDER}
+    if(av)h.append(av);h.append(make("span","",nameOf(key)));
+  }else if(prefs.group==="status"){const dot=make("span","dot");dot.style.background=(PHASES[key]??[])[1]??"#71717a";h.append(dot,(PHASES[key]??[key])[0])}
+  else h.append(first.querySelector(".tag").cloneNode(true));
+  h.append(make("span","count",String(count)));return h;
+}
+function render(){
+  document.body.dataset.group=prefs.group;
+  for(const {box,rows} of boxes){
+    if(!rows.length)continue;
+    const kept=rows.filter(matches).sort(SORTS[prefs.sort]),groups=new Map();
+    for(const r of kept){const k=KEYS[prefs.group](r);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r)}
+    const order=[...groups.keys()];
+    if(prefs.group==="status")order.sort((a,b)=>rank(Object.keys(PHASES),a)-rank(Object.keys(PHASES),b));
+    else if(prefs.group==="type")order.sort((a,b)=>rank(TAGS,a)-rank(TAGS,b));
+    else if(prefs.sort==="title")order.sort((a,b)=>nameOf(a).localeCompare(nameOf(b),undefined,{sensitivity:"base"}));
+    box.replaceChildren(...order.map((k)=>{const section=make("section","group"),list=make("div","list");if(prefs.group!=="none")section.append(heading(k,groups.get(k)[0],groups.get(k).length));list.append(...groups.get(k));section.append(list);return section}));
+    if(!kept.length){const list=make("div","list"),empty=make("div","empty","No reviews match these filters."),clear=make("button","clear-all","Clear filters");clear.type="button";empty.append(clear);list.append(empty);box.append(list)}
+  }
+  const active=boxes[0].rows,visible=active.filter(matches),shown=visible.length,waiting=visible.filter((r)=>WAITING.includes(r.dataset.phase)).length;
+  const summary=document.getElementById("summary");
+  if(summary)summary.textContent=(shown===active.length?active.length+" "+(active.length===1?"review":"reviews"):shown+" of "+active.length+" reviews")+(waiting?", "+waiting+" waiting on you":"");
+  for(const i of document.querySelectorAll(".menu input"))i.checked=i.type==="radio"?prefs[i.name]===i.value:prefs[i.name].includes(i.value);
+  for(const k of ["group","sort"]){const b=document.querySelector("[data-label="+k+"]");if(b)b.textContent=LABELS[k][prefs[k]]}
+  const n=prefs.phase.length+prefs.tag.length,f=document.querySelector("[data-label=filter]");
+  if(f){f.textContent=n?String(n):"";f.className=n?"badge":""}
+}
+render();
+// Menus: one open at a time; a click outside or Escape closes them.
+const dds=[...document.querySelectorAll(".dd")],openMenu=()=>dds.find((d)=>!d.querySelector(".menu").hidden);
+const toggle=(dd,open)=>{dd.querySelector(".menu").hidden=!open;dd.querySelector(".tool").setAttribute("aria-expanded",String(open))};
+let reloadLater=false;
+document.addEventListener("click",(e)=>{
+  const dd=e.target.closest(".dd");for(const d of dds)if(d!==dd)toggle(d,false);
+  if(dd&&e.target.closest(".tool"))toggle(dd,dd.querySelector(".menu").hidden);
+  if(e.target.closest(".clear,.clear-all")){prefs.phase=[];prefs.tag=[];save();render()}
+  if(reloadLater&&!openMenu())location.reload();
+});
+document.addEventListener("keydown",(e)=>{const d=openMenu();if(e.key==="Escape"&&d){toggle(d,false);d.querySelector(".tool").focus();if(reloadLater)location.reload()}});
+document.addEventListener("change",(e)=>{const i=e.target;if(!(i.name in prefs))return;
+  if(i.type==="radio"){prefs[i.name]=i.value;toggle(i.closest(".dd"),false)}else prefs[i.name]=[...document.querySelectorAll("input[name="+i.name+"]:checked")].map((x)=>x.value);
+  save();render()});
 // The stream starts with every review's current state, so reload only for a review that changed or is new.
 const shown=${JSON.stringify(Object.fromEntries(all.map((r) => [r.id, r.updatedAt]))).replace(/</g, "\\u003c")};
 const es=new EventSource("/api/events?token=${pageToken}&watch=*");let t;
-es.addEventListener("state",(e)=>{const s=JSON.parse(e.data);if(shown[s.id]===s.updatedAt)return;clearTimeout(t);t=setTimeout(()=>location.reload(),400)});
+es.addEventListener("state",(e)=>{const s=JSON.parse(e.data);if(shown[s.id]===s.updatedAt)return;clearTimeout(t);t=setTimeout(()=>openMenu()?(reloadLater=true):location.reload(),400)});
 document.addEventListener("click",async(e)=>{const b=e.target.closest("button[data-act]");if(!b)return;
 if(b.dataset.act==="delete"&&!confirm("Delete this review's files ("+b.dataset.size+") and its saved rounds? This cannot be undone. Your code and branches are not touched."))return;
 const act=b.dataset.act==="delete"?"delete":"archive";
