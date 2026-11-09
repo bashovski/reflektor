@@ -33,6 +33,11 @@ try {
 
   // The PR type pill is drawn twice, by the viewer (TAGS in meta.ts) and by the inbox (TAGS in daemon.mjs), from two lists
   // that cannot share code: the daemon uses Node built-ins only. So the lists are compared here instead.
+  // The third-party notices file ships with the skill and must name every package the viewer bundles.
+  const notices = readFileSync(join(root, "skill/THIRD-PARTY-NOTICES.md"), "utf8");
+  for (const dep of Object.keys(JSON.parse(readFileSync(join(root, "viewer/package.json"), "utf8")).dependencies))
+    if (!notices.includes(`## ${dep} `)) fail(`THIRD-PARTY-NOTICES.md does not cover ${dep}; run node scripts/build-notices.mjs`);
+
   const lucideName = (icon) => icon[0].toLowerCase() + icon.slice(1);
   const viewerTags = Object.fromEntries(
     [...readFileSync(join(root, "viewer/src/lib/meta.ts"), "utf8").matchAll(/^\s+([A-Z]+): \{ color: "(#[0-9a-f]{6})", icon: (\w+) \}/gm)].map(([, tag, color, icon]) => [tag, `${color} ${lucideName(icon)}`]),
