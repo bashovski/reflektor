@@ -125,6 +125,7 @@ function loadReview(entry) {
     phase: saved.phase ?? "reviewing",
     statuses: saved.statuses ?? {},
     plan: saved.plan ?? null,
+    pr: saved.pr ?? null,
     // Events saved before handling was tracked count as handled once delivered.
     events: (saved.events ?? []).map((e) => ("handledAt" in e ? e : { ...e, handledAt: e.deliveredAt })),
     lastAgentActivity: saved.lastAgentActivity ?? null,
@@ -153,6 +154,7 @@ function save(r) {
     phase: r.phase,
     statuses: r.statuses,
     plan: r.plan,
+    pr: r.pr ?? null,
     events: r.events,
     lastAgentActivity: r.lastAgentActivity,
     updatedAt: r.updatedAt,
@@ -205,6 +207,9 @@ const liveState = (r) => ({
   lastAgentActivity: r.lastAgentActivity,
   // Code that changed after the current round was built; null when it still matches.
   drift: r.drift ?? null,
+  // The branch's pull request as last seen: told by the agent, or polled from GitHub. The page
+  // prefers it to the one frozen in the report, which may be older.
+  pr: r.pr ?? null,
   // Whether an agent waits for this review's events, and since when the oldest event waits for one.
   // The page warns when nobody picks up what the reviewer sent.
   listening: listening(r),
@@ -350,6 +355,17 @@ const PHASES = {
   sent: ["Sent to Claude", "#2563eb"],
   working: ["Claude working", "#2563eb"],
   done: ["Done", "#059669"],
+  merged: ["Merged", "#7c3aed"],
+};
+// The status the inbox shows: the review's phase, except that a merged pull request ends the review
+// whatever round it was in. Nothing more will happen to a merged branch.
+const statusOf = (r) => (r.pr?.state === "MERGED" ? "merged" : r.phase);
+
+// Pull request states: the colors and icons of PR_STATES in viewer/src/lib/meta.ts.
+const PR_STATES = {
+  OPEN: ["open", "#059669", "gitPullRequest"],
+  MERGED: ["merged", "#7c3aed", "gitMerge"],
+  CLOSED: ["closed", "#dc2626", "gitPullRequestClosed"],
 };
 
 // Lucide icons (ISC license), drawn in the text color.
@@ -371,6 +387,9 @@ const ICONS = {
   filter: '<path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
   search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+  gitPullRequest: '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/>',
+  gitMerge: '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
+  gitPullRequestClosed: '<circle cx="6" cy="6" r="3"/><path d="M6 9v12"/><path d="m21 3-6 6"/><path d="m21 9-6-6"/><path d="M18 11.5V15"/><circle cx="18" cy="18" r="3"/>',
 };
 const icon = (name) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
@@ -390,6 +409,12 @@ const tagPill = (tag) => {
   const [color, name] = TAGS[tag] ?? ["#71717a", null];
   return `<span class="tag" style="background:${color}">${name ? icon(name) : ""}${escapeHtml(tag ?? "")}</span>`;
 };
+// The branch's pull request as a small chip: its number in the state's color, the state and title on hover.
+const prChip = (pr) => {
+  if (!pr) return "";
+  const [label, color, name] = PR_STATES[pr.state] ?? PR_STATES.OPEN;
+  return `<span class="pr" data-state="${escapeHtml(pr.state)}" style="color:${color}" title="Pull request #${Number(pr.number)}, ${label}${pr.title ? `: ${escapeHtml(pr.title)}` : ""}">${icon(name)}#${Number(pr.number)}</span>`;
+};
 
 // The review icon from viewer/src/lib/favicon.ts in gray, with a red dot while a review waits on you.
 const inboxIcon = (dot) =>
@@ -407,18 +432,19 @@ const ownerOf = (repo) => (repo.includes("/") ? repo.slice(0, repo.lastIndexOf("
 
 // One review. The data attributes are what the page groups, sorts and filters by.
 function inboxRow(r) {
-  const [label, color] = r.archived ? ["Archived", "#71717a"] : (PHASES[r.phase] ?? [r.phase, "#71717a"]);
+  const status = statusOf(r);
+  const [label, color] = r.archived ? ["Archived", "#71717a"] : (PHASES[status] ?? [status, "#71717a"]);
   const waiting = r.questions.filter((q) => !q.answer).length;
   const id = escapeHtml(r.id);
   const owner = ownerOf(r.repo);
   const actions = r.archived
     ? `<button class="act" data-act="restore" data-id="${id}">Restore</button><button class="act danger" data-act="delete" data-id="${id}" data-size="${megabytes(sizeOf(r))}">Delete</button>`
     : `<button class="act" data-act="archive" data-id="${id}" title="Move to Archived">Archive</button>`;
-  const data = { owner, repo: r.repo, branch: r.branch, phase: r.phase, tag: r.tag ?? "", updated: r.updatedAt, title: r.title ?? r.branch };
+  const data = { owner, repo: r.repo, branch: r.branch, phase: status, tag: r.tag ?? "", updated: r.updatedAt, title: r.title ?? r.branch };
   return `<div class="row" ${Object.entries(data).map(([k, v]) => `data-${k}="${escapeHtml(v)}"`).join(" ")}><a href="/r/${encodeURIComponent(r.id)}">
       <span class="tc">${tagPill(r.tag)}</span>
       <span class="main"><span class="title">${escapeHtml(r.title ?? r.branch)}</span>
-      <span class="meta">${avatarHtml(r.avatar)}<span><span class="repo">${owner ? `<span class="owner">${escapeHtml(owner)}/</span>` : ""}${escapeHtml(r.repo.slice(owner ? owner.length + 1 : 0))} · </span>${escapeHtml(r.branch)} · round ${r.round}${waiting ? ` · ${waiting} question${waiting === 1 ? "" : "s"} waiting` : ""}</span></span></span>
+      <span class="meta">${avatarHtml(r.avatar)}<span><span class="repo">${owner ? `<span class="owner">${escapeHtml(owner)}/</span>` : ""}${escapeHtml(r.repo.slice(owner ? owner.length + 1 : 0))} · </span>${escapeHtml(r.branch)} · round ${r.round}${waiting ? ` · ${waiting} question${waiting === 1 ? "" : "s"} waiting` : ""}</span>${prChip(r.pr)}</span></span>
       <span class="phase" style="color:${color}">${label}</span>
       <time data-at="${r.updatedAt}"></time></a>${actions}</div>`;
 }
@@ -436,9 +462,9 @@ function inboxPage(welcome = false) {
   const active = all.filter((r) => !r.archived);
   const archived = all.filter((r) => r.archived);
   // Reviews that need the reviewer: their turn to review, or a plan to approve.
-  const waitingOnYou = active.filter((r) => r.phase === "reviewing" || r.phase === "planning").length;
+  const waitingOnYou = active.filter((r) => statusOf(r) === "reviewing" || statusOf(r) === "planning").length;
   // Filters offer only the statuses and tags some review has.
-  const phases = Object.keys(PHASES).filter((p) => all.some((r) => r.phase === p));
+  const phases = Object.keys(PHASES).filter((p) => all.some((r) => statusOf(r) === p));
   const tags = Object.keys(TAGS).filter((t) => all.some((r) => r.tag === t));
   const toolbar = all.length
     ? `<div class="bar"><span class="left"><span id="summary"></span></span><div class="tools">${menu(
@@ -490,6 +516,7 @@ legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--m
 .meta,time{color:var(--muted);font-size:12px}.meta{display:flex;align-items:center;gap:6px;min-width:0}
 [data-group=owner] .meta .av,[data-group=owner] .owner,[data-group=repo] .meta .av,[data-group=repo] .repo{display:none}
 .av{width:16px;height:16px;flex:none;border-radius:4px;object-fit:cover;display:inline-grid;place-items:center;color:#fff;font:600 8px/1 ui-sans-serif,system-ui,sans-serif}.phase{font-size:12px;font-weight:600;white-space:nowrap}time{min-width:64px;text-align:right;white-space:nowrap}
+.pr{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 6px 0 5px;border:1px solid color-mix(in srgb,currentColor 35%,transparent);border-radius:999px;font:600 11px/1 ui-sans-serif,system-ui,sans-serif;white-space:nowrap}.pr svg{width:11px;height:11px;stroke-width:2.4}
 .act{cursor:pointer;font:500 12px ui-sans-serif,system-ui,sans-serif;color:var(--muted);background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;margin-left:6px;opacity:0}
 .row:hover .act,.act:focus-visible,.archived .act{opacity:1}.act:hover{color:var(--text)}.danger:hover{color:#dc2626;border-color:#dc2626}
 details{margin-top:28px}summary{cursor:pointer;color:var(--muted);margin-bottom:10px}
@@ -709,7 +736,19 @@ function roundFacts(r) {
   if (r.facts?.builtAt === entry.builtAt) return r.facts;
   try {
     const { diff } = JSON.parse(roundText(roundFile(entry)));
-    r.facts = { builtAt: entry.builtAt, root: diff.repo.root, gitDir: diff.repo.gitDir, branch: diff.branch.head, headSha: diff.branch.headSha, snapshot: diff.branch.snapshot };
+    r.facts = {
+      builtAt: entry.builtAt,
+      root: diff.repo.root,
+      gitDir: diff.repo.gitDir,
+      branch: diff.branch.head,
+      headSha: diff.branch.headSha,
+      snapshot: diff.branch.snapshot,
+      // Where the branch's pull request would live, and whether the branch is on the remote at all.
+      host: diff.repo.host ?? null,
+      owner: diff.repo.owner ?? null,
+      name: diff.repo.name,
+      upstream: diff.branch.upstream ?? null,
+    };
   } catch {
     r.facts = { builtAt: entry.builtAt, root: null };
   }
@@ -749,8 +788,149 @@ async function checkDrift(r) {
 }
 
 setInterval(() => {
-  for (const r of reviews.values()) if (openTabs(r) > 0 && (r.phase === "reviewing" || r.phase === "done")) void checkDrift(r);
+  for (const r of reviews.values()) {
+    if (openTabs(r) === 0) continue;
+    if (r.phase === "reviewing" || r.phase === "done") void checkDrift(r);
+    // Not awaited: a slow network must not hold up the git check.
+    void checkPr(r);
+  }
 }, DRIFT_MS).unref();
+
+// ------------------------------------------------------------------ pull request
+// The branch's pull request on GitHub, followed while the review is on screen, so a pull request
+// opened, merged or closed after the report was built shows up without a new report. The agent tells
+// the daemon the moment it opens one (review.mjs pr); for what happens on GitHub afterwards the
+// daemon polls with conditional requests. GitHub allows 5,000 requests an hour per token, and a 304
+// Not Modified answer to a request with If-None-Match does not count, so following an idle pull
+// request costs nothing: one request per review when something changed, headers only otherwise.
+
+const PR_POLL_MS = Number(process.env.PR_REPORT_PR_POLL_SECONDS ?? 60) * 1000;
+// Overridden by the check suites, which point the daemon at a local stand-in for GitHub.
+const GITHUB_API = (process.env.PR_REPORT_GITHUB_API ?? "https://api.github.com").replace(/\/+$/, "");
+const PR_QUIET_MS = 30 * 60_000;
+
+// The token comes from gh once per daemon start and stays in memory: never on disk or in the log.
+// Without one (logged out) the daemon asks gh itself for the pull request; without gh it does not poll.
+let githubAuth = null;
+const githubToken = () =>
+  (githubAuth ??= process.env.PR_REPORT_GITHUB_TOKEN
+    ? Promise.resolve({ token: process.env.PR_REPORT_GITHUB_TOKEN, gh: true })
+    : run("gh", ["auth", "token"], { windowsHide: true, timeout: 10_000 }).then(
+        (x) => ({ token: x.stdout.trim() || null, gh: true }),
+        (e) => ({ token: null, gh: e.code !== "ENOENT" }),
+      ));
+
+// One shape for a pull request from the REST API (snake_case) and from gh (camelCase).
+const prFrom = (p, checkedAt = now()) => ({
+  number: Number(p.number),
+  url: p.html_url ?? p.url,
+  title: p.title ?? null,
+  state: p.merged_at || p.mergedAt || p.state === "MERGED" ? "MERGED" : String(p.state).toUpperCase() === "CLOSED" ? "CLOSED" : "OPEN",
+  base: p.base?.ref ?? p.baseRefName ?? null,
+  mergedAt: p.merged_at ?? p.mergedAt ?? null,
+  checkedAt,
+});
+
+// The error for an answer that is not 2xx or 304. A rate limit says when to try again.
+function githubError(res) {
+  const e = new Error(`GitHub answered ${res.status}`);
+  e.status = res.status;
+  if (res.status === 403 || res.status === 429) {
+    const after = Number(res.headers.get("retry-after"));
+    const reset = Number(res.headers.get("x-ratelimit-reset"));
+    e.retryAfterMs = after ? after * 1000 : reset ? Math.max(1000, reset * 1000 - Date.now()) : undefined;
+  }
+  return e;
+}
+
+const githubGet = (path, token, etag) =>
+  fetch(`${GITHUB_API}${path}`, {
+    headers: {
+      authorization: `Bearer ${token}`,
+      accept: "application/vnd.github+json",
+      "x-github-api-version": "2022-11-28",
+      "user-agent": "pr-report",
+      ...(etag ? { "if-none-match": etag } : {}),
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+
+// The newest pull request from this branch, through the REST API. Returns undefined when nothing
+// changed since the last look (304), null when the branch has none, else the pull request.
+async function restPr(r, f, token) {
+  const query = new URLSearchParams({ head: `${f.owner}:${f.branch}`, state: "all", per_page: "1" });
+  const res = await githubGet(`/repos/${f.owner}/${f.name}/pulls?${query}`, token, r.prEtag);
+  if (res.status === 304) return undefined;
+  if (res.status === 401) {
+    // The token no longer works: from here on ask gh, which may have a fresh one.
+    githubAuth = Promise.resolve({ token: null, gh: true });
+    throw githubError(res);
+  }
+  if (!res.ok) throw githubError(res);
+  r.prEtag = res.headers.get("etag");
+  const [pr] = await res.json();
+  return pr ? prFrom(pr) : null;
+}
+
+// The pull request through gh, for a daemon without a token. `ref` is the branch or the pull request's URL.
+const ghPr = (cwd, ref) =>
+  run("gh", ["pr", "view", ref, "--json", "number,url,title,state,mergedAt,baseRefName"], { cwd, windowsHide: true, timeout: 15_000 }).then(
+    (x) => prFrom(JSON.parse(x.stdout)),
+    (e) => {
+      if (/no pull requests found/i.test(e.stderr ?? "")) return null;
+      throw e;
+    },
+  );
+
+// Keeps what GitHub said, and tells open pages and the inbox when it differs from what they show.
+function setPr(r, pr) {
+  // A pull request does not go away. An empty answer with one known means the lookup missed it
+  // (a pull request into another repo, from a fork), so the known one stays.
+  if (!pr) return false;
+  const shown = r.pr && JSON.stringify([r.pr.number, r.pr.state, r.pr.title, r.pr.mergedAt, r.pr.base]);
+  if (shown === JSON.stringify([pr.number, pr.state, pr.title, pr.mergedAt, pr.base])) {
+    r.pr.checkedAt = pr.checkedAt;
+    return false;
+  }
+  r.pr = pr;
+  save(r);
+  return true;
+}
+
+// A report built after the pull request exists starts with its state. A state the daemon saw since
+// (a merge) wins over an older build.
+function seedPr(r, bundle) {
+  const frozen = bundle.diff.branch.pr;
+  if (!frozen || (r.pr && r.pr.checkedAt > bundle.builtAt)) return;
+  setPr(r, { number: Number(frozen.number), url: frozen.url, title: frozen.title ?? null, state: frozen.state ?? "OPEN", base: bundle.diff.branch.base, mergedAt: null, checkedAt: bundle.builtAt });
+}
+
+// One look at GitHub for a review on screen, when it is due. Every PR_POLL_MS, or every tick while
+// the branch is on the remote without a pull request, since one is likely about to be opened.
+// Nothing more once it is merged. On failure it backs off, as far as GitHub says when rate limited,
+// doubling otherwise (offline, logged out) until it goes quiet.
+async function checkPr(r) {
+  const f = roundFacts(r);
+  if (f?.host !== "github.com" || !f.owner || f.branch === "HEAD") return;
+  if (r.pr?.state === "MERGED" || r.prBusy || Date.now() < (r.prNextAt ?? 0)) return;
+  r.prBusy = true;
+  try {
+    const auth = await githubToken();
+    if (!auth.token && !auth.gh) {
+      r.prNextAt = Infinity;
+      return;
+    }
+    const found = auth.token ? await restPr(r, f, auth.token) : await ghPr(existsSync(f.root ?? "") ? f.root : undefined, f.branch);
+    r.prFailures = 0;
+    if (found !== undefined) setPr(r, found);
+    r.prNextAt = Date.now() + (!r.pr && f.upstream ? 0 : PR_POLL_MS);
+  } catch (e) {
+    r.prFailures = (r.prFailures ?? 0) + 1;
+    r.prNextAt = Date.now() + (e.retryAfterMs ?? Math.min(PR_POLL_MS * 2 ** r.prFailures, PR_QUIET_MS));
+  } finally {
+    r.prBusy = false;
+  }
+}
 
 // ------------------------------------------------------------------ archive
 // The inbox keeps reviews in use. Finished ones move to "Archived" after 3 quiet days, others after
@@ -762,7 +942,8 @@ function archiveIdle() {
   let changed = false;
   for (const r of reviews.values()) {
     const quiet = Date.now() - Date.parse(r.updatedAt);
-    if (!r.archived && (quiet > 14 * DAY || (r.phase === "done" && quiet > 3 * DAY))) {
+    const finished = statusOf(r) === "done" || statusOf(r) === "merged";
+    if (!r.archived && (quiet > 14 * DAY || (finished && quiet > 3 * DAY))) {
       r.archived = now();
       changed = true;
     }
@@ -892,7 +1073,7 @@ async function handle(req, res, port) {
     let r = [...reviews.values()].find((x) => x.dir === dir && x.branch === branch);
     if (!r) {
       const id = `${slug(bundle.diff.repo.name)}-${slug(branch)}-${createHash("sha1").update(dir).digest("hex").slice(0, 4)}`;
-      r = { id, dir, repo, branch, rounds: [], phase: "reviewing", statuses: {}, plan: null, events: [], lastAgentActivity: null, questions: [], round: bundle.round };
+      r = { id, dir, repo, branch, rounds: [], phase: "reviewing", statuses: {}, plan: null, pr: null, events: [], lastAgentActivity: null, questions: [], round: bundle.round };
       reviews.set(id, r);
     }
     r.title = bundle.report.title;
@@ -909,6 +1090,7 @@ async function handle(req, res, port) {
     // A new build matches the code again; a rebuild answers the reviewer's request for one.
     r.drift = null;
     markHandled(r, "refresh");
+    seedPr(r, bundle);
     if (!republished && round !== r.round) {
       r.round = round;
       r.phase = "reviewing";
@@ -998,6 +1180,30 @@ async function handle(req, res, port) {
       const finished = finishIfSettled(r);
       save(r);
       return send(res, 200, { ok: true, finished, round: r.round });
+    }
+    // The agent opened a pull request: show it now, and follow it from here.
+    if (action === "pr") {
+      const m = String(body.url ?? "").match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+      if (!m) return send(res, 400, { error: "url must be a pull request on github.com, like https://github.com/owner/repo/pull/12" });
+      const [url, owner, name, number] = m;
+      const auth = await githubToken();
+      let pr;
+      try {
+        if (auth.token) {
+          const answer = await githubGet(`/repos/${owner}/${name}/pulls/${number}`, auth.token);
+          if (!answer.ok) throw githubError(answer);
+          pr = prFrom(await answer.json());
+        } else if (auth.gh) pr = await ghPr(undefined, url);
+      } catch (e) {
+        return send(res, 502, { error: `Could not read the pull request: ${e.message}` });
+      }
+      // Without gh, what the URL says: a pull request just opened is open.
+      pr ??= { number: Number(number), url, title: typeof body.title === "string" ? body.title : null, state: "OPEN", base: null, mergedAt: null, checkedAt: now() };
+      setPr(r, pr);
+      // The next poll must answer in full, not with "nothing changed" since the look before this one.
+      r.prEtag = null;
+      r.prNextAt = 0;
+      return send(res, 200, { pr: r.pr });
     }
     return send(res, 404, { error: "not found" });
   }

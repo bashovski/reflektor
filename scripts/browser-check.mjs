@@ -15,14 +15,26 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gitBash } from "../skill/scripts/repo.mjs";
+import { githubPr, startGithubStub } from "./github-stub.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const { chromium } = createRequire(join(root, "viewer/package.json"))("playwright-core");
 const tmp = mkdtempSync(join(tmpdir(), "pr-report-browser-"));
 const repo = join(tmp, "books");
 const data = join(repo, ".git/pr-report/feat-books");
+// GitHub is a local stub: the fake repo's remote is on github.com, so the daemon would otherwise ask the real API.
 // GH_CONFIG_DIR points at nothing, so gh has no login and the user menu shows the repo's git identity.
-const env = { ...process.env, PR_REPORT_HOME: join(tmp, "home"), PR_REPORT_PORT: String(4900 + Math.floor(Math.random() * 400)), PR_REPORT_DRIFT_SECONDS: "1", GH_CONFIG_DIR: join(tmp, "gh-config") };
+const github = await startGithubStub();
+const env = {
+  ...process.env,
+  PR_REPORT_HOME: join(tmp, "home"),
+  PR_REPORT_PORT: String(4900 + Math.floor(Math.random() * 400)),
+  PR_REPORT_DRIFT_SECONDS: "1",
+  PR_REPORT_GITHUB_API: github.url,
+  PR_REPORT_GITHUB_TOKEN: "stub-token",
+  PR_REPORT_PR_POLL_SECONDS: "1",
+  GH_CONFIG_DIR: join(tmp, "gh-config"),
+};
 
 const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
 const script = (name, ...args) => run("node", [join(root, "skill/scripts", name), ...args]);
@@ -167,6 +179,31 @@ try {
   await page.getByRole("button", { name: "Ask Claude to update the report" }).click();
   if (!review("wait", "--id", id).includes("asked for an updated report")) fail("the update request did not reach the agent");
 
+  // 7b. A pull request opened on GitHub after the report was built shows up in the header within a
+  // poll; merged, the page says so at the top, the before-merge items are done, and the warning
+  // about changed code goes, since the code is meant to move on now.
+  github.set([githubPr(7, "open")]);
+  await expectVisible(page.getByRole("link", { name: /PR #7.*Open/ }), "the open pull request pill in the header", 15_000);
+  await page.getByRole("button", { name: /acme-labs/ }).click();
+  await expectVisible(page.getByRole("menuitem", { name: /View Pull Request/ }), "the pull request in the owner menu");
+  if (await page.getByRole("menuitem", { name: /Open Pull Request/ }).count()) fail("the owner menu still offers a new pull request while one is open");
+  await page.keyboard.press("Escape");
+  github.set([githubPr(7, "closed", new Date().toISOString())]);
+  await expectVisible(page.getByText(/Pull request #7 was merged into main on/), "the merged banner", 15_000);
+  await expectVisible(page.getByRole("link", { name: /PR #7.*Merged/ }), "the merged pull request pill in the header");
+  await expectVisible(page.getByText("Merged, so these are done."), "the before-merge items shown as done");
+  try {
+    await page.getByText(/changed after this report was built/).first().waitFor({ state: "hidden", timeout: 5000 });
+  } catch {
+    fail("the changed-code warning stays after the merge");
+  }
+  let title = "";
+  for (let i = 0; i < 20 && !/merged/i.test(title); i++) {
+    await sleep(200);
+    title = await page.title();
+  }
+  if (!/merged/i.test(title)) fail(`the tab title does not say the pull request is merged: ${title}`);
+
   // 8. The inbox shows one owner's reviews when asked, groups by owner by default, and remembers another grouping after a reload.
   await page.goto(`http://127.0.0.1:${port}/?owner=someone-else`);
   await expectVisible(page.getByText("Owner: someone-else"), "the owner filter");
@@ -176,13 +213,15 @@ try {
   await page.getByRole("button", { name: /^Group/ }).click();
   await page.getByRole("radio", { name: "Status" }).check();
   await page.reload();
-  await expectVisible(page.getByRole("heading", { name: /Waiting on you/ }), "the status grouping after a reload");
+  // The review's pull request is merged, so the status group is "Merged", not "Waiting on you".
+  await expectVisible(page.getByRole("heading", { name: /^Merged/ }), "the status grouping after a reload");
+  if (!(await page.locator(".row .pr[data-state=MERGED]").count())) fail("the inbox row has no chip for the merged pull request");
   // Search sits in the filter menu and forgives typos.
   await page.getByRole("button", { name: /^Filter/ }).click();
   await page.getByRole("textbox", { name: "Search reviews" }).fill("zzzz");
   await expectVisible(page.getByText("No reviews match these filters."), "the empty search result");
   await page.getByRole("textbox", { name: "Search reviews" }).fill("libary");
-  await expectVisible(page.getByRole("heading", { name: /Waiting on you/ }), "a fuzzy search match");
+  await expectVisible(page.getByRole("heading", { name: /^Merged/ }), "a fuzzy search match");
 
   // 9. A browser that skipped the setup is offered it once, above a report and on the inbox.
   await page.evaluate(() => localStorage.removeItem("pr-report:setup"));
@@ -195,7 +234,9 @@ try {
 
   const unexpected = errors.filter((e) => !/favicon/.test(e));
   if (unexpected.length) fail(`errors in the page:\n${unexpected.join("\n")}`);
-  console.log("browser: setup page, draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, user menu, changed-code warning, inbox grouping and search, and the setup offer all worked");
+  console.log(
+    "browser: setup page, draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, user menu, changed-code warning, pull request opened and merged, inbox grouping and search, and the setup offer all worked",
+  );
 } catch (e) {
   fail(e.stderr?.toString() || e.stack || e.message);
 } finally {
@@ -205,6 +246,7 @@ try {
   } catch {
     // Already stopped.
   }
+  github.close();
   await sleep(200);
   rmSync(tmp, { recursive: true, force: true });
 }

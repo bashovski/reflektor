@@ -31,6 +31,7 @@ export type DiffFile = {
 
 export type BaseSource = "argument" | "open-pr" | "config" | "default-branch" | "guess";
 export type Forge = "github" | "gitlab" | "bitbucket";
+export type PrState = "OPEN" | "CLOSED" | "MERGED";
 
 export type Commit = { sha: string; short: string; subject: string; author: string; date: string };
 
@@ -95,8 +96,9 @@ export type DiffData = {
     baseRef: string;
     baseSource: BaseSource;
     mergeBase: string;
-    // The branch's pull request on GitHub, in any state. Reports from before `state` count as open.
-    pr: { number: number; url: string; title: string; state?: "OPEN" | "CLOSED" | "MERGED" } | null;
+    // The branch's pull request on GitHub as of this build, in any state. Reports from before `state`
+    // count as open. The review daemon follows the pull request live from here (see viewer/src/lib/pr.ts).
+    pr: { number: number; url: string; title: string; state?: PrState } | null;
     // The branch on the remote as of the last fetch or push, and commits not pushed yet. Null when it is not on the remote.
     upstream?: { ref: string; ahead: number } | null;
   };
