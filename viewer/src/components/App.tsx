@@ -21,6 +21,7 @@ import { ReviewBar } from "./ReviewBar";
 import { RoundBanner } from "./RoundBanner";
 import { Sections } from "./Sections";
 import { SettingsDialog } from "./Settings";
+import { SetupBanner } from "./SetupBanner";
 import { Sidebar } from "./Sidebar";
 
 const useShortcuts = (onHelp: () => void) => {
@@ -106,6 +107,7 @@ const Layout = () => {
   return (
     <>
       <TopBar onSettings={() => setSettings(true)} />
+      <SetupBanner />
       <RoundBanner />
       <DriftBanner />
       <div className="mx-auto grid max-w-[1440px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)]">

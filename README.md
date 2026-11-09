@@ -20,6 +20,8 @@ It works with any language or stack. It only needs git and Node.js.
 
 The script builds the viewer and links `~/.claude/skills/pr-report` to this repo's `skill/` folder, so edits apply right away. Use `./install.sh --copy` to copy the folder instead.
 
+A first install ends in the browser, on a one-minute setup page: whether the GitHub and GitLab command lines (`gh`, `glab`) are installed and logged in, with the commands to get there, then light or dark, then a code theme with a live preview. Enter moves on and Escape skips. `--no-open` leaves the browser alone; `node skill/scripts/review.mjs setup` opens the page any time, and so does a link in a report's settings. The choices live in that browser, next to the diff style, and the report's gear (or `?`) changes them later. An inbox or report opened in a browser that never ran the setup offers it once.
+
 On Windows, run `node scripts/install.mjs` (or `--copy`) in PowerShell, cmd or Git Bash. The link is a directory junction, so it needs no admin rights. Claude Code on Windows runs commands in Git Bash, and so do the project checks.
 
 Then, in any git repo, ask Claude for a PR report or type:

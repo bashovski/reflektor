@@ -425,7 +425,9 @@ const menu = (key, iconName, label, body) =>
 const choices = (name, legend, options) =>
   `<fieldset><legend>${legend}</legend>${options.map(([value, html]) => `<label><input type="${name === "group" || name === "sort" ? "radio" : "checkbox"}" name="${name}" value="${escapeHtml(value)}">${html}</label>`).join("")}</fieldset>`;
 
-function inboxPage() {
+// The inbox. `welcome` is set when the setup page hands over to it, so a first-timer is told they are
+// done and how to start; without it, an empty inbox just says how to start.
+function inboxPage(welcome = false) {
   const all = [...reviews.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const active = all.filter((r) => !r.archived);
   const archived = all.filter((r) => r.archived);
@@ -488,12 +490,19 @@ legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--m
 .row:hover .act,.act:focus-visible,.archived .act{opacity:1}.act:hover{color:var(--text)}.danger:hover{color:#dc2626;border-color:#dc2626}
 details{margin-top:28px}summary{cursor:pointer;color:var(--muted);margin-bottom:10px}
 @media (max-width:640px){.row>a{display:grid;grid-template-columns:1fr auto auto;gap:6px 10px;padding:12px}.tc{width:auto}.main{grid-column:1/-1;grid-row:2}time{min-width:0}}
-.empty{padding:32px;text-align:center;color:var(--muted)}.empty button{margin-left:6px;font:inherit;color:var(--text);background:none;border:0;text-decoration:underline;cursor:pointer}</style></head><body><main>
+.empty{padding:32px;text-align:center;color:var(--muted)}.empty button{margin-left:6px;font:inherit;color:var(--text);background:none;border:0;text-decoration:underline;cursor:pointer}
+.intro{padding:44px 24px}.intro h2{margin:0 0 8px;font-size:18px;color:var(--text)}.intro p{max-width:540px;margin:0 auto}
+code{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--hover);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--text);white-space:nowrap}
+.cmds{list-style:none;margin:20px auto 0;padding:0;display:grid;gap:8px;max-width:480px;text-align:left}.cmds li{display:flex;align-items:center;gap:12px}.cmds code{flex:none;min-width:156px;text-align:center}
+.hint{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font-size:13px}.hint[hidden]{display:none}.hint a{color:inherit;font-weight:600}.hint button{margin-left:auto;padding:2px 6px;border:0;background:none;color:var(--muted);font:inherit;cursor:pointer}.hint button:hover{color:var(--text)}</style></head><body><main>
 <h1>PR reports</h1><p>Every review on this machine. Open one to comment, ask questions and send it to Claude.</p>
-${toolbar}<div id="active" data-rows>${active.length ? `<div class="list">${active.map(inboxRow).join("")}</div>` : '<div class="list"><div class="empty">No reviews yet. Run /pr-report in a repo.</div></div>'}</div>
+<div class="hint" id="setup-hint" hidden><span>New here? A one-minute <a href="/setup">setup</a> checks your tools and picks how reports look.</span><button type="button" id="setup-dismiss" title="Not now">Not now</button></div>
+${toolbar}<div id="active" data-rows>${active.length ? `<div class="list">${active.map(inboxRow).join("")}</div>` : `<div class="list">${emptyState(welcome, archived.length)}</div>`}</div>
 ${archived.length ? `<details><summary>Archived (${archived.length}): finished reviews after 3 quiet days, others after 14</summary><div class="archived" data-rows><div class="list">${archived.map(inboxRow).join("")}</div></div></details>` : ""}
 </main>
 <script>
+// A browser that never saw the setup page (see viewer/src/lib/setup.ts) is offered it once, here and above a report.
+try{const hint=document.getElementById("setup-hint");if(!localStorage.getItem("pr-report:setup")){hint.hidden=false;document.getElementById("setup-dismiss").onclick=()=>{localStorage.setItem("pr-report:setup",JSON.stringify({at:new Date().toISOString()}));hint.hidden=true}}}catch{}
 const ago=(t)=>{const s=(Date.now()-Date.parse(t))/1000;return s<60?"now":s<3600?Math.round(s/60)+" min ago":s<86400?Math.round(s/3600)+" h ago":Math.round(s/86400)+" d ago"};
 for(const el of document.querySelectorAll("time"))el.textContent=ago(el.dataset.at);
 const PHASES=${JSON.stringify(PHASES)},TAGS=${JSON.stringify(Object.keys(TAGS))},WAITING=["reviewing","planning"],FOLDER=${JSON.stringify(icon("folder"))};
@@ -604,6 +613,23 @@ const ASSET_TYPES = {
   ".png": "image/png",
 };
 
+// What an inbox without open reviews shows: how to start, and a greeting when the setup page sent
+// the reader here. Once reviews exist, an empty inbox only points at the archive.
+function emptyState(welcome, archivedCount) {
+  if (archivedCount) return '<div class="empty">Nothing open. The archived reviews are below.</div>';
+  return `<div class="empty intro"><h2>${welcome ? "You're all set" : "No reviews yet"}</h2>
+<p>Open Claude Code in a repo, on a branch with changes, and type <code>/pr-report</code>. The report opens in a new tab, and every review on this machine shows up here.</p>
+<ul class="cmds"><li><code>/pr-report</code><span>compare with the PR base or the default branch</span></li><li><code>/pr-report develop</code><span>compare with another branch</span></li><li><code>/pr-report resume</code><span>pick a review up in a new Claude Code session</span></li></ul></div>`;
+}
+
+// First-run setup: the viewer at /setup, with the page token so it can ask the daemon about the
+// tools on this machine. The installer opens it after an install.
+function setupPage() {
+  return readFileSync(join(APP_DIR, "index.html"), "utf8")
+    .replace("<title>PR report</title>", () => "<title>Set up pr-report</title>")
+    .replace("</head>", () => `<script>window.__PR_SETUP__=${JSON.stringify({ token: pageToken })}</script></head>`);
+}
+
 function reviewPage(r, round) {
   const entry = r.rounds.find((x) => x.round === round) ?? r.rounds.at(-1);
   if (!entry || !existsSync(roundFile(entry))) return null;
@@ -637,6 +663,40 @@ const run = promisify(execFile);
 const gitIn = (cwd, args, env) =>
   // windowsHide: the daemon has no console on Windows, so each git call would flash a window.
   run("git", ["-c", "core.quotePath=false", ...args], { cwd, env: env ?? process.env, maxBuffer: 16 * 1024 * 1024, windowsHide: true }).then((x) => x.stdout.trim(), () => null);
+
+// ------------------------------------------------------------------ tools on this machine
+
+// The setup page asks which of the GitHub and GitLab command lines are installed and logged in.
+// Each answer is two fixed commands with a short timeout; nothing from the request reaches them.
+// The answer is kept for two seconds, since several tabs may ask at once.
+const tool = async (cmd, args) => {
+  try {
+    const { stdout, stderr } = await run(cmd, args, { timeout: 8000, windowsHide: true, env: process.env });
+    return { ok: true, text: `${stdout}\n${stderr}` };
+  } catch (e) {
+    return { ok: false, text: `${e.stdout ?? ""}\n${e.stderr ?? ""}` };
+  }
+};
+async function toolState(cmd, accountPattern) {
+  const version = await tool(cmd, ["--version"]);
+  if (!version.ok) return { installed: false, version: null, loggedIn: false, account: null, host: null };
+  // "gh version 2.92.0 (2026-04-28)", "glab 1.50.0 (2025-01-01)".
+  const number = version.text.match(/\d+\.\d+\.\d+/)?.[0] ?? null;
+  // "auth status" exits 0 only when logged in. Its text names the host on a line of its own and the
+  // account on the "Logged in" line.
+  const auth = await tool(cmd, ["auth", "status"]);
+  const host = auth.text.match(/^\s*([a-z0-9-]+(?:\.[a-z0-9-]+)+)\s*$/im)?.[1] ?? null;
+  const account = auth.text.match(accountPattern)?.[1] ?? null;
+  return { installed: true, version: number, loggedIn: auth.ok, account, host };
+}
+let toolsCache = null;
+async function toolsReport() {
+  if (toolsCache && Date.now() - toolsCache.at < 2000) return toolsCache.report;
+  const [gh, glab] = await Promise.all([toolState("gh", /Logged in to \S+ account (\S+)/), toolState("glab", /Logged in to \S+ as (\S+)/)]);
+  const report = { gh, glab, checkedAt: now() };
+  toolsCache = { at: Date.now(), report };
+  return report;
+}
 
 // The repo and the code a round was built from, read once from its data file.
 function roundFacts(r) {
@@ -749,14 +809,15 @@ async function handle(req, res, port) {
   const parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
   if (!url.pathname.endsWith("/next-event")) lastActivity = Date.now();
 
-  if (req.method === "GET" && url.pathname === "/") return send(res, 200, inboxPage(), "text/html; charset=utf-8");
+  if (req.method === "GET" && url.pathname === "/") return send(res, 200, inboxPage(url.searchParams.has("welcome")), "text/html; charset=utf-8");
   if (req.method === "GET" && url.pathname === "/fuse.mjs") {
     if (!FUSE_FILE) return send(res, 404, "Not found", "text/plain");
     res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=3600", "x-content-type-options": "nosniff" });
     return res.end(readFileSync(FUSE_FILE));
   }
-  if ((parts[0] === "r" || parts[0] === "app") && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
+  if (["r", "app", "setup"].includes(parts[0]) && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
   if (req.method === "GET" && parts[0] === "app" && parts[1] === "assets") return sendAsset(res, parts.slice(1));
+  if (req.method === "GET" && url.pathname === "/setup") return send(res, 200, setupPage(), "text/html; charset=utf-8");
   if (req.method === "GET" && parts[0] === "r" && parts[1]) {
     const r = reviews.get(parts[1]);
     const html = r && reviewPage(r, Number(url.searchParams.get("round")) || r.round);
@@ -764,6 +825,12 @@ async function handle(req, res, port) {
   }
 
   if (parts[0] !== "api") return send(res, 404, { error: "not found" });
+
+  // ---------- setup page: the tools on this machine, page token
+  if (req.method === "GET" && parts[1] === "setup" && parts[2] === "tools") {
+    if (!same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
+    return send(res, 200, await toolsReport());
+  }
 
   // ---------- agent API (review.mjs), admin token
   const admin = same(req.headers["x-admin-token"], adminToken);
