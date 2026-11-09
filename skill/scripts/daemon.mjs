@@ -19,6 +19,7 @@ import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { readChecksRun } from "./checks-run.mjs";
+import { purgeCache, whoAmI } from "./identity.mjs";
 import { replaceFile } from "./repo.mjs";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
@@ -48,6 +49,7 @@ const writeJson = (file, value, mode) => {
   replaceFile(tmp, file);
 };
 const now = () => new Date().toISOString();
+const startedAt = now();
 const pidAlive = (pid) => {
   try {
     process.kill(pid, 0);
@@ -214,6 +216,8 @@ const liveState = (r) => ({
 
 const streams = new Set();
 const sse = (res, event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+// What open pages show as the daemon's status: version and uptime, and Node for bug reports.
+const daemonInfo = () => ({ version: VERSION, pid: process.pid, node: process.version, startedAt });
 const watches = (res, id) => res.watchAll || res.watching.has(id);
 function broadcast(r) {
   for (const res of streams) if (watches(res, r.id)) sse(res, "state", liveState(r));
@@ -836,6 +840,8 @@ async function handle(req, res, port) {
   const admin = same(req.headers["x-admin-token"], adminToken);
   if (parts[1] === "health") return admin ? send(res, 200, { ok: true, version: VERSION, pid: process.pid }) : send(res, 401, { error: "bad token" });
   if (parts[1] === "shutdown" && admin) {
+    // Open pages hear that the daemon is being replaced, so they say "restarting" instead of "unavailable".
+    for (const stream of streams) sse(stream, "shutdown", { version: VERSION });
     send(res, 200, { ok: true });
     setTimeout(() => process.exit(0), 100);
     return;
@@ -850,8 +856,21 @@ async function handle(req, res, port) {
     res.watching = new Set(res.watchAll ? [] : watch.split(","));
     streams.add(res);
     for (const r of reviews.values()) if (watches(res, r.id)) sse(res, "state", liveState(r));
+    // After the states: a reader of the first chunk still finds a review's state first.
+    sse(res, "daemon", daemonInfo());
     req.on("close", () => streams.delete(res));
     return;
+  }
+
+  // ---------- page API without a review: who is reading, and the daemon's cache
+  if (parts[1] === "me" || parts[1] === "cache") {
+    if (!same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
+    if (req.method === "GET" && parts[1] === "me") {
+      const who = await whoAmI({ host: url.searchParams.get("host") || null, forge: url.searchParams.get("forge") || null, root: url.searchParams.get("root") || null });
+      return send(res, 200, who);
+    }
+    if (req.method === "POST" && parts[1] === "cache" && parts[2] === "purge") return send(res, 200, { ok: true, removed: purgeCache() });
+    return send(res, 404, { error: "not found" });
   }
 
   if (parts[1] === "reviews" && req.method === "GET") {

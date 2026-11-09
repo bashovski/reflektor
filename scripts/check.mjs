@@ -224,7 +224,8 @@ async function checkAppAssets(base, page) {
 // A whole review against a private daemon (own home folder and port), driven like an agent and a page.
 
 async function daemonFlow() {
-  const env = { PR_REPORT_HOME: join(tmp, "home"), PR_REPORT_PORT: String(4400 + Math.floor(Math.random() * 500)), PR_REPORT_DRIFT_SECONDS: "1" };
+  // GH_CONFIG_DIR points at nothing, so gh has no login and the identity lookup falls back to the repo's git config.
+  const env = { PR_REPORT_HOME: join(tmp, "home"), PR_REPORT_PORT: String(4400 + Math.floor(Math.random() * 500)), PR_REPORT_DRIFT_SECONDS: "1", GH_CONFIG_DIR: join(tmp, "gh-config") };
   const reviewDir = join(tmp, "review");
   const review = (...args) => run("node", [join(root, "skill/scripts/review.mjs"), ...args], env);
   const build = (out) =>
@@ -251,6 +252,30 @@ async function daemonFlow() {
       reader.cancel();
       return JSON.parse(new TextDecoder().decode(value).match(/data: (.*)/)[1]);
     };
+    // The start of the stream as text, for the events around the states.
+    const streamStart = async () => {
+      const res = await fetch(`${base}/api/events?token=${config.token}&watch=${id}`, { signal: AbortSignal.timeout(2000) });
+      const reader = res.body.getReader();
+      let text = "";
+      for (let i = 0; i < 3 && !text.includes("event: daemon"); i++) text += new TextDecoder().decode((await reader.read()).value);
+      reader.cancel();
+      return text;
+    };
+
+    // Who is reading: the page token is required, and without a gh login the answer is the repo's git identity.
+    const meUrl = `${base}/api/me?${new URLSearchParams({ host: "github.com", forge: "github", root: repo })}`;
+    if ((await fetch(meUrl)).status !== 401) fail("the identity endpoint answers without the page token");
+    const me = await (await fetch(meUrl, { headers: { "x-review-token": config.token } })).json();
+    if (me.source !== "git" || me.name !== "Sample Dev" || me.avatar?.initials !== "SD") fail(`the identity did not fall back to the repo's git config: ${JSON.stringify(me)}`);
+    // The stream introduces the daemon (version, uptime) after the review states, so a first-chunk reader still gets a state first.
+    const hello = await streamStart();
+    const daemonAt = hello.indexOf("event: daemon");
+    if (daemonAt < 0 || daemonAt < hello.indexOf("event: state") || !hello.includes('"startedAt"')) fail("the event stream does not introduce the daemon after the review states");
+    // Purging the cache from the page removes what is under cache/ and nothing else.
+    mkdirSync(join(env.PR_REPORT_HOME, "cache", "avatars"), { recursive: true });
+    writeFileSync(join(env.PR_REPORT_HOME, "cache", "avatars", "stale"), "x");
+    const purged = await (await fetch(`${base}/api/cache/purge`, { method: "POST", headers: { "x-review-token": config.token } })).json();
+    if (!(purged.removed >= 1) || existsSync(join(env.PR_REPORT_HOME, "cache")) || !existsSync(join(env.PR_REPORT_HOME, "daemon.json"))) fail("purging the cache did not remove exactly the cache folder");
 
     // The inbox reloads on state events; the first one on connect must match what it shows, or it reloads forever.
     const inbox = await (await fetch(`${base}/`)).text();
@@ -363,7 +388,17 @@ async function daemonFlow() {
     if (!(await state()).listening) fail("a running waiter does not count as listening");
     const daemonPid = () => JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")).pid;
     const oldPid = daemonPid();
+    const goodbye = await fetch(`${base}/api/events?token=${config.token}&watch=${id}`);
+    const goodbyeReader = goodbye.body.getReader();
     review("stop");
+    // The daemon tells open pages it is going away, so they can show "restarting" rather than "unavailable".
+    let heard = "";
+    for (let i = 0; i < 5 && !heard.includes("event: shutdown"); i++) {
+      const chunk = await Promise.race([goodbyeReader.read(), sleep(1000).then(() => ({ done: true }))]).catch(() => ({ done: true }));
+      if (chunk.done) break;
+      heard += new TextDecoder().decode(chunk.value);
+    }
+    if (!heard.includes("event: shutdown")) fail("open pages are not told that the daemon is shutting down");
     // The waiter starts a new daemon; wait for it, not for the old one in its last moments.
     for (let i = 0; i < 100; i++) {
       await sleep(100);
