@@ -31,6 +31,17 @@ const fail = (message) => {
 try {
   run(bash, [join(root, "fixtures", "make-books-repo.sh"), repo]);
 
+  // The PR type pill is drawn twice, by the viewer (TAGS in meta.ts) and by the inbox (TAGS in daemon.mjs), from two lists
+  // that cannot share code: the daemon uses Node built-ins only. So the lists are compared here instead.
+  const lucideName = (icon) => icon[0].toLowerCase() + icon.slice(1);
+  const viewerTags = Object.fromEntries(
+    [...readFileSync(join(root, "viewer/src/lib/meta.ts"), "utf8").matchAll(/^\s+([A-Z]+): \{ color: "(#[0-9a-f]{6})", icon: (\w+) \}/gm)].map(([, tag, color, icon]) => [tag, `${color} ${lucideName(icon)}`]),
+  );
+  const inboxTags = Object.fromEntries([...readFileSync(join(root, "skill/scripts/daemon.mjs"), "utf8").matchAll(/^\s+([A-Z]+): \["(#[0-9a-f]{6})", "(\w+)"\]/gm)].map(([, tag, color, icon]) => [tag, `${color} ${icon}`]));
+  if (Object.keys(viewerTags).length < 7 || Object.keys(inboxTags).length < 7) fail(`could not read both tag lists (viewer ${Object.keys(viewerTags).length}, inbox ${Object.keys(inboxTags).length})`);
+  for (const tag of new Set([...Object.keys(viewerTags), ...Object.keys(inboxTags)]))
+    if (viewerTags[tag] !== inboxTags[tag]) fail(`the tag lists differ for ${tag}: viewer has ${viewerTags[tag] ?? "nothing"}, the inbox has ${inboxTags[tag] ?? "nothing"}`);
+
   // A private home, so avatars come only from what this check puts in its cache.
   const home = { PR_REPORT_HOME: join(tmp, "collect-home") };
   const collected = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"], home);
