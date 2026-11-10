@@ -27,17 +27,17 @@ export const BeforeMerge = () => {
           const Icon = merged ? CircleCheck : meta.icon;
           const target: CommentTarget = { type: "before-merge", index: i, text: item.text };
           return (
-            <li key={i} id={`bm-${i}`} className="group/row flex items-start gap-3 text-sm">
+            <li key={i} id={`bm-${i}`} className="group/row flex flex-wrap items-start gap-x-3 gap-y-1 text-sm">
               <span className={cx("mt-0.5 inline-flex w-28 shrink-0 items-center gap-1.5 text-xs font-medium", merged ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400")}>
                 <Icon className="size-3.5" />
                 {meta.label}
               </span>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-[min(10rem,100%)] flex-1">
                 <RichText text={item.text} className={cx("block leading-relaxed", merged && "text-zinc-500 line-through decoration-zinc-400")} />
                 {!merged && <QuickActions target={target} variant="todo" />}
                 <TargetComments target={target} />
               </div>
-              {item.ref && <RefLink refTo={item.ref} />}
+              {item.ref && <RefLink refTo={item.ref} className="ml-auto" />}
             </li>
           );
         })}

@@ -14,6 +14,29 @@ export const Pill = ({ className, children }: { className: string; children: Rea
 
 export const Dot = ({ className }: { className: string }) => <span className={cx("size-1.5 shrink-0 rounded-full", className)} />;
 
+// A small ring filled to `value` (0 to 1): how much of the review is viewed, in the top bar.
+export const ProgressRing = ({ value, className }: { value: number; className?: string }) => {
+  const r = 7;
+  const c = 2 * Math.PI * r;
+  const v = Math.min(1, Math.max(0, value));
+  return (
+    <svg viewBox="0 0 18 18" className={cx("shrink-0 -rotate-90", className)} aria-hidden>
+      <circle cx="9" cy="9" r={r} fill="none" strokeWidth="2.5" className="stroke-zinc-500/20" />
+      <circle
+        cx="9"
+        cy="9"
+        r={r}
+        fill="none"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={c * (1 - v)}
+        className={cx("transition-[stroke-dashoffset] duration-300", v >= 1 ? "stroke-emerald-500" : "stroke-blue-500")}
+      />
+    </svg>
+  );
+};
+
 // What a key cap shows for keys whose name is not what the keyboard prints on them.
 export const KEY_LABELS: Record<string, string> = {
   Enter: "↵",
@@ -115,17 +138,23 @@ export const shortPath = (path: string, keep = 2) => {
   return parts.length <= keep ? path : `…/${parts.slice(-keep).join("/")}`;
 };
 
-export const RefLink = ({ refTo, keep = 1 }: { refTo: Ref; keep?: number }) => {
+// A file reference chip. It never shrinks next to text, so the rows that hold one wrap it to a line of its own on a
+// narrow screen (flex-wrap on the row, a minimum width on the text). There it is at most as wide as the row: the path
+// truncates, the line number never does. Without this, a long file name pushed the page wider than a phone screen.
+export const RefLink = ({ refTo, keep = 1, className }: { refTo: Ref; keep?: number; className?: string }) => {
   const { jumpTo } = useReport();
   return (
     <button
       type="button"
       onClick={() => jumpTo(refTo)}
       title={`${refTo.path}${refTo.line ? `:${refTo.line}` : ""}`}
-      className="inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-mono text-[11px] text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100"
+      className={cx(
+        "inline-flex max-w-full min-w-0 shrink-0 items-center rounded-md px-1.5 py-0.5 font-mono text-[11px] text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100",
+        className,
+      )}
     >
-      {shortPath(refTo.path, keep)}
-      {refTo.line ? `:${refTo.line}` : ""}
+      <span className="truncate">{shortPath(refTo.path, keep)}</span>
+      {refTo.line ? <span className="shrink-0">:{refTo.line}</span> : null}
     </button>
   );
 };

@@ -41,12 +41,12 @@ export const PreviousReview = () => {
                   </span>
                 </div>
               </div>
-              <div className="flex min-w-0 items-start gap-2">
+              <div className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1">
                 {reply ? (
                   <>
                     <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", REPLY_STATUS[reply.status].className)}>{REPLY_STATUS[reply.status].label}</Pill>
-                    <RichText text={reply.text} className="block min-w-0 flex-1 text-zinc-700 dark:text-zinc-300" />
-                    {reply.ref && <RefLink refTo={reply.ref} />}
+                    <RichText text={reply.text} className="block min-w-[min(10rem,100%)] flex-1 text-zinc-700 dark:text-zinc-300" />
+                    {reply.ref && <RefLink refTo={reply.ref} className="ml-auto" />}
                   </>
                 ) : (
                   <span className="text-xs text-amber-600 dark:text-amber-400">Claude did not reply to this comment.</span>

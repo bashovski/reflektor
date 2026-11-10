@@ -46,18 +46,18 @@ export const PlanCheck = () => {
           const target: CommentTarget = { type: "plan-item", index: i, status: item.status, text: item.text };
           const unfinished = item.status === "missing" || item.status === "partial";
           return (
-            <li key={i} id={`plan-${i}`} className="group/row relative flex items-start gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-zinc-500/[0.04]">
+            <li key={i} id={`plan-${i}`} className="group/row relative flex flex-wrap items-start gap-x-3 gap-y-1 rounded-lg px-2 py-1.5 text-sm hover:bg-zinc-500/[0.04]">
               <span className={cx("mt-px inline-flex w-[118px] shrink-0 items-center gap-1.5 text-xs font-medium", meta.className)}>
                 <Icon className="size-3.5" />
                 {meta.label}
               </span>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-[min(10rem,100%)] flex-1">
                 <RichText text={item.text} className="block leading-relaxed" />
                 {item.note && <RichText text={item.note} className="block text-[13px] text-zinc-500" />}
                 <QuickActions target={target} variant={unfinished ? "problem" : "info"} labels={unfinished ? PLAN_LABELS : undefined} />
                 <TargetComments target={target} />
               </div>
-              {item.ref && <RefLink refTo={item.ref} />}
+              {item.ref && <RefLink refTo={item.ref} className="ml-auto" />}
             </li>
           );
         })}

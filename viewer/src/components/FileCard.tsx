@@ -57,7 +57,7 @@ export const toDiffInput = (file: DiffFile): DiffInput | null => {
 };
 
 export const LineNoteBubble = ({ text }: { text: string }) => (
-  <div className="my-1.5 mr-3 ml-12 flex max-w-2xl items-start gap-2 rounded-lg border border-blue-500/25 bg-blue-50 px-3 py-2 font-sans text-[13px] leading-snug text-zinc-800 shadow-sm dark:bg-blue-950/60 dark:text-zinc-200">
+  <div className="my-1.5 mr-3 ml-12 flex max-w-2xl items-start gap-2 rounded-lg border border-blue-500/20 border-l-[3px] border-l-blue-500 bg-blue-500/[0.06] px-3 py-2 font-sans text-[13px] leading-snug text-zinc-800 dark:text-zinc-200">
     <MessageSquareText className="mt-0.5 size-3.5 shrink-0 text-blue-500" />
     <RichText text={text} />
   </div>

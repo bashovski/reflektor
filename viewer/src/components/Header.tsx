@@ -7,11 +7,12 @@ import { OwnerMenu } from "./OwnerMenu";
 import { PrDescription } from "./PrDescription";
 import { PrStatePill } from "./PullRequest";
 import { UserMenu } from "./UserMenu";
-import { Dot, LocCount, Pill, TagPill } from "./ui";
+import { cx, Dot, LocCount, ProgressRing, TagPill } from "./ui";
 
 export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp: () => void }) => {
-  const { bundle } = useReport();
+  const { bundle, viewedCount } = useReport();
   const { repo, branch } = bundle.diff;
+  const total = bundle.diff.stats.files;
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg)]/85 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-3 px-4 sm:px-6">
@@ -26,8 +27,13 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
           <span className="text-zinc-400">→</span>
           {branch.base}
         </span>
+        {/* How far the review is, visible wherever the reader has scrolled. */}
+        <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-zinc-500 tabular-nums" title={`${viewedCount} of ${total} files viewed`}>
+          <ProgressRing value={total ? viewedCount / total : 0} className="size-4" />
+          {viewedCount}/{total}
+        </span>
         {window.__PR_REVIEW__ && (
-          <a href="/" className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
+          <a href="/" className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
             <Inbox className="size-3.5" /> All reviews
           </a>
         )}
@@ -39,7 +45,7 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
             type="button"
             onClick={onSettings}
             title="Settings and keyboard shortcuts (?)"
-            className="ml-auto inline-flex rounded-md p-2 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100"
+            className="inline-flex rounded-md p-2 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
             <Settings className="size-4" />
           </button>
@@ -50,7 +56,7 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
 };
 
 export const Hero = () => {
-  const { bundle, viewedCount } = useReport();
+  const { bundle } = useReport();
   const { diff, report } = bundle;
   const { branch, scope, stats, commits, coverage } = diff;
   const pr = usePr();
@@ -119,16 +125,8 @@ export const Hero = () => {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {report.targets.map((t) => (
-          <Pill key={t} className={TARGETS[t].className}>
-            <Dot className={TARGETS[t].dot} />
-            {TARGETS[t].label}
-          </Pill>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[var(--border)] pt-4 text-sm">
+      {/* One strip of facts: the same icon, number and word pattern for each, with the review levels as a bar. */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5 border-t border-[var(--border)] pt-4 text-sm">
         <span className="inline-flex items-center gap-1.5">
           <FileCode2 className="size-4 text-zinc-400" />
           {stats.files} files
@@ -137,19 +135,10 @@ export const Hero = () => {
         {!bundle.draft && (
           <span className="inline-flex items-center gap-1.5">
             <Clock className="size-4 text-zinc-400" />
-            About {report.reviewMinutes} min to review
+            About {report.reviewMinutes} min
           </span>
         )}
-        {!bundle.draft && (
-          <span className="inline-flex items-center gap-3 text-xs">
-            {(["must", "skim", "skip"] as const).map((level) => (
-              <span key={level} className="inline-flex items-center gap-1.5">
-                <Dot className={REVIEW[level].dot} />
-                {levelCounts[level]} {REVIEW[level].label.toLowerCase()}
-              </span>
-            ))}
-          </span>
-        )}
+        {!bundle.draft && <LevelBar counts={levelCounts} />}
         {failedChecks > 0 && (
           <a href="#project-checks" className="inline-flex items-center gap-1.5 font-medium text-red-600 hover:underline dark:text-red-400">
             <CircleX className="size-4" />
@@ -163,13 +152,37 @@ export const Hero = () => {
             {coverage.sources.some((s) => s.stale) && <span className="text-xs text-amber-600 dark:text-amber-400">(coverage file is older than the changes)</span>}
           </a>
         )}
-        <span className="ml-auto inline-flex items-center gap-3 text-xs text-zinc-500">
+        <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+          {report.targets.map((t) => (
+            <span key={t} className="inline-flex items-center gap-1.5">
+              <Dot className={TARGETS[t].dot} />
+              {TARGETS[t].label}
+            </span>
+          ))}
+        </span>
+        <span className="ml-auto inline-flex items-center text-xs text-zinc-500">
           <PrDescription />
-          <span>
-            {viewedCount}/{stats.files} viewed
-          </span>
         </span>
       </div>
     </div>
+  );
+};
+
+// Must read, skim and skip as one bar, the way the coverage bar is drawn, with the counts beside it.
+const LevelBar = ({ counts }: { counts: Record<"must" | "skim" | "skip", number> }) => {
+  const levels = ["must", "skim", "skip"] as const;
+  const total = levels.reduce((n, l) => n + counts[l], 0) || 1;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs">
+      <span className="flex h-1.5 w-24 overflow-hidden rounded-full bg-zinc-500/10" aria-hidden>
+        {levels.map((l) => counts[l] > 0 && <span key={l} className={cx("h-full", REVIEW[l].rail)} style={{ width: `${(counts[l] / total) * 100}%` }} />)}
+      </span>
+      {levels.map((l) => (
+        <span key={l} className="inline-flex items-center gap-1 text-zinc-600 tabular-nums dark:text-zinc-400">
+          <Dot className={REVIEW[l].dot} />
+          {counts[l]} {REVIEW[l].label.toLowerCase()}
+        </span>
+      ))}
+    </span>
   );
 };

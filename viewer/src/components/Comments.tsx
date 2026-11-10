@@ -106,10 +106,10 @@ export const CommentStatusLine = ({ commentId }: { commentId: string }) => {
   }
   const meta = REPLY_STATUS[status.status];
   return (
-    <div className="mt-1.5 flex items-start gap-2 border-t border-[var(--border)] pt-1.5 text-[13px]">
+    <div className="mt-1.5 flex flex-wrap items-start gap-x-2 gap-y-1 border-t border-[var(--border)] pt-1.5 text-[13px]">
       <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", meta.className)}>{meta.label}</Pill>
-      {status.text && <RichText text={status.text} className="block min-w-0 flex-1" />}
-      {status.ref && <RefLink refTo={status.ref} />}
+      {status.text && <RichText text={status.text} className="block min-w-[min(10rem,100%)] flex-1" />}
+      {status.ref && <RefLink refTo={status.ref} className="ml-auto" />}
     </div>
   );
 };
@@ -159,10 +159,10 @@ export const QuestionThread = ({ question }: { question: LiveQuestion }) => {
         </span>
       </p>
       {question.answer ? (
-        <div className="mt-1.5 flex items-start gap-2 border-t border-violet-500/20 pt-1.5">
+        <div className="mt-1.5 flex flex-wrap items-start gap-x-2 gap-y-1 border-t border-violet-500/20 pt-1.5">
           <Sparkles className="mt-0.5 size-3.5 shrink-0 text-violet-500" />
-          <RichText text={question.answer.text} className="block min-w-0 flex-1" />
-          {question.answer.ref && <RefLink refTo={question.answer.ref} />}
+          <RichText text={question.answer.text} className="block min-w-[min(10rem,100%)] flex-1" />
+          {question.answer.ref && <RefLink refTo={question.answer.ref} className="ml-auto" />}
         </div>
       ) : (
         <p className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
@@ -212,7 +212,7 @@ export const QuickActions = ({
   if (decided) {
     return (
       <div className="mt-1">
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex flex-wrap items-center justify-end gap-1">
           <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
             <Check className="size-3.5" />
             {decided.kind === "accepted"
@@ -252,19 +252,25 @@ export const QuickActions = ({
     );
   }
 
+  // The decision sits at the right edge as one control, so a row reads as text on the left and a choice on the right.
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1">
-      <button type="button" className={cx(button, "bg-blue-600/10 text-blue-700 hover:bg-blue-600/20 dark:text-blue-300")} onClick={() => add(target, { kind: "fix" })}>
-        <Wrench className="size-3.5" /> {labels?.fix ?? (variant === "todo" ? "Do this" : "Fix this")}
-      </button>
-      {variant === "problem" && (
-        <button type="button" className={ghost} onClick={() => add(target, { kind: "accepted" })}>
-          <Check className="size-3.5" /> {labels?.fine ?? "It's fine"}
-        </button>
-      )}
+    <div className="mt-1.5 flex flex-wrap items-center justify-end gap-2">
       <button type="button" className={ghost} onClick={comment()}>
         <MessageSquarePlus className="size-3.5" /> Comment
       </button>
+      <span className="inline-flex overflow-hidden rounded-md border border-[var(--border)] text-xs font-medium">
+        <button type="button" className="inline-flex items-center gap-1 px-2.5 py-1 text-blue-700 hover:bg-blue-600/10 dark:text-blue-300" onClick={() => add(target, { kind: "fix" })}>
+          <Wrench className="size-3.5" /> {labels?.fix ?? (variant === "todo" ? "Do this" : "Fix this")}
+        </button>
+        {variant === "problem" && (
+          <>
+            <span aria-hidden className="w-px bg-[var(--border)]" />
+            <button type="button" className="inline-flex items-center gap-1 px-2.5 py-1 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400" onClick={() => add(target, { kind: "accepted" })}>
+              <Check className="size-3.5" /> {labels?.fine ?? "It's fine"}
+            </button>
+          </>
+        )}
+      </span>
     </div>
   );
 };

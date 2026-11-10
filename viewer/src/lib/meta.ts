@@ -70,32 +70,32 @@ export const TAGS: Record<Tag, { color: string; icon: LucideIcon }> = {
 export const TARGETS: Record<Target, { label: string; className: string; dot: string }> = {
   backend: {
     label: "Backend",
-    className: "bg-blue-500/10 text-blue-700 ring-blue-500/30 dark:text-blue-300",
+    className: "bg-blue-500/[0.08] text-blue-700 ring-blue-500/25 dark:text-blue-300",
     dot: "bg-blue-500",
   },
   frontend: {
     label: "Frontend",
-    className: "bg-yellow-400/15 text-yellow-800 ring-yellow-500/40 dark:text-yellow-200",
+    className: "bg-yellow-400/[0.12] text-yellow-800 ring-yellow-500/30 dark:text-yellow-200",
     dot: "bg-yellow-400",
   },
   database: {
     label: "Database",
-    className: "bg-pink-500/10 text-pink-700 ring-pink-500/30 dark:text-pink-300",
+    className: "bg-pink-500/[0.08] text-pink-700 ring-pink-500/25 dark:text-pink-300",
     dot: "bg-pink-500",
   },
   infrastructure: {
     label: "Infrastructure",
-    className: "bg-green-500/10 text-green-700 ring-green-500/30 dark:text-green-300",
+    className: "bg-green-500/[0.08] text-green-700 ring-green-500/25 dark:text-green-300",
     dot: "bg-green-500",
   },
   cicd: {
     label: "CI/CD",
-    className: "bg-orange-500/10 text-orange-700 ring-orange-500/30 dark:text-orange-300",
+    className: "bg-orange-500/[0.08] text-orange-700 ring-orange-500/25 dark:text-orange-300",
     dot: "bg-orange-500",
   },
   misc: {
     label: "Misc",
-    className: "bg-purple-500/10 text-purple-700 ring-purple-500/30 dark:text-purple-300",
+    className: "bg-purple-500/[0.08] text-purple-700 ring-purple-500/25 dark:text-purple-300",
     dot: "bg-purple-500",
   },
 };
@@ -114,31 +114,39 @@ export const SECTIONS: Record<SectionKind, { label: string; icon: LucideIcon }> 
   other: { label: "Other files", icon: Folder },
 };
 
-export const REVIEW: Record<ReviewLevel, { label: string; className: string; dot: string }> = {
+// The review level is the one color a reader should pick up while scrolling: the pill on a section, the rail on its
+// card, the badge in the sidebar path and the bar in the hero all use these.
+export const REVIEW: Record<ReviewLevel, { label: string; className: string; dot: string; rail: string; badge: string }> = {
   must: {
     label: "Must read",
-    className: "bg-red-500/10 text-red-700 ring-red-500/30 dark:text-red-300",
+    className: "bg-red-500/[0.08] text-red-700 ring-red-500/25 dark:text-red-300",
     dot: "bg-red-500",
+    rail: "bg-red-500",
+    badge: "bg-red-500/15 text-red-700 dark:text-red-300",
   },
   skim: {
     label: "Skim",
-    className: "bg-amber-500/10 text-amber-700 ring-amber-500/30 dark:text-amber-300",
+    className: "bg-amber-500/[0.08] text-amber-700 ring-amber-500/25 dark:text-amber-300",
     dot: "bg-amber-500",
+    rail: "bg-amber-500",
+    badge: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
   },
   skip: {
     label: "Skip",
-    className: "bg-zinc-500/10 text-zinc-600 ring-zinc-500/25 dark:text-zinc-400",
+    className: "bg-zinc-500/[0.08] text-zinc-600 ring-zinc-500/25 dark:text-zinc-400",
     dot: "bg-zinc-400",
+    rail: "bg-zinc-400",
+    badge: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300",
   },
 };
 
-export const HIGHLIGHTS: Record<HighlightKind, { label: string; icon: LucideIcon; className: string }> = {
-  behavior: { label: "Behavior", icon: Activity, className: "text-blue-600 dark:text-blue-400" },
-  risk: { label: "Risk", icon: TriangleAlert, className: "text-red-600 dark:text-red-400" },
-  contract: { label: "Contract", icon: Plug, className: "text-violet-600 dark:text-violet-400" },
-  decision: { label: "Decision", icon: Lightbulb, className: "text-teal-600 dark:text-teal-400" },
-  gap: { label: "Gap", icon: CircleDashed, className: "text-amber-600 dark:text-amber-400" },
-  affected: { label: "Affected", icon: Waypoints, className: "text-orange-600 dark:text-orange-400" },
+export const HIGHLIGHTS: Record<HighlightKind, { label: string; icon: LucideIcon; className: string; tint: string }> = {
+  behavior: { label: "Behavior", icon: Activity, className: "text-blue-600 dark:text-blue-400", tint: "bg-blue-500/10" },
+  risk: { label: "Risk", icon: TriangleAlert, className: "text-red-600 dark:text-red-400", tint: "bg-red-500/10" },
+  contract: { label: "Contract", icon: Plug, className: "text-violet-600 dark:text-violet-400", tint: "bg-violet-500/10" },
+  decision: { label: "Decision", icon: Lightbulb, className: "text-teal-600 dark:text-teal-400", tint: "bg-teal-500/10" },
+  gap: { label: "Gap", icon: CircleDashed, className: "text-amber-600 dark:text-amber-400", tint: "bg-amber-500/10" },
+  affected: { label: "Affected", icon: Waypoints, className: "text-orange-600 dark:text-orange-400", tint: "bg-orange-500/10" },
 };
 
 export const BEFORE_MERGE: Record<BeforeMergeKind, { label: string; icon: LucideIcon }> = {
