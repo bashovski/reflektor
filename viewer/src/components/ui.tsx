@@ -14,6 +14,12 @@ export const Pill = ({ className, children }: { className: string; children: Rea
 
 export const Dot = ({ className }: { className: string }) => <span className={cx("size-1.5 shrink-0 rounded-full", className)} />;
 
+// A number inside a small circle. Centering the line of text leaves the digit about a pixel high, because a
+// line keeps room under the baseline for descenders, and a digit has none. `text-box` cuts the line down to
+// the digit itself, from the top of a capital to the baseline, so the circle centers what the eye sees. Where a
+// browser does not know `text-box` yet, the digit stays where it was.
+export const Digit = ({ children }: { children: ReactNode }) => <span className="leading-none tabular-nums [text-box:trim-both_cap_alphabetic]">{children}</span>;
+
 // A small ring filled to `value` (0 to 1): how much of the review is viewed, in the top bar.
 export const ProgressRing = ({ value, className }: { value: number; className?: string }) => {
   const r = 7;

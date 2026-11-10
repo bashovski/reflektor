@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { type Agent, useAgent } from "../lib/agent";
 import { PROJECT } from "../lib/meta";
 import { SHORTCUTS } from "./Settings";
-import { Kbd } from "./ui";
+import { Digit, Kbd } from "./ui";
 
 // How a review works, in the order a reviewer meets it. Opened from the user menu.
 const steps = (agent: Agent): [string, string][] => [
@@ -43,7 +43,9 @@ export const HelpDialog = ({ open, onClose }: { open: boolean; onClose: () => vo
           <ol className="space-y-2.5 text-sm">
             {steps(agent).map(([title, text], i) => (
               <li key={title} className="flex gap-3">
-                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-zinc-500/10 text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">{i + 1}</span>
+                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-zinc-500/10 text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">
+                  <Digit>{i + 1}</Digit>
+                </span>
                 <span>
                   <span className="font-medium">{title}</span> <span className="text-zinc-600 dark:text-zinc-400">{text}</span>
                 </span>
