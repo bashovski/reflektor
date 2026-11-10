@@ -18,7 +18,7 @@ export const PreviousReview = () => {
   const done = previous.comments.filter((c) => replyFor.get(c.id)?.status === "fixed").length;
 
   return (
-    <section className="surface rounded-xl border p-4 sm:p-5">
+    <section className="surface border p-4 sm:p-5">
       <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
         <MessagesSquare className="size-4 text-blue-500" />
         Your review, round {previous.round}

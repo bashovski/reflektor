@@ -210,7 +210,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
     <div
       id={fileDomId(path)}
       onClickCapture={() => setCurrent(path)}
-      className={cx("surface overflow-clip rounded-lg border", current === path && "ring-2 ring-blue-500/40")}
+      className={cx("surface overflow-clip border", current === path && "ring-2 ring-blue-500/40")}
     >
       <div className={cx("sticky top-14 z-10 flex items-center gap-2 bg-[var(--surface-2)] px-2 py-1.5 sm:px-3", open && "border-b border-[var(--border)]")}>
         <button type="button" onClick={() => setFileOpen(path, !open)} className="rounded p-0.5 text-zinc-400 hover:bg-zinc-500/10" title={open ? "Collapse" : "Expand"}>

@@ -54,6 +54,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* A block on the page: a section, a file, the plan check and the like. Blocks have square corners, so a card
+   takes `surface border` and no rounding. Things that float over the page (menus, dialogs, the review bar) and
+   small controls keep theirs. */
 .surface {
   background: var(--surface);
   border-color: var(--border);
