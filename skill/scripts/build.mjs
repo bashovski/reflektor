@@ -16,6 +16,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { detectAgent } from "./agent.mjs";
 import { readChecksRun } from "./checks-run.mjs";
 import { shellPath } from "./repo.mjs";
 
@@ -63,6 +64,8 @@ function parseArgs(argv) {
     else if (a === "--checks") args.checks = next();
     else if (a === "--open") args.open = true;
     else if (a === "--draft") args.draft = true;
+    else if (a === "--agent") args.agent = next();
+    else if (a === "--agent-name") args.agentName = next();
     else throw new Error(`Unknown argument: ${a}`);
   }
   if (!args.diff || (!args.report && !args.draft)) throw new Error("--diff and --report are required (or --draft)");
@@ -522,6 +525,8 @@ const bundle = {
   projectChecks,
   prDescription: prText,
   ...(args.draft ? { draft: true } : {}),
+  // The agent that built this, so the standalone file and a page nobody has called since can name it (agent.mjs).
+  agent: detectAgent({ id: args.agent, name: args.agentName }),
   warnings: [...notes, ...warnings],
   builtAt: new Date().toISOString(),
 };

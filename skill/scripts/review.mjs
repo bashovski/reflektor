@@ -11,6 +11,9 @@
 //   list                                  every review the daemon knows
 //   setup   [--no-open]                   open the first-run setup page (tools, light or dark, code theme)
 //   stop                                  stop the daemon
+//
+// Every command tells the daemon which agent is calling, worked out from the shell it runs in (agent.mjs).
+// --agent <id> says it outright; --agent-name "<product>" is the agent's own answer when nothing else is known.
 
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -18,6 +21,7 @@ import { existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { AGENT_HEADER, detectAgent, encodeAgent } from "./agent.mjs";
 import { shellPath } from "./repo.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -35,6 +39,10 @@ for (let i = 0; i < rest.length; i++) {
   if (rest[i + 1] === undefined || rest[i + 1].startsWith("--")) args[key] = true;
   else args[key] = rest[++i];
 }
+
+// Who is calling. Worked out here, in the agent's own shell, and sent with every request: the daemon serves
+// every agent on the machine and cannot know by itself.
+const agent = detectAgent({ id: typeof args.agent === "string" ? args.agent : undefined, name: typeof args["agent-name"] === "string" ? args["agent-name"] : undefined });
 
 const readJson = (file) => {
   try {
@@ -91,7 +99,7 @@ async function ensureDaemon() {
 async function api(info, method, path, body) {
   const res = await fetch(`http://127.0.0.1:${info.port}${path}`, {
     method,
-    headers: { "x-admin-token": info.adminToken, ...(body ? { "content-type": "application/json" } : {}) },
+    headers: { "x-admin-token": info.adminToken, ...(agent ? { [AGENT_HEADER]: encodeAgent(agent) } : {}), ...(body ? { "content-type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = res.status === 204 ? null : await res.json().catch(() => null);
@@ -188,6 +196,8 @@ async function main() {
           : `Already open in ${data.tabs} tab(s); they show a banner for the new round.`,
       );
     }
+    // Nothing in this shell says which agent this is, so the page speaks of "your agent" until it is told.
+    if (!agent) console.log(`note: the page does not know which agent you are. Add --agent-name "<the product you run in>" to review.mjs commands so it can say.`);
     console.log(`Next: run in the background: ${self} wait --id ${data.id}`);
   } else if (command === "setup") {
     // The first-run page: the tools on this machine, light or dark, and a code theme. The installer

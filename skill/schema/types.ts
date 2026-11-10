@@ -337,6 +337,11 @@ export type Reply = { commentId: string; status: ReplyStatus; text: string; ref?
 
 export type FlowStepChecked = FlowStep & { verified: boolean };
 
+// The coding agent on the other side of a review, in the words the page shows. `name` is the assistant
+// ("Send to Claude"), `product` the program the user types into ("In Claude Code, run ..."), `resume` what
+// they type there to pick a review up. Worked out by scripts/agent.mjs from skill/agents.json.
+export type AgentInfo = { id: string | null; name: string; product: string; resume: string | null; version: string | null };
+
 export type Bundle = {
   diff: DiffData;
   report: Omit<Report, "flows"> & { flows: (Omit<Flow, "steps"> & { steps: FlowStepChecked[] })[] };
@@ -356,6 +361,8 @@ export type Bundle = {
   prDescription: { title: string; body: string } | null;
   // Built with --draft before Claude's report was ready: the page shows the facts and holds back sending.
   draft?: boolean;
+  // The agent that built the report; null or missing when the build could not tell.
+  agent?: AgentInfo | null;
   warnings: string[];
   builtAt: string;
 };

@@ -125,6 +125,8 @@ node "${CLAUDE_SKILL_DIR}/scripts/build.mjs" --diff <diff file> --draft
 node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" open --report <json file from build> --open
 ```
 
+The page names the agent it talks to. `review.mjs` and `build.mjs` work that out from the shell they run in, so there is normally nothing to do. If `review.mjs open` prints a `note:` line saying the page does not know which agent you are, add `--agent-name "<the product you are running in>"` to every `review.mjs` command from then on.
+
 After `collect --update` in a later round, add `--report <report file>` to the build, so the draft shows the carried report. The page says Claude is still writing the notes and holds back sending until the real report replaces it. Do not start the waiter yet, and say nothing to the user until step 7.
 
 ## 4. Understand the change
