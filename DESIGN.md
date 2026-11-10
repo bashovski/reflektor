@@ -30,7 +30,8 @@ A color that carries a meaning is written by its role, never by its hue. The rol
 | `accent` | What you can act on: main buttons, links, focus, your own comments | blue |
 | `agent` | The agent's side: its work in progress, its questions and answers | violet |
 
-- **Greys are zinc.** The page itself is colored by the tokens `--bg`, `--surface`, `--surface-2`, `--border`, `--text` and `--muted`, which change with the theme.
+- **Greys are zinc.** The page itself is colored by the tokens `--bg`, `--surface`, `--surface-2` and `--border`, which change with the theme.
+- **Text has three tones.** What you read is `--text`. What explains it (descriptions, labels, notes) takes `text-muted`, which keeps at least 4.5 to 1 against a block in both themes. What can be missed (separators, icons, small counts) takes `text-faint`, at about 3.8 to 1. Do not write a single zinc shade for text: it is the same grey in both themes, so it is too dim in one of them.
 - **Category colors are not roles.** A color that only tells categories apart keeps its hue, so retuning a role never moves it: the targets, the PR type tags, the highlight kinds that are not a warning, and the pull request states, which are GitHub's own colors. They live in `viewer/src/lib/meta.ts`.
 - **Color is never the only signal.** A status shows a word or an icon next to its color.
 

@@ -13,7 +13,7 @@ const STATUS: Record<CheckStatus, { label: string; icon: typeof CircleCheck; cla
 // stopped run never finished.
 const UNFINISHED = {
   running: { label: "Running", icon: Loader2, className: "text-agent-600 dark:text-agent-400", spin: true },
-  waiting: { label: "Waiting", icon: CircleDashed, className: "text-zinc-400", spin: false },
+  waiting: { label: "Waiting", icon: CircleDashed, className: "text-faint", spin: false },
   stopped: { label: "Did not finish", icon: CircleSlash, className: "text-warn-600 dark:text-warn-400", spin: false },
 };
 
@@ -40,9 +40,9 @@ export const ProjectChecks = () => {
       <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
         <TerminalSquare className={cx("size-4", running ? "text-agent-500" : failed || checks.status === "stopped" ? "text-danger-500" : "text-ok-500")} />
         Project checks
-        <span className="font-normal text-zinc-500">{summary}</span>
+        <span className="font-normal text-muted">{summary}</span>
       </h2>
-      <p className="mb-3 text-xs text-zinc-500">
+      <p className="mb-3 text-xs text-muted">
         Your project's own commands, {running ? "started" : "run"} {when ? new Date(when).toLocaleString() : ""}.
         {running && " Results appear here as each one finishes. Coverage and the notes about tests follow once the tests are done."}
         {checks.status === "stopped" && <span className="text-warn-600 dark:text-warn-400"> The run ended before its last check, so some did not run.</span>}
@@ -59,8 +59,8 @@ export const ProjectChecks = () => {
                 {meta.label}
               </span>
               <span className="shrink-0 text-sm font-medium">{r.name}</span>
-              <code className="min-w-0 truncate font-mono text-xs text-zinc-500">{r.command}</code>
-              <span className="num ml-auto shrink-0 text-xs text-zinc-400">{seconds(r.durationMs)}</span>
+              <code className="min-w-0 truncate font-mono text-xs text-muted">{r.command}</code>
+              <span className="num ml-auto shrink-0 text-xs text-faint">{seconds(r.durationMs)}</span>
             </span>
           );
           if (r.status === "passed") {

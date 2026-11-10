@@ -53,7 +53,7 @@ const Load = () => {
     fetchRound(config.round).then(setBundle, (e: Error) => setError(e.message));
   }, [bundle]);
   if (bundle) return <Root initial={bundle} />;
-  return <p className="p-10 text-sm text-zinc-500">{error ?? "Loading the report…"}</p>;
+  return <p className="p-10 text-sm text-muted">{error ?? "Loading the report…"}</p>;
 };
 
 createRoot(document.getElementById("root")!).render(

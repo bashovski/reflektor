@@ -25,11 +25,11 @@ const MEMBER: Record<MemberChange, { sign: string; className: string }> = {
 const ContractRow = ({ contract: c }: { contract: Contract }) => (
   <li className="px-4 py-3 sm:px-5">
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span className="w-16 shrink-0 font-mono text-[11px] text-zinc-500">{KIND[c.kind]}</span>
+      <span className="w-16 shrink-0 font-mono text-[11px] text-muted">{KIND[c.kind]}</span>
       <code className="font-mono text-[13px] font-semibold">{c.name}</code>
       <Pill className={cx("px-1.5 py-0 text-[10px]", STATUS[c.status].pill)}>{STATUS[c.status].label}</Pill>
       {c.generated && (
-        <Pill className="bg-zinc-500/10 px-1.5 py-0 text-[10px] text-zinc-500 ring-zinc-500/25">
+        <Pill className="bg-zinc-500/10 px-1.5 py-0 text-[10px] text-muted ring-zinc-500/25">
           <span title="Generated code: review the schema or spec it is generated from">Generated</span>
         </Pill>
       )}
@@ -41,7 +41,7 @@ const ContractRow = ({ contract: c }: { contract: Contract }) => (
     {c.kind === "constant" && (c.value || c.was) && (
       <div className="mt-1.5 font-mono text-xs sm:pl-[72px]">
         {c.was && <span className={cx("text-danger-600 dark:text-danger-400", c.value && "line-through decoration-danger-400/50")}>{c.was}</span>}
-        {c.was && c.value && <span className="px-1.5 text-zinc-400">→</span>}
+        {c.was && c.value && <span className="px-1.5 text-faint">→</span>}
         {c.value && <span className="text-ok-700 dark:text-ok-400">{c.value}</span>}
       </div>
     )}
@@ -50,12 +50,12 @@ const ContractRow = ({ contract: c }: { contract: Contract }) => (
         {c.members.map((m) => (
           <li key={`${m.change}-${m.name}`} className="flex gap-2">
             <span className={cx("w-2.5 shrink-0 font-semibold", MEMBER[m.change].className)}>{MEMBER[m.change].sign}</span>
-            <span className={cx(m.change === "removed" && "text-zinc-500 line-through decoration-danger-400/50")}>
+            <span className={cx(m.change === "removed" && "text-muted line-through decoration-danger-400/50")}>
               {m.name}
               {m.type && (
-                <span className="text-zinc-500">
+                <span className="text-muted">
                   : {m.was && <span className="text-danger-600 line-through decoration-danger-400/50 dark:text-danger-400">{m.was}</span>}
-                  {m.was && <span className="px-1 text-zinc-400">→</span>}
+                  {m.was && <span className="px-1 text-faint">→</span>}
                   {m.type}
                 </span>
               )}
@@ -87,11 +87,11 @@ export const Contracts = () => {
       </SectionTitle>
       <Card className="overflow-hidden">
         <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-zinc-500/[0.04] sm:px-5">
-          <ChevronRight className={cx("size-4 shrink-0 text-zinc-400 transition-transform", open && "rotate-90")} />
+          <ChevronRight className={cx("size-4 shrink-0 text-faint transition-transform", open && "rotate-90")} />
           <span className="font-semibold">
             {contracts.length} {contracts.length === 1 ? "type or constant" : "types and constants"}
           </span>
-          <span className="text-xs text-zinc-500">{counts}</span>
+          <span className="text-xs text-muted">{counts}</span>
         </button>
         {open && (
           <ul className="divide-y divide-[var(--border)] border-t border-[var(--border)]">

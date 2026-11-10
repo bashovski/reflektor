@@ -52,7 +52,7 @@ export const RichText = ({ text, className }: { text: string; className?: string
         if (block.type === "p") return <p key={i}>{renderInline(block.text)}</p>;
         const List = block.type;
         return (
-          <List key={i} className={cx("space-y-0.5 pl-5 marker:text-zinc-400", List === "ul" ? "list-disc" : "list-decimal")}>
+          <List key={i} className={cx("space-y-0.5 pl-5 marker:text-faint", List === "ul" ? "list-disc" : "list-decimal")}>
             {block.items.map((item, j) => (
               <li key={j} className="pl-0.5">
                 {renderInline(item)}

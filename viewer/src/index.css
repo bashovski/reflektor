@@ -41,6 +41,12 @@
   --color-agent-800: var(--color-violet-800); --color-agent-900: var(--color-violet-900); --color-agent-950: var(--color-violet-950);
 }
 
+/* The text tones as classes. They are inline so a class reads the token where it is used, and follows the theme. */
+@theme inline {
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+}
+
 /* Tailwind v4 gives buttons the default arrow cursor. */
 @layer base {
   button:not(:disabled),
@@ -56,7 +62,12 @@
   --surface-2: #f4f4f5;
   --border: #e4e4e7;
   --text: #18181b;
+  /* Text has three tones. `--text` is for what you read. `--muted` (`text-muted`) is for what explains it:
+     descriptions, labels, notes. It keeps at least 4.5 to 1 against a block in both themes. `--faint`
+     (`text-faint`) is for what can be missed: separators, icons, small counts, at about 3.8 to 1. A plain zinc
+     shade is the same grey in both themes, so it is too dim in one of them: use the tones for text. */
   --muted: #71717a;
+  --faint: #83838c;
   --diffs-font-family: "Geist Mono Variable", ui-monospace, monospace;
   --diffs-header-font-family: "Geist Variable", ui-sans-serif, sans-serif;
   --diffs-font-size: 12.5px;
@@ -71,6 +82,7 @@
   --border: #27272a;
   --text: #f4f4f5;
   --muted: #a1a1aa;
+  --faint: #71717a;
   color-scheme: dark;
 }
 

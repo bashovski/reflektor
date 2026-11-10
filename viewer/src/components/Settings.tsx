@@ -41,7 +41,7 @@ export const Choice = <T extends string>({
           {o.icon}
           {o.label}
         </span>
-        <span className="text-xs text-zinc-500">{o.hint}</span>
+        <span className="text-xs text-muted">{o.hint}</span>
       </button>
     ))}
   </div>
@@ -65,14 +65,14 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
     >
       <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
         <h2 className="font-semibold">Settings</h2>
-        <button type="button" onClick={onClose} className="rounded-control p-1 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
+        <button type="button" onClick={onClose} className="rounded-control p-1 text-muted hover:bg-zinc-500/10" title="Close (Esc)">
           <X className="size-4" />
         </button>
       </div>
 
       <div className="space-y-6 px-5 py-4">
         <section>
-          <h3 className="mb-2 label-caps text-xs text-zinc-500">Diff view</h3>
+          <h3 className="mb-2 label-caps text-xs text-muted">Diff view</h3>
           <Choice<DiffStyle>
             value={diffStyle}
             onChange={setDiffStyle}
@@ -84,7 +84,7 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
         </section>
 
         <section>
-          <h3 className="mb-2 label-caps text-xs text-zinc-500">Theme</h3>
+          <h3 className="mb-2 label-caps text-xs text-muted">Theme</h3>
           <Choice<ThemeChoice>
             value={theme}
             onChange={setTheme}
@@ -97,14 +97,14 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
         </section>
 
         <section>
-          <h3 className="mb-2 label-caps text-xs text-zinc-500">Code theme</h3>
+          <h3 className="mb-2 label-caps text-xs text-muted">Code theme</h3>
           <div className="grid gap-2 sm:grid-cols-2">
             {(["dark", "light"] as const).map((mode: ThemeMode) => (
-              <label key={mode} className="flex flex-col gap-1 text-xs text-zinc-500">
+              <label key={mode} className="flex flex-col gap-1 text-xs text-muted">
                 <span className="inline-flex items-center gap-1.5">
                   {mode === "dark" ? <Moon className="size-3.5" /> : <Sun className="size-3.5" />}
                   {mode === "dark" ? "Dark mode" : "Light mode"}
-                  {resolvedTheme === mode && <span className="text-zinc-400">(on screen now)</span>}
+                  {resolvedTheme === mode && <span className="text-faint">(on screen now)</span>}
                 </span>
                 <select
                   value={codeTheme[mode]}
@@ -123,7 +123,7 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
         </section>
 
         <section>
-          <h3 className="mb-2 label-caps text-xs text-zinc-500">Keyboard shortcuts</h3>
+          <h3 className="mb-2 label-caps text-xs text-muted">Keyboard shortcuts</h3>
           <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
             {SHORTCUTS.map(([key, label]) => (
               <li key={key} className="flex items-center gap-2.5">
@@ -139,7 +139,7 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
         </section>
 
         {window.__PR_REVIEW__ && (
-          <a href="/setup" className="inline-block text-xs text-zinc-500 hover:underline">
+          <a href="/setup" className="inline-block text-xs text-muted hover:underline">
             Run the first-time setup again
           </a>
         )}

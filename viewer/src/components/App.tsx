@@ -76,7 +76,7 @@ const Warnings = () => {
   const { bundle } = useReport();
   if (!bundle.warnings.length) return null;
   return (
-    <details className="border border-[var(--border)] px-4 py-3 text-sm text-zinc-500">
+    <details className="border border-[var(--border)] px-4 py-3 text-sm text-muted">
       <summary className="flex cursor-pointer items-center gap-2">
         <TriangleAlert className="size-4 text-warn-500" />
         {bundle.warnings.length} build warnings
@@ -141,7 +141,7 @@ const Layout = () => {
           <Sections />
           <Coverage />
           <Warnings />
-          <footer className="pb-24 text-xs text-zinc-400">
+          <footer className="pb-24 text-xs text-faint">
             Code comes straight from git. Notes, highlights and flows were written by {agent.name} and may be wrong. Built{" "}
             {new Date(bundle.builtAt).toLocaleString()}.
           </footer>

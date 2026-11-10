@@ -51,8 +51,8 @@ export const Sidebar = () => {
     <nav className="sticky top-[72px] space-y-6 text-sm">
       <div>
         <div className="mb-2 flex items-baseline justify-between">
-          <span className="label-caps text-xs text-zinc-500">Review path</span>
-          <span className="num text-xs text-zinc-500">
+          <span className="label-caps text-xs text-muted">Review path</span>
+          <span className="num text-xs text-muted">
             {viewedCount}/{total}
           </span>
         </div>
@@ -80,10 +80,10 @@ export const Sidebar = () => {
                   >
                     {complete ? <Check className="size-3" /> : <Digit>{i + 1}</Digit>}
                   </span>
-                  <span className={cx("min-w-0 flex-1 truncate", current && "font-medium", complete && "text-zinc-400 line-through decoration-zinc-400/50")}>
+                  <span className={cx("min-w-0 flex-1 truncate", current && "font-medium", complete && "text-faint line-through decoration-zinc-400/50")}>
                     {s.title ?? SECTIONS[s.kind].label}
                   </span>
-                  <span className="num w-9 shrink-0 text-right text-[11px] text-zinc-400">
+                  <span className="num w-9 shrink-0 text-right text-[11px] text-faint">
                     {done}/{paths.length}
                   </span>
                 </span>
@@ -94,12 +94,12 @@ export const Sidebar = () => {
           );
         })}
         {report.flows.length > 0 && (
-          <li className="pt-3 pb-1 pl-2 label-caps text-[11px] text-zinc-400">How it works</li>
+          <li className="pt-3 pb-1 pl-2 label-caps text-[11px] text-muted">How it works</li>
         )}
         {report.flows.map((f) => (
           <li key={f.id}>
             <a href={`#flow-${f.id}`} className="flex items-center gap-2.5 rounded-control px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-zinc-500/10 text-zinc-500">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-zinc-500/10 text-muted">
                 <Route className="size-3" />
               </span>
               <span className="min-w-0 flex-1 truncate">{f.title}</span>

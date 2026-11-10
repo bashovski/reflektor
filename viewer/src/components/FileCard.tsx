@@ -213,21 +213,21 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
       className={cx("surface overflow-clip border", current === path && "ring-2 ring-accent-500/40")}
     >
       <div className={cx("sticky top-14 z-10 flex items-center gap-2 bg-[var(--surface-2)] px-2 py-1.5 sm:px-3", open && "border-b border-[var(--border)]")}>
-        <button type="button" onClick={() => setFileOpen(path, !open)} className="rounded-control p-0.5 text-zinc-400 hover:bg-zinc-500/10" title={open ? "Collapse" : "Expand"}>
+        <button type="button" onClick={() => setFileOpen(path, !open)} className="rounded-control p-0.5 text-faint hover:bg-zinc-500/10" title={open ? "Collapse" : "Expand"}>
           <ChevronRight className={cx("size-4 transition-transform", open && "rotate-90")} />
         </button>
         <span className={cx("w-14 shrink-0 text-[11px] font-medium", status.className)}>{status.label}</span>
         <FileIcon path={path} />
         <button type="button" onClick={() => setFileOpen(path, !open)} className="flex min-w-0 text-left font-mono text-[12.5px]" title={path}>
-          <span className="truncate text-zinc-500">{dir}</span>
+          <span className="truncate text-muted">{dir}</span>
           <span className="shrink-0 font-semibold">{name}</span>
-          {file.oldPath && <span className="truncate text-zinc-400">&nbsp;(from {file.oldPath})</span>}
+          {file.oldPath && <span className="truncate text-faint">&nbsp;(from {file.oldPath})</span>}
         </button>
         {view === "branch" && sinceRound?.paths.has(path) && (
           <Pill className="shrink-0 bg-accent-500/10 px-2 text-[10px] text-accent-700 ring-accent-500/30 dark:text-accent-300">Changed since round {sinceRound.round}</Pill>
         )}
         {file.uncommitted && <Pill className="shrink-0 bg-warn-500/10 px-2 text-[10px] text-warn-700 ring-warn-500/30 dark:text-warn-300">Not committed</Pill>}
-        {file.generated && <Pill className="shrink-0 bg-zinc-500/10 px-2 text-[10px] text-zinc-500 ring-zinc-500/25">Generated</Pill>}
+        {file.generated && <Pill className="shrink-0 bg-zinc-500/10 px-2 text-[10px] text-muted ring-zinc-500/25">Generated</Pill>}
 
         <div className="ml-auto flex shrink-0 items-center gap-3">
           {coverage && coverage.covered.length + coverage.uncovered.length > 0 && <CoveragePill covered={coverage.covered.length} uncovered={coverage.uncovered.length} />}
@@ -289,7 +289,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
             </div>
           )}
           {!input ? (
-            <p className="px-4 py-6 text-sm text-zinc-500">{file.binary ? "Binary file. Not shown." : "File is too large to show here."}</p>
+            <p className="px-4 py-6 text-sm text-muted">{file.binary ? "Binary file. Not shown." : "File is too large to show here."}</p>
           ) : (
             <MultiFileDiff<AnnotationMeta>
               {...input}

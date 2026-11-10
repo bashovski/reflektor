@@ -32,14 +32,14 @@ export const HelpDialog = ({ open, onClose }: { open: boolean; onClose: () => vo
     >
       <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
         <h2 className="font-semibold">Help</h2>
-        <button type="button" onClick={onClose} className="rounded-control p-1 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
+        <button type="button" onClick={onClose} className="rounded-control p-1 text-muted hover:bg-zinc-500/10" title="Close (Esc)">
           <X className="size-4" />
         </button>
       </div>
 
       <div className="space-y-6 px-5 py-4">
         <section>
-          <h3 className="mb-2 label-caps text-xs text-zinc-500">How to review</h3>
+          <h3 className="mb-2 label-caps text-xs text-muted">How to review</h3>
           <ol className="space-y-2.5 text-sm">
             {steps(agent).map(([title, text], i) => (
               <li key={title} className="flex gap-3">
@@ -55,7 +55,7 @@ export const HelpDialog = ({ open, onClose }: { open: boolean; onClose: () => vo
         </section>
 
         <section>
-          <h3 className="mb-2 label-caps text-xs text-zinc-500">Keyboard shortcuts</h3>
+          <h3 className="mb-2 label-caps text-xs text-muted">Keyboard shortcuts</h3>
           <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
             {SHORTCUTS.map(([key, label]) => (
               <li key={key} className="flex items-center gap-2.5">

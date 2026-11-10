@@ -23,7 +23,7 @@ export const PreviousReview = () => {
         <MessagesSquare className="size-4 text-accent-500" />
         Your review, round {previous.round}
       </h2>
-      <p className="mb-3 text-xs text-zinc-500">
+      <p className="mb-3 text-xs text-muted">
         {previous.comments.length} {previous.comments.length === 1 ? "comment" : "comments"}, {done} fixed.{" "}
         {bundle.diff.sinceRound ? "The changes below can show what changed since that review, or the whole branch." : "The changes below are only what changed since that review."}
       </p>
@@ -33,7 +33,7 @@ export const PreviousReview = () => {
           return (
             <li key={c.id} className="grid gap-1.5 py-2.5 text-sm sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] sm:gap-4">
               <div className="min-w-0">
-                <p className="mb-0.5 truncate font-mono text-[11px] text-zinc-500" title={describeTarget(c.target)}>
+                <p className="mb-0.5 truncate font-mono text-[11px] text-muted" title={describeTarget(c.target)}>
                   {describeTarget(c.target)}
                 </p>
                 <div className="flex items-start gap-1.5">

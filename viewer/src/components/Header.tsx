@@ -19,17 +19,17 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
       <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-3 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-2 text-sm">
           <OwnerMenu />
-          {repo.owner && <span className="text-zinc-400">/</span>}
+          {repo.owner && <span className="text-faint">/</span>}
           <span className="truncate font-semibold">{repo.name}</span>
         </div>
         <span className="hidden items-center gap-1.5 rounded-control bg-zinc-500/10 px-2 py-1 font-mono text-xs text-zinc-600 md:inline-flex dark:text-zinc-300">
           <GitBranch className="size-3.5" />
           {branch.head}
-          <span className="text-zinc-400">→</span>
+          <span className="text-faint">→</span>
           {branch.base}
         </span>
         {/* How far the review is, visible wherever the reader has scrolled. */}
-        <span className="num ml-auto inline-flex items-center gap-1.5 text-xs text-zinc-500" title={`${viewedCount} of ${total} files viewed`}>
+        <span className="num ml-auto inline-flex items-center gap-1.5 text-xs text-muted" title={`${viewedCount} of ${total} files viewed`}>
           <ProgressRing value={total ? viewedCount / total : 0} className="size-4" />
           {viewedCount}/{total}
         </span>
@@ -46,7 +46,7 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
             type="button"
             onClick={onSettings}
             title="Settings and keyboard shortcuts (?)"
-            className="inline-flex rounded-control p-2 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100"
+            className="inline-flex rounded-control p-2 text-muted hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
             <Settings className="size-4" />
           </button>
@@ -78,11 +78,11 @@ export const Hero = () => {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
         <span className="inline-flex items-center gap-1.5">
           <GitBranch className="size-3.5" />
           <span className="font-mono">{branch.head}</span> into <span className="font-mono">{branch.base}</span>
-          <span className="text-zinc-400">({BASE_SOURCE[branch.baseSource]})</span>
+          <span className="text-faint">({BASE_SOURCE[branch.baseSource]})</span>
         </span>
         <details className="group relative">
           <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200">
@@ -95,9 +95,9 @@ export const Hero = () => {
           <ol className="surface absolute left-0 z-20 mt-2 w-[min(520px,90vw)] space-y-1 rounded-control border p-3 shadow-float">
             {commits.map((c) => (
               <li key={c.sha} className="flex gap-3 text-xs">
-                <span className="font-mono text-zinc-400">{c.short}</span>
+                <span className="font-mono text-faint">{c.short}</span>
                 <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{c.subject}</span>
-                <span className="num shrink-0 text-zinc-400">{new Date(c.date).toLocaleDateString()}</span>
+                <span className="num shrink-0 text-faint">{new Date(c.date).toLocaleDateString()}</span>
               </li>
             ))}
           </ol>
@@ -132,7 +132,7 @@ export const Hero = () => {
       {/* One strip of facts: the same icon, number and word pattern for each, with the review levels as a bar. */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5 border-t border-[var(--border)] pt-4 text-sm">
         <span className="inline-flex items-center gap-1.5">
-          <FileCode2 className="size-4 text-zinc-400" />
+          <FileCode2 className="size-4 text-faint" />
           <span>
             <span className="num">{stats.files}</span> files
           </span>
@@ -140,7 +140,7 @@ export const Hero = () => {
         </span>
         {!bundle.draft && (
           <span className="inline-flex items-center gap-1.5">
-            <Clock className="size-4 text-zinc-400" />
+            <Clock className="size-4 text-faint" />
             <span>
               About <span className="num">{report.reviewMinutes}</span> min
             </span>
@@ -157,14 +157,14 @@ export const Hero = () => {
         )}
         {coverage?.percent != null && (
           <a href="#coverage" className="inline-flex items-center gap-1.5 hover:underline">
-            <FlaskConical className="size-4 text-zinc-400" />
+            <FlaskConical className="size-4 text-faint" />
             <span>
               Tests run <span className="num">{coverage.percent}%</span> of new lines
             </span>
             {coverage.sources.some((s) => s.stale) && <span className="text-xs text-warn-600 dark:text-warn-400">(coverage file is older than the changes)</span>}
           </a>
         )}
-        <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+        <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
           {report.targets.map((t) => (
             <span key={t} className="inline-flex items-center gap-1.5">
               <Dot className={TARGETS[t].dot} />
@@ -172,7 +172,7 @@ export const Hero = () => {
             </span>
           ))}
         </span>
-        <span className="ml-auto inline-flex items-center text-xs text-zinc-500">
+        <span className="ml-auto inline-flex items-center text-xs text-muted">
           <PrDescription />
         </span>
       </div>

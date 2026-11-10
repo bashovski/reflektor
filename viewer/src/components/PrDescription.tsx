@@ -67,22 +67,22 @@ export const PrDescription = () => {
         <div className="flex h-full flex-col">
           <div className="flex items-center gap-3 border-b border-[var(--border)] px-5 py-3">
             <h2 className="font-semibold">PR description</h2>
-            <span className="text-xs text-zinc-500">Markdown, ready to paste. {agent.Name} can also open the PR with it.</span>
-            <button type="button" onClick={() => setOpen(false)} className="ml-auto rounded-control p-1 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
+            <span className="text-xs text-muted">Markdown, ready to paste. {agent.Name} can also open the PR with it.</span>
+            <button type="button" onClick={() => setOpen(false)} className="ml-auto rounded-control p-1 text-muted hover:bg-zinc-500/10" title="Close (Esc)">
               <X className="size-4" />
             </button>
           </div>
           <div className="min-h-0 flex-1 space-y-4 overflow-auto px-5 py-4">
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="label-caps text-xs text-zinc-500">Title</span>
+                <span className="label-caps text-xs text-muted">Title</span>
                 <CopyButton text={pr.title} label="Copy title" />
               </div>
               <p className="rounded-control border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm">{pr.title}</p>
             </div>
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="label-caps text-xs text-zinc-500">Body</span>
+                <span className="label-caps text-xs text-muted">Body</span>
                 <CopyButton text={pr.body} label="Copy body" />
               </div>
               <pre className="rounded-control border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap">{pr.body}</pre>
