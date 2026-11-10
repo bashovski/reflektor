@@ -72,7 +72,7 @@ export const ProjectChecks = () => {
           }
           return (
             <li key={r.name}>
-              <details open className="rounded-lg border border-red-500/25 bg-red-500/[0.04]">
+              <details open className="rounded-control border border-red-500/25 bg-red-500/[0.04]">
                 <summary className="flex list-none px-2 py-1.5">{row}</summary>
                 <pre className="max-h-72 overflow-auto border-t border-red-500/20 px-3 py-2 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
                   {r.outputTail || "(no output)"}

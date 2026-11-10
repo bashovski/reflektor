@@ -26,7 +26,7 @@ const CopyButton = ({ text, label }: { text: string; label: string }) => {
         setDone(true);
         window.setTimeout(() => setDone(false), 2000);
       }}
-      className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] px-2 py-1 text-xs font-medium hover:bg-zinc-500/10"
+      className="inline-flex items-center gap-1.5 rounded-control border border-[var(--border)] px-2 py-1 text-xs font-medium hover:bg-zinc-500/10"
     >
       {done ? <Check className="size-3.5 text-emerald-600" /> : <ClipboardCopy className="size-3.5" />}
       {done ? "Copied" : label}
@@ -53,7 +53,7 @@ export const PrDescription = () => {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400"
+        className="inline-flex items-center gap-1.5 rounded-control px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400"
       >
         <FileText className="size-3.5" />
         PR description
@@ -62,13 +62,13 @@ export const PrDescription = () => {
         ref={ref}
         onClose={() => setOpen(false)}
         onClick={(e) => e.target === ref.current && setOpen(false)}
-        className="surface m-auto h-[min(80vh,760px)] w-[min(760px,94vw)] max-w-none overflow-hidden rounded-xl border p-0 text-[var(--text)] shadow-float"
+        className="surface m-auto h-[min(80vh,760px)] w-[min(760px,94vw)] max-w-none overflow-hidden rounded-control border p-0 text-[var(--text)] shadow-float"
       >
         <div className="flex h-full flex-col">
           <div className="flex items-center gap-3 border-b border-[var(--border)] px-5 py-3">
             <h2 className="font-semibold">PR description</h2>
             <span className="text-xs text-zinc-500">Markdown, ready to paste. {agent.Name} can also open the PR with it.</span>
-            <button type="button" onClick={() => setOpen(false)} className="ml-auto rounded p-1 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
+            <button type="button" onClick={() => setOpen(false)} className="ml-auto rounded-control p-1 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
               <X className="size-4" />
             </button>
           </div>
@@ -78,14 +78,14 @@ export const PrDescription = () => {
                 <span className="label-caps text-xs text-zinc-500">Title</span>
                 <CopyButton text={pr.title} label="Copy title" />
               </div>
-              <p className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm">{pr.title}</p>
+              <p className="rounded-control border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm">{pr.title}</p>
             </div>
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <span className="label-caps text-xs text-zinc-500">Body</span>
                 <CopyButton text={pr.body} label="Copy body" />
               </div>
-              <pre className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap">{pr.body}</pre>
+              <pre className="rounded-control border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap">{pr.body}</pre>
             </div>
           </div>
         </div>

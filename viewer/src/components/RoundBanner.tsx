@@ -38,7 +38,7 @@ export const RoundBanner = () => {
         <button
           type="button"
           onClick={() => showRound(latestRound)}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-control bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
         >
           Show round {latestRound} <ArrowRight className="size-3.5" />
         </button>

@@ -36,7 +36,7 @@ export const DriftBanner = () => {
               setAsked(true);
               await requestRefresh();
             }}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 px-2.5 py-1 text-xs font-medium hover:bg-amber-500/10 disabled:opacity-60"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-control border border-amber-500/40 px-2.5 py-1 text-xs font-medium hover:bg-amber-500/10 disabled:opacity-60"
           >
             <RefreshCw className="size-3.5" />
             {asked ? `Asked ${agent.name} to update the report` : `Ask ${agent.name} to update the report`}

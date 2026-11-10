@@ -8,7 +8,7 @@ export const cx = (...parts: (string | false | null | undefined)[]) => parts.fil
 
 // A badge: a short status or kind, in the label style (see `label-caps` in index.css).
 export const Pill = ({ className, children }: { className: string; children: ReactNode }) => (
-  <span className={cx("label-caps inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs ring-1 ring-inset", className)}>
+  <span className={cx("label-caps inline-flex items-center gap-1.5 rounded-control px-2.5 py-0.5 text-xs ring-1 ring-inset", className)}>
     {children}
   </span>
 );
@@ -86,12 +86,12 @@ export const KEY_LABELS: Record<string, string> = {
 // The modifier that pairs with Enter in shortcuts: Cmd on a Mac, Ctrl everywhere else.
 export const MOD_KEY = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "Meta" : "Control";
 
-// A key cap: a small rounded rectangle with a hairline border and a one-pixel ledge under it, the way
+// A key cap: a small rectangle with a hairline border and a one-pixel ledge under it, the way
 // Linear draws shortcuts. `name` is the key as KeyboardEvent.key gives it ("Enter", "j", "?").
 export const Kbd = ({ name, className }: { name: string; className?: string }) => (
   <kbd
     className={cx(
-      "inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-[5px] border border-[var(--border)] bg-[var(--surface-2)] px-1.5 font-mono text-[11px] leading-none font-medium text-zinc-600 shadow-[0_1px_0_0_var(--border)] dark:text-zinc-300",
+      "inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-control border border-[var(--border)] bg-[var(--surface-2)] px-1.5 font-mono text-[11px] leading-none font-medium text-zinc-600 shadow-[0_1px_0_0_var(--border)] dark:text-zinc-300",
       className,
     )}
   >
@@ -99,12 +99,12 @@ export const Kbd = ({ name, className }: { name: string; className?: string }) =
   </kbd>
 );
 
-// The PR type, drawn the same way as in the inbox (tagPill in skill/scripts/daemon.mjs): a colored pill with a white icon.
+// The PR type, drawn the same way as in the inbox (tagPill in skill/scripts/daemon.mjs): a colored tag with a white icon.
 export const TagPill = ({ tag, className }: { tag: Tag; className?: string }) => {
   const { color, icon: Icon } = TAGS[tag];
   return (
     <span
-      className={cx("inline-flex h-[22px] items-center gap-[5px] rounded-full pr-[9px] pl-[7px] font-mono text-[11px] font-semibold tracking-[0.03em] whitespace-nowrap text-white", className)}
+      className={cx("inline-flex h-[22px] items-center gap-[5px] rounded-control pr-[9px] pl-[7px] font-mono text-[11px] font-semibold tracking-[0.03em] whitespace-nowrap text-white", className)}
       style={{ background: color }}
     >
       <Icon className="size-3" strokeWidth={2.4} aria-hidden="true" />
@@ -130,7 +130,7 @@ export const DiffBar = ({ additions, deletions }: { additions: number; deletions
         <span
           key={i}
           className={cx(
-            "size-2 rounded-[2px]",
+            "size-2",
             i < green ? "bg-emerald-500" : i < green + red ? "bg-red-500" : "bg-zinc-300 dark:bg-zinc-700",
           )}
         />
@@ -151,11 +151,11 @@ export const FileIcon = ({ path, className }: { path: string; className?: string
 // The repo owner's picture, or its initials on a color. Square with slightly rounded corners.
 export const OwnerAvatar = ({ avatar, className }: { avatar?: RepoAvatar; className?: string }) => {
   if (!avatar) return null;
-  if (avatar.image) return <img src={avatar.image} alt="" aria-hidden className={cx("shrink-0 rounded-md object-cover", className)} />;
+  if (avatar.image) return <img src={avatar.image} alt="" aria-hidden className={cx("shrink-0 rounded-control object-cover", className)} />;
   return (
     <span
       aria-hidden
-      className={cx("grid shrink-0 place-items-center rounded-md font-semibold leading-none text-white", className)}
+      className={cx("grid shrink-0 place-items-center rounded-control font-semibold leading-none text-white", className)}
       style={{ backgroundColor: avatar.color }}
     >
       {avatar.initials}
@@ -179,7 +179,7 @@ export const RefLink = ({ refTo, keep = 1, className }: { refTo: Ref; keep?: num
       onClick={() => jumpTo(refTo)}
       title={`${refTo.path}${refTo.line ? `:${refTo.line}` : ""}`}
       className={cx(
-        "inline-flex max-w-full min-w-0 shrink-0 items-center rounded-md px-1.5 py-0.5 font-mono text-[11px] text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100",
+        "inline-flex max-w-full min-w-0 shrink-0 items-center rounded-control px-1.5 py-0.5 font-mono text-[11px] text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100",
         className,
       )}
     >
@@ -193,7 +193,7 @@ export const IconButton = ({ className, children, ...rest }: ButtonHTMLAttribute
   <button
     type="button"
     className={cx(
-      "inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-500/10 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
+      "inline-flex items-center justify-center gap-1.5 rounded-control px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-500/10 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
       className,
     )}
     {...rest}

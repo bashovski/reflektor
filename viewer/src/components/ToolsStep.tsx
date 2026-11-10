@@ -96,9 +96,9 @@ const Command = ({ text }: { text: string }) => {
   };
   return (
     <span className="inline-flex items-center gap-2">
-      <code className={cx("rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1 font-mono text-[12px]", !runnable && "font-sans")}>{text}</code>
+      <code className={cx("rounded-control border border-[var(--border)] bg-[var(--bg)] px-2 py-1 font-mono text-[12px]", !runnable && "font-sans")}>{text}</code>
       {runnable && (
-        <button type="button" onClick={copy} title="Copy" className="inline-flex items-center gap-1 rounded p-1 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100">
+        <button type="button" onClick={copy} title="Copy" className="inline-flex items-center gap-1 rounded-control p-1 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100">
           <ClipboardCopy className="size-3.5" />
           {copied && <span className="text-[11px]">Copied</span>}
         </button>
@@ -142,7 +142,7 @@ export const ToolsStep = () => {
               aria-pressed={open === tool.key}
               onClick={() => setOpen(open === tool.key ? null : tool.key)}
               className={cx(
-                "relative flex flex-col items-start gap-3 rounded-xl border p-4 text-left",
+                "relative flex flex-col items-start gap-3 rounded-control border p-4 text-left",
                 open === tool.key ? "border-blue-500 ring-1 ring-blue-500" : "border-[var(--border)] hover:bg-zinc-500/[0.04]",
               )}
             >
@@ -165,7 +165,7 @@ export const ToolsStep = () => {
         })}
       </div>
       {shown && (
-        <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm">
+        <div className="space-y-3 rounded-control border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm">
           <p className="text-zinc-600 dark:text-zinc-400">{shown.gives}</p>
           {connected(shown.key) ? (
             <p className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">

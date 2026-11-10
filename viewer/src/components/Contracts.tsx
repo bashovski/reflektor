@@ -46,7 +46,7 @@ const ContractRow = ({ contract: c }: { contract: Contract }) => (
       </div>
     )}
     {!!c.members?.length && (
-      <ul className="mt-2 rounded-md bg-zinc-500/[0.06] px-3 py-1.5 font-mono text-xs leading-relaxed sm:ml-[72px]">
+      <ul className="mt-2 rounded-control bg-zinc-500/[0.06] px-3 py-1.5 font-mono text-xs leading-relaxed sm:ml-[72px]">
         {c.members.map((m) => (
           <li key={`${m.change}-${m.name}`} className="flex gap-2">
             <span className={cx("w-2.5 shrink-0 font-semibold", MEMBER[m.change].className)}>{MEMBER[m.change].sign}</span>

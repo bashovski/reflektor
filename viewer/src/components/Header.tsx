@@ -22,7 +22,7 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
           {repo.owner && <span className="text-zinc-400">/</span>}
           <span className="truncate font-semibold">{repo.name}</span>
         </div>
-        <span className="hidden items-center gap-1.5 rounded-md bg-zinc-500/10 px-2 py-1 font-mono text-xs text-zinc-600 md:inline-flex dark:text-zinc-300">
+        <span className="hidden items-center gap-1.5 rounded-control bg-zinc-500/10 px-2 py-1 font-mono text-xs text-zinc-600 md:inline-flex dark:text-zinc-300">
           <GitBranch className="size-3.5" />
           {branch.head}
           <span className="text-zinc-400">→</span>
@@ -34,7 +34,7 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
           {viewedCount}/{total}
         </span>
         {window.__PR_REVIEW__ && (
-          <a href="/" className="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
+          <a href="/" className="inline-flex items-center gap-1.5 rounded-control px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
             <Inbox className="size-3.5" /> All reviews
           </a>
         )}
@@ -46,7 +46,7 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
             type="button"
             onClick={onSettings}
             title="Settings and keyboard shortcuts (?)"
-            className="inline-flex rounded-md p-2 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100"
+            className="inline-flex rounded-control p-2 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
             <Settings className="size-4" />
           </button>
@@ -92,7 +92,7 @@ export const Hero = () => {
               <span className="text-amber-600 dark:text-amber-400"> + {stats.uncommittedFiles} uncommitted files</span>
             )}
           </summary>
-          <ol className="surface absolute left-0 z-20 mt-2 w-[min(520px,90vw)] space-y-1 rounded-lg border p-3 shadow-float">
+          <ol className="surface absolute left-0 z-20 mt-2 w-[min(520px,90vw)] space-y-1 rounded-control border p-3 shadow-float">
             {commits.map((c) => (
               <li key={c.sha} className="flex gap-3 text-xs">
                 <span className="font-mono text-zinc-400">{c.short}</span>

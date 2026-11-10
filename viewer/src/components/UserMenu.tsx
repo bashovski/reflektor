@@ -54,7 +54,7 @@ const bugReportUrl = (daemon: DaemonInfo | null, bundle: Bundle) => {
   return `${PROJECT.issues}?${new URLSearchParams({ body: body.join("\n") })}`;
 };
 
-const item = "group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left data-[focus]:bg-zinc-500/10 [&>svg:first-child]:size-4 [&>svg:first-child]:shrink-0 [&>svg:first-child]:text-zinc-500";
+const item = "group flex w-full items-center gap-3 rounded-control px-2.5 py-2 text-left data-[focus]:bg-zinc-500/10 [&>svg:first-child]:size-4 [&>svg:first-child]:shrink-0 [&>svg:first-child]:text-zinc-500";
 
 const PurgeDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   const ref = useRef<HTMLDialogElement>(null);
@@ -83,7 +83,7 @@ const PurgeDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) 
   };
 
   return (
-    <dialog ref={ref} onClose={onClose} onClick={(e) => e.target === ref.current && onClose()} className="surface m-auto w-[min(440px,94vw)] rounded-xl border p-0 text-[var(--text)] shadow-float">
+    <dialog ref={ref} onClose={onClose} onClick={(e) => e.target === ref.current && onClose()} className="surface m-auto w-[min(440px,94vw)] rounded-control border p-0 text-[var(--text)] shadow-float">
       <div className="space-y-3 px-5 py-4">
         <h2 className="font-semibold">Purge the daemon&rsquo;s cache?</h2>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -91,11 +91,11 @@ const PurgeDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) 
         </p>
         {result && <p className="text-sm">{result}</p>}
         <div className="flex justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="rounded-md border border-[var(--border)] px-3 py-1.5 text-sm hover:bg-zinc-500/10">
+          <button type="button" onClick={onClose} className="rounded-control border border-[var(--border)] px-3 py-1.5 text-sm hover:bg-zinc-500/10">
             {result ? "Close" : "Cancel"}
           </button>
           {!result && (
-            <button type="button" onClick={purge} disabled={busy} className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60">
+            <button type="button" onClick={purge} disabled={busy} className="rounded-control bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60">
               {busy ? "Purging…" : "Purge"}
             </button>
           )}
@@ -129,7 +129,7 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
         <MenuItems
           anchor="bottom end"
           transition
-          className="surface z-50 w-72 origin-top-right rounded-xl border p-1.5 text-sm shadow-float transition duration-100 ease-out [--anchor-gap:6px] focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0"
+          className="surface z-50 w-72 origin-top-right rounded-control border p-1.5 text-sm shadow-float transition duration-100 ease-out [--anchor-gap:6px] focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0"
         >
           <div className="flex items-center gap-3 px-2.5 py-2">
             <Avatar avatar={who?.avatar ?? null} className="size-9 text-sm" />
@@ -159,7 +159,7 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
             <button type="button" onClick={onSettings} className={item}>
               <Settings />
               <span className="flex-1">Settings</span>
-              <kbd className="rounded border border-[var(--border)] bg-zinc-500/10 px-1.5 font-mono text-xs text-zinc-500">?</kbd>
+              <kbd className="rounded-control border border-[var(--border)] bg-zinc-500/10 px-1.5 font-mono text-xs text-zinc-500">?</kbd>
             </button>
           </MenuItem>
           <MenuItem>

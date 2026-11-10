@@ -35,7 +35,7 @@ export const Findings = () => {
                 <p className="flex flex-wrap items-center gap-x-2 font-medium">
                   <Icon className="size-3.5 text-zinc-500" />
                   {f.rule}
-                  {f.preview && <code className="rounded bg-zinc-500/10 px-1 font-mono text-[11px] font-normal text-zinc-500">{f.preview}</code>}
+                  {f.preview && <code className="rounded-control bg-zinc-500/10 px-1 font-mono text-[11px] font-normal text-zinc-500">{f.preview}</code>}
                 </p>
                 <p className="text-[13px] leading-snug text-zinc-600 dark:text-zinc-400">{f.message}</p>
               </div>

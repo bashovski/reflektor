@@ -16,7 +16,7 @@ const REPORT_TARGET: CommentTarget = { type: "report" };
 // Its wrapper repeats the page container (max-w-[1440px] px-4 sm:px-6, as in App.tsx and the top bar), so the bar
 // is exactly as wide as the sidebar and the content together, at every window size.
 const floating = "pointer-events-none fixed inset-x-0 bottom-4 z-40 mx-auto max-w-[1440px] px-4 sm:px-6";
-const panel = "pointer-events-auto w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 shadow-float backdrop-blur";
+const panel = "pointer-events-auto w-full overflow-hidden rounded-control border border-[var(--border)] bg-[var(--surface)]/95 shadow-float backdrop-blur";
 
 // Every risk, gap, flow error and unfinished plan item is a problem the reviewer should decide on.
 const useProblems = () => {
@@ -80,7 +80,7 @@ const ResumeHint = ({ text }: { text: string }) => {
         type="button"
         onClick={copy}
         title="Copy"
-        className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-[11px] ring-1 ring-amber-500/25 ring-inset hover:bg-amber-500/20"
+        className="inline-flex items-center gap-1 rounded-control bg-amber-500/10 px-1.5 py-0.5 font-mono text-[11px] ring-1 ring-amber-500/25 ring-inset hover:bg-amber-500/20"
       >
         {agent.resumeCommand}
         <ClipboardCopy className="size-3" />
@@ -199,7 +199,7 @@ export const ReviewBar = () => {
                   <span className="min-w-0 flex-1 text-zinc-700 dark:text-zinc-300">
                     {c.text ? <RichText text={c.text} /> : <span className="text-zinc-400">{c.kind === "accepted" ? "Fine as it is" : "Do the suggested fix"}</span>}
                   </span>
-                  <button type="button" onClick={() => review.remove(c.id)} className="shrink-0 rounded p-0.5 text-zinc-400 hover:bg-zinc-500/10" title="Delete">
+                  <button type="button" onClick={() => review.remove(c.id)} className="shrink-0 rounded-control p-0.5 text-zinc-400 hover:bg-zinc-500/10" title="Delete">
                     <X className="size-3.5" />
                   </button>
                 </li>
@@ -214,7 +214,7 @@ export const ReviewBar = () => {
           <span
             title={`${problems.length} risks and gaps: ${queued} to fix, ${fine} fine, ${open} not decided`}
             className={cx(
-              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset tabular-nums",
+              "inline-flex items-center gap-1.5 rounded-control px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset tabular-nums",
               open > 0 ? "bg-amber-500/[0.08] text-amber-700 ring-amber-500/25 dark:text-amber-300" : "bg-emerald-500/[0.08] text-emerald-700 ring-emerald-500/25 dark:text-emerald-300",
             )}
           >
@@ -225,7 +225,7 @@ export const ReviewBar = () => {
         <button
           type="button"
           onClick={() => setListOpen(!listOpen)}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400"
+          className="inline-flex items-center gap-1.5 rounded-control px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400"
         >
           <ListChecks className="size-3.5" />
           {comments.length} {comments.length === 1 ? "comment" : "comments"}
@@ -240,7 +240,7 @@ export const ReviewBar = () => {
         <button
           type="button"
           onClick={() => review.openComposer(REPORT_TARGET)}
-          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400"
+          className="inline-flex items-center gap-1.5 rounded-control px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400"
         >
           <MessageSquarePlus className="size-3.5" />
           General comment
@@ -264,7 +264,7 @@ export const ReviewBar = () => {
                       ? `Send your comments to ${agent.name} (${KEY_LABELS[MOD_KEY]}+Enter)`
                       : `Looks good to me: tell ${agent.name} the review is done, with no comments (${KEY_LABELS[MOD_KEY]}+Enter)`
                 }
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-control bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {draft ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
                 {draft ? `${agent.Name} is writing the notes` : comments.length ? `Send ${comments.length} to ${agent.name}` : "LGTM"}
@@ -284,7 +284,7 @@ export const ReviewBar = () => {
                 type="button"
                 onClick={copy}
                 disabled={!comments.length}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-control bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
               >
                 <ClipboardCopy className="size-3.5" />
                 {copied ? `Copied. Paste it to ${agent.name}` : `Copy for ${agent.name}`}

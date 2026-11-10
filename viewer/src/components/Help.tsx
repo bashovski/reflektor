@@ -28,11 +28,11 @@ export const HelpDialog = ({ open, onClose }: { open: boolean; onClose: () => vo
       ref={ref}
       onClose={onClose}
       onClick={(e) => e.target === ref.current && onClose()}
-      className="surface m-auto w-[min(560px,94vw)] rounded-xl border p-0 text-[var(--text)] shadow-float"
+      className="surface m-auto w-[min(560px,94vw)] rounded-control border p-0 text-[var(--text)] shadow-float"
     >
       <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
         <h2 className="font-semibold">Help</h2>
-        <button type="button" onClick={onClose} className="rounded p-1 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
+        <button type="button" onClick={onClose} className="rounded-control p-1 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
           <X className="size-4" />
         </button>
       </div>
