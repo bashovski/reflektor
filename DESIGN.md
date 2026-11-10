@@ -44,6 +44,10 @@ A color that carries a meaning is written by its role, never by its hue. The rol
 
 Progress is drawn with `Meter` (`viewer/src/components/ui.tsx`): a row of square cells, one for each thing while there are few, with the figure written next to it.
 
+## Files
+
+A file's name or path that you can click shows the file's type icon before it, drawn by `FileIcon` (`viewer/src/components/ui.tsx`). The link to a file and line is always `RefLink` from the same file, which has the icon built in.
+
 ## The inbox
 
 The inbox is plain CSS inside `skill/scripts/daemon.mjs` and cannot use the classes above. It follows the same rules by hand: 2px corners, mono capitals for labels and status words, mono for figures and branch names, the same focus ring and the same shadow for menus. A change to a rule here needs the same change there.
