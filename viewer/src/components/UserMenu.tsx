@@ -54,7 +54,7 @@ const bugReportUrl = (daemon: DaemonInfo | null, bundle: Bundle) => {
   return `${PROJECT.issues}?${new URLSearchParams({ body: body.join("\n") })}`;
 };
 
-const item = "group flex w-full items-center gap-3 rounded-control px-2.5 py-2 text-left data-[focus]:bg-zinc-500/10 [&>svg:first-child]:size-4 [&>svg:first-child]:shrink-0 [&>svg:first-child]:text-zinc-500";
+const item = "group flex w-full items-center gap-3 rounded-control px-2.5 py-2 text-left data-[focus]:bg-zinc-500/10 [&>svg:first-child]:size-4 [&>svg:first-child]:shrink-0 [&>svg:first-child]:text-muted";
 
 const PurgeDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   const ref = useRef<HTMLDialogElement>(null);
@@ -136,7 +136,7 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
             <div className="min-w-0">
               <div className="truncate font-medium">{who ? (who.name ?? who.login ?? who.email ?? "Unknown") : "Looking you up…"}</div>
               {who && (
-                <div className="truncate text-xs text-zinc-500">
+                <div className="truncate text-xs text-muted">
                   {who.login ? `@${who.login}` : (who.email ?? "")}
                   {who.login || who.email ? " · " : ""}
                   {SOURCES[who.source]}
@@ -151,7 +151,7 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
               <a href={who.url} target="_blank" rel="noreferrer" className={item}>
                 <UserRound />
                 <span className="flex-1">Open {forge ?? ""} profile</span>
-                <ExternalLink className="size-3.5 text-zinc-400 opacity-0 group-data-[focus]:opacity-100" />
+                <ExternalLink className="size-3.5 text-faint opacity-0 group-data-[focus]:opacity-100" />
               </a>
             </MenuItem>
           )}
@@ -159,7 +159,7 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
             <button type="button" onClick={onSettings} className={item}>
               <Settings />
               <span className="flex-1">Settings</span>
-              <kbd className="rounded-control border border-[var(--border)] bg-zinc-500/10 px-1.5 font-mono text-xs text-zinc-500">?</kbd>
+              <kbd className="rounded-control border border-[var(--border)] bg-zinc-500/10 px-1.5 font-mono text-xs text-muted">?</kbd>
             </button>
           </MenuItem>
           <MenuItem>
@@ -172,7 +172,7 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
             <a href={bugReportUrl(daemon, bundle)} target="_blank" rel="noreferrer" className={item}>
               <Bug />
               <span className="flex-1">Report a bug</span>
-              <ExternalLink className="size-3.5 text-zinc-400 opacity-0 group-data-[focus]:opacity-100" />
+              <ExternalLink className="size-3.5 text-faint opacity-0 group-data-[focus]:opacity-100" />
             </a>
           </MenuItem>
           <MenuSeparator className="my-1 h-px bg-[var(--border)]" />
@@ -185,7 +185,7 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
           </MenuItem>
           <MenuSeparator className="my-1 h-px bg-[var(--border)]" />
 
-          <div role="status" className="flex items-center gap-2 px-2.5 py-2 text-xs text-zinc-500">
+          <div role="status" className="flex items-center gap-2 px-2.5 py-2 text-xs text-muted">
             <span aria-hidden className={cx("size-2 shrink-0 rounded-full", status.dot)} />
             <span className="truncate">
               {status.label}

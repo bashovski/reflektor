@@ -62,7 +62,7 @@ export const OwnerMenu = () => {
       icon: <Inbox />,
       label: repo.owner ? (
         <>
-          View All Reports for <span className="text-zinc-500 dark:text-zinc-400">{repo.owner}</span>
+          View All Reports for <span className="text-muted">{repo.owner}</span>
         </>
       ) : (
         "View All Reports"
@@ -101,7 +101,7 @@ export const OwnerMenu = () => {
   const owner = (
     <>
       <OwnerAvatar avatar={repo.avatar} className="size-6 text-[11px]" />
-      {repo.owner && <span className="truncate text-zinc-500">{repo.owner}</span>}
+      {repo.owner && <span className="truncate text-muted">{repo.owner}</span>}
     </>
   );
   if (!items.length) return <span className="flex min-w-0 items-center gap-2">{owner}</span>;
@@ -113,7 +113,7 @@ export const OwnerMenu = () => {
         className="-ml-1 flex min-w-0 items-center gap-2 rounded-control py-1 pr-1 pl-1 hover:bg-zinc-500/10 focus:outline-none data-[focus]:ring-2 data-[focus]:ring-zinc-400/60 data-[open]:bg-zinc-500/10"
       >
         {owner}
-        <ChevronDown className="size-3.5 shrink-0 text-zinc-400" />
+        <ChevronDown className="size-3.5 shrink-0 text-faint" />
       </MenuButton>
       <MenuItems
         anchor="bottom start"
@@ -127,13 +127,13 @@ export const OwnerMenu = () => {
               {...(item.external ? { target: "_blank", rel: "noreferrer" } : {})}
               className="group flex items-start gap-3 rounded-control px-2.5 py-2 data-[focus]:bg-zinc-500/10"
             >
-              <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center text-zinc-500 [&>svg]:size-4">{item.icon}</span>
+              <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center text-muted [&>svg]:size-4">{item.icon}</span>
               <span className="min-w-0 flex-1">
                 <span className="block font-medium">{item.label}</span>
-                <span className="line-clamp-2 block text-xs break-words text-zinc-500">{item.detail}</span>
+                <span className="line-clamp-2 block text-xs break-words text-muted">{item.detail}</span>
                 {item.warning && <span className="mt-0.5 block text-xs text-warn-600 dark:text-warn-400">{item.warning}</span>}
               </span>
-              {item.external && <ExternalLink className={cx("mt-0.5 size-3.5 shrink-0 text-zinc-400 opacity-0 group-data-[focus]:opacity-100")} />}
+              {item.external && <ExternalLink className={cx("mt-0.5 size-3.5 shrink-0 text-faint opacity-0 group-data-[focus]:opacity-100")} />}
             </a>
           </MenuItem>
         ))}

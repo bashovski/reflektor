@@ -50,16 +50,16 @@ const SectionCard = ({ section, index, paths }: { section: Section; index: numbe
         onClick={() => setSectionOpen(index, !open)}
         className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-zinc-500/[0.04] sm:px-5"
       >
-        <ChevronRight className={cx("mt-0.5 size-4 shrink-0 text-zinc-400 transition-transform", open && "rotate-90")} />
-        <Icon className="mt-0.5 size-4 shrink-0 text-zinc-500" />
+        <ChevronRight className={cx("mt-0.5 size-4 shrink-0 text-faint transition-transform", open && "rotate-90")} />
+        <Icon className="mt-0.5 size-4 shrink-0 text-muted" />
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <span className="font-semibold">{section.title ?? meta.label}</span>
             <Pill className={cx("text-[11px]", review.className)}>{review.label}</Pill>
           </span>
-          <span className="mt-0.5 block text-[13px] leading-snug text-zinc-500">{section.reason}</span>
+          <span className="mt-0.5 block text-[13px] leading-snug text-muted">{section.reason}</span>
         </span>
-        <span className="ml-auto flex shrink-0 items-center gap-3 pt-0.5 text-xs text-zinc-500">
+        <span className="ml-auto flex shrink-0 items-center gap-3 pt-0.5 text-xs text-muted">
           <span>
             <span className="num">{files.length}</span> {files.length === 1 ? "file" : "files"}
           </span>
@@ -148,11 +148,11 @@ export const ViewSwitch = () => {
           onClick={() => setView(o.value)}
           className={cx(
             "inline-flex items-center gap-1.5 rounded-control px-2.5 py-1 font-medium",
-            view === o.value ? "bg-zinc-500/15 text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300",
+            view === o.value ? "bg-zinc-500/15 text-zinc-900 dark:text-zinc-100" : "text-muted hover:text-zinc-700 dark:hover:text-zinc-300",
           )}
         >
           {o.label}
-          <span className="num text-zinc-400">{o.count}</span>
+          <span className="num text-faint">{o.count}</span>
         </button>
       ))}
     </div>
@@ -170,7 +170,7 @@ export const Sections = () => {
         </span>
       </SectionTitle>
       {view === "round" && sinceRound && (
-        <p className="mb-3 text-sm text-zinc-500">
+        <p className="mb-3 text-sm text-muted">
           Each file against its version in round {sinceRound.round}.
           {hidden > 0 && (
             <>
@@ -184,7 +184,7 @@ export const Sections = () => {
           )}
         </p>
       )}
-      {view === "round" && sinceRound && !sinceRound.paths.size && <p className="text-sm text-zinc-500">No code changed since round {sinceRound.round}.</p>}
+      {view === "round" && sinceRound && !sinceRound.paths.size && <p className="text-sm text-muted">No code changed since round {sinceRound.round}.</p>}
       <div className="space-y-3">
         {shownSections.map(({ section, index, paths }) => (
           <SectionCard key={`${view}-${section.kind}-${index}`} section={section} index={index} paths={paths} />

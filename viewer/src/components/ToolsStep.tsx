@@ -98,7 +98,7 @@ const Command = ({ text }: { text: string }) => {
     <span className="inline-flex items-center gap-2">
       <code className={cx("rounded-control border border-[var(--border)] bg-[var(--bg)] px-2 py-1 font-mono text-[12px]", !runnable && "font-sans")}>{text}</code>
       {runnable && (
-        <button type="button" onClick={copy} title="Copy" className="inline-flex items-center gap-1 rounded-control p-1 text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100">
+        <button type="button" onClick={copy} title="Copy" className="inline-flex items-center gap-1 rounded-control p-1 text-muted hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100">
           <ClipboardCopy className="size-3.5" />
           {copied && <span className="text-[11px]">Copied</span>}
         </button>
@@ -127,7 +127,7 @@ export const ToolsStep = () => {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-zinc-500">
+      <p className="text-sm text-muted">
         pr-report works without these. With one of them, a report knows the pull request it belongs to, and your agent can open one for you. Click a
         tool to see how to connect it.
       </p>
@@ -149,12 +149,12 @@ export const ToolsStep = () => {
               <span className="text-zinc-800 dark:text-zinc-100">{tool.icon}</span>
               <span>
                 <span className="block font-semibold">{tool.name}</span>
-                <span className="block text-xs text-zinc-500">{statusText(state)}</span>
+                <span className="block text-xs text-muted">{statusText(state)}</span>
               </span>
               <span
                 className={cx(
                   "absolute right-3 bottom-3 grid size-6 place-items-center rounded-full",
-                  ok ? "bg-ok-500 text-white" : "border border-[var(--border)] text-zinc-400",
+                  ok ? "bg-ok-500 text-white" : "border border-[var(--border)] text-faint",
                 )}
                 title={ok ? "Connected" : "Not connected"}
               >
@@ -174,14 +174,14 @@ export const ToolsStep = () => {
           ) : (
             <ol className="space-y-2">
               <li className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="w-16 shrink-0 label-caps text-[11px] text-zinc-500">Install</span>
+                <span className="w-16 shrink-0 label-caps text-[11px] text-muted">Install</span>
                 <Command text={shown.install[os]} />
               </li>
               <li className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="w-16 shrink-0 label-caps text-[11px] text-zinc-500">Log in</span>
+                <span className="w-16 shrink-0 label-caps text-[11px] text-muted">Log in</span>
                 <Command text={shown.login} />
               </li>
-              <li className="text-xs text-zinc-500">Run these in a terminal. This page checks every few seconds and ticks the box once you are logged in.</li>
+              <li className="text-xs text-muted">Run these in a terminal. This page checks every few seconds and ticks the box once you are logged in.</li>
             </ol>
           )}
         </div>

@@ -64,7 +64,7 @@ export const SetupFrame = ({
   const step = steps[index];
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[860px] flex-col justify-center px-4 py-10 sm:px-6">
-      <div className="mb-4 flex items-center justify-between text-xs text-zinc-500">
+      <div className="mb-4 flex items-center justify-between text-xs text-muted">
         <span className="font-semibold tracking-tight text-[var(--text)]">pr-report</span>
         <span className="inline-flex items-center gap-1.5" aria-label={`Step ${index + 1} of ${steps.length}`}>
           {steps.map((s, i) => (
@@ -83,7 +83,7 @@ export const SetupFrame = ({
           )}
           <span className="ml-auto inline-flex items-center gap-3">
             {index < steps.length - 1 && (
-              <button type="button" onClick={onSkip} className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:underline">
+              <button type="button" onClick={onSkip} className="inline-flex items-center gap-1.5 text-xs text-muted hover:underline">
                 Skip setup <Kbd name="Escape" />
               </button>
             )}
@@ -109,7 +109,7 @@ export const ThemeStep = () => {
   const { theme, setTheme } = usePrefs();
   return (
     <div className="space-y-3">
-      <p className="text-sm text-zinc-500">Applied as you click. Change it any time from the gear in a report.</p>
+      <p className="text-sm text-muted">Applied as you click. Change it any time from the gear in a report.</p>
       <Choice<ThemeChoice>
         value={theme}
         onChange={setTheme}
@@ -151,7 +151,7 @@ export const CodeThemeStep = () => {
   const other = resolvedTheme === "dark" ? "light" : "dark";
   return (
     <div className="space-y-3">
-      <p className="text-sm text-zinc-500">
+      <p className="text-sm text-muted">
         {theme === "system" ? `Your OS is in ${resolvedTheme} mode, so these are ${resolvedTheme} themes. ` : `Themes drawn for ${resolvedTheme} mode. `}
         {codeThemesFor(other).find((t) => t.id === codeTheme[other])?.name} stays the {other} mode theme; both can change later in the gear of a report.
       </p>

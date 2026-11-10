@@ -14,7 +14,7 @@ const ghost = `${button} text-zinc-600 hover:bg-zinc-500/10 hover:text-zinc-900 
 const primary = `${button} bg-accent-600 text-white hover:bg-accent-700`;
 
 export const SuggestedFix = ({ text, className }: { text: string; className?: string }) => (
-  <div className={cx("flex items-start gap-1.5 text-[13px] text-zinc-500", className)}>
+  <div className={cx("flex items-start gap-1.5 text-[13px] text-muted", className)}>
     <Wrench className="mt-[3px] size-3 shrink-0" />
     <span className="min-w-0">
       <span className="font-medium text-zinc-600 dark:text-zinc-400">Suggested fix: </span>
@@ -57,7 +57,7 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
 
   return (
     <div className="my-1.5 rounded-control border border-accent-500/40 bg-[var(--surface)] p-2.5 font-sans" onClick={(e) => e.stopPropagation()}>
-      <p className="mb-1.5 text-[11px] text-zinc-500">{describeTarget(target)}</p>
+      <p className="mb-1.5 text-[11px] text-muted">{describeTarget(target)}</p>
       <textarea
         ref={ref}
         value={text}
@@ -65,10 +65,10 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
         onKeyDown={onKey}
         rows={3}
         placeholder={placeholder ?? "What should change, or what do you want to know?"}
-        className="w-full resize-y rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-[13px] leading-relaxed outline-none placeholder:text-zinc-400 focus:border-accent-500"
+        className="w-full resize-y rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-[13px] leading-relaxed outline-none placeholder:text-faint focus:border-accent-500"
       />
       <div className="mt-1.5 flex items-center gap-2">
-        <span className="hidden text-[11px] text-zinc-400 sm:inline">
+        <span className="hidden text-[11px] text-faint sm:inline">
           {canAsk ? `Ask now: ${agent.name} answers while you review. Add comment: saved until you send the review.` : <>Start with <code>nit:</code> or <code>q:</code> to mark it, or let {agent.name} decide. ⌘↵ saves.</>}
         </span>
         <span className="ml-auto" />
@@ -121,7 +121,7 @@ export const CommentItem = ({ comment, compact }: { comment: ReviewComment; comp
   const agent = useAgent();
   const { editable, openComposer, remove, composer } = useReview();
   if (composer?.editingId === comment.id) return <Composer target={comment.target} />;
-  const tone = comment.kind ? COMMENT_KINDS[comment.kind].className : "bg-zinc-500/10 text-zinc-500 ring-zinc-500/25";
+  const tone = comment.kind ? COMMENT_KINDS[comment.kind].className : "bg-zinc-500/10 text-muted ring-zinc-500/25";
 
   return (
     <div className={cx("group/comment flex items-start gap-2 rounded-control border border-[var(--border)] bg-[var(--surface-2)] font-sans", compact ? "px-2 py-1.5" : "my-1.5 px-3 py-2")}>
@@ -170,7 +170,7 @@ export const QuestionThread = ({ question }: { question: LiveQuestion }) => {
           {question.answer.ref && <RefLink refTo={question.answer.ref} className="ml-auto" />}
         </div>
       ) : (
-        <p className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
+        <p className="mt-1 flex items-center gap-1.5 text-xs text-muted">
           <Loader2 className="size-3 animate-spin" />
           {slow ? `${agent.Name} has not picked this up yet. Is the ${agent.noun} session still open?` : `Waiting for ${agent.name}…`}
         </p>
@@ -251,7 +251,7 @@ export const QuickActions = ({
         type="button"
         title="Comment"
         onClick={comment()}
-        className="absolute right-1.5 bottom-1 rounded-control border border-[var(--border)] bg-[var(--surface)] p-1 text-zinc-500 opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-zinc-900 focus:opacity-100 dark:hover:text-zinc-100"
+        className="absolute right-1.5 bottom-1 rounded-control border border-[var(--border)] bg-[var(--surface)] p-1 text-muted opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-zinc-900 focus:opacity-100 dark:hover:text-zinc-100"
       >
         <MessageSquarePlus className="size-3.5" />
       </button>

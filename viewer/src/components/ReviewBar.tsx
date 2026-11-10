@@ -85,7 +85,7 @@ const ResumeHint = ({ text }: { text: string }) => {
         {agent.resumeCommand}
         <ClipboardCopy className="size-3" />
       </button>
-      {copied && <span className="text-zinc-500">Copied</span>}
+      {copied && <span className="text-muted">Copied</span>}
     </span>
   );
 };
@@ -187,19 +187,19 @@ export const ReviewBar = () => {
           {composingGeneral && <Composer target={REPORT_TARGET} placeholder="A comment about the whole change" />}
           {listOpen && (
             <ul className="space-y-1.5">
-              {!comments.length && <li className="text-sm text-zinc-500">No comments yet.</li>}
+              {!comments.length && <li className="text-sm text-muted">No comments yet.</li>}
               {comments.map((c) => (
                 <li key={c.id} className="flex items-start gap-2 text-sm">
-                  <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", c.kind ? COMMENT_KINDS[c.kind].className : "bg-zinc-500/10 text-zinc-500 ring-zinc-500/25")}>
+                  <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", c.kind ? COMMENT_KINDS[c.kind].className : "bg-zinc-500/10 text-muted ring-zinc-500/25")}>
                     {c.kind ? COMMENT_KINDS[c.kind].label : `${agent.Name} decides`}
                   </Pill>
-                  <button type="button" onClick={() => goTo(c)} className="shrink-0 font-mono text-xs text-zinc-500 hover:underline">
+                  <button type="button" onClick={() => goTo(c)} className="shrink-0 font-mono text-xs text-muted hover:underline">
                     {describeTarget(c.target)}
                   </button>
                   <span className="min-w-0 flex-1 text-zinc-700 dark:text-zinc-300">
-                    {c.text ? <RichText text={c.text} /> : <span className="text-zinc-400">{c.kind === "accepted" ? "Fine as it is" : "Do the suggested fix"}</span>}
+                    {c.text ? <RichText text={c.text} /> : <span className="text-faint">{c.kind === "accepted" ? "Fine as it is" : "Do the suggested fix"}</span>}
                   </span>
-                  <button type="button" onClick={() => review.remove(c.id)} className="shrink-0 rounded-control p-0.5 text-zinc-400 hover:bg-zinc-500/10" title="Delete">
+                  <button type="button" onClick={() => review.remove(c.id)} className="shrink-0 rounded-control p-0.5 text-faint hover:bg-zinc-500/10" title="Delete">
                     <X className="size-3.5" />
                   </button>
                 </li>
@@ -234,7 +234,7 @@ export const ReviewBar = () => {
           <span className="inline-flex items-center gap-1.5 text-xs text-agent-700 dark:text-agent-300">
             <MessageCircleQuestion className="size-3.5" />
             {review.questions.length} {review.questions.length === 1 ? "question" : "questions"}
-            {review.questions.some((q) => !q.answer) && <span className="text-zinc-500">({review.questions.filter((q) => !q.answer).length} waiting)</span>}
+            {review.questions.some((q) => !q.answer) && <span className="text-muted">({review.questions.filter((q) => !q.answer).length} waiting)</span>}
           </span>
         )}
         <button
@@ -252,7 +252,7 @@ export const ReviewBar = () => {
         <span className="ml-auto inline-flex items-center gap-3">
           {mode === "server" ? (
             <>
-              <span className={cx("text-[11px] text-zinc-400", saveState === "saved" && "fade-out")}>{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}</span>
+              <span className={cx("text-[11px] text-faint", saveState === "saved" && "fade-out")}>{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}</span>
               <button
                 type="button"
                 onClick={review.submit}
@@ -279,7 +279,7 @@ export const ReviewBar = () => {
             </>
           ) : (
             <>
-              <span className="hidden text-[11px] text-zinc-400 md:inline">Opened as a file: comments stay in this browser.</span>
+              <span className="hidden text-[11px] text-faint md:inline">Opened as a file: comments stay in this browser.</span>
               <button
                 type="button"
                 onClick={copy}

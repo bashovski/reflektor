@@ -20,7 +20,7 @@ export const BeforeMerge = () => {
       <h2 className={cx("mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold", merged ? "text-violet-800 dark:text-violet-300" : "text-warn-800 dark:text-warn-300")}>
         {merged ? <CircleCheck className="size-4" /> : <CircleAlert className="size-4" />}
         Before you merge
-        {merged && <span className="font-normal text-zinc-500">Merged, so these are done.</span>}
+        {merged && <span className="font-normal text-muted">Merged, so these are done.</span>}
       </h2>
       <ul className="space-y-2">
         {items.map((item, i) => {
@@ -34,7 +34,7 @@ export const BeforeMerge = () => {
                 {meta.label}
               </span>
               <div className="min-w-[min(10rem,100%)] flex-1">
-                <RichText text={item.text} className={cx("block leading-relaxed", merged && "text-zinc-500 line-through decoration-zinc-400")} />
+                <RichText text={item.text} className={cx("block leading-relaxed", merged && "text-muted line-through decoration-zinc-400")} />
                 {!merged && <QuickActions target={target} variant="todo" />}
                 <TargetComments target={target} />
               </div>

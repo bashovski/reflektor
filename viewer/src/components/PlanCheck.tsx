@@ -38,7 +38,7 @@ export const PlanCheck = () => {
         </span>
         {/* A plan with nothing planned counts as done, so its one cell is full. */}
         <Meter value={planned.length ? done : 1} total={planned.length || 1} fill={pct === 100 ? "bg-ok-500" : "bg-warn-500"} className="h-1.5 w-28" />
-        <span className="w-full text-xs text-zinc-500">Plan: {plan.source}</span>
+        <span className="w-full text-xs text-muted">Plan: {plan.source}</span>
       </div>
       <ul className="space-y-1.5">
         {plan.items.map((item, i) => {
@@ -54,7 +54,7 @@ export const PlanCheck = () => {
               </span>
               <div className="min-w-[min(10rem,100%)] flex-1">
                 <RichText text={item.text} className="block leading-relaxed" />
-                {item.note && <RichText text={item.note} className="block text-[13px] text-zinc-500" />}
+                {item.note && <RichText text={item.note} className="block text-[13px] text-muted" />}
                 <QuickActions target={target} variant={unfinished ? "problem" : "info"} labels={unfinished ? planLabels(agent) : undefined} />
                 <TargetComments target={target} />
               </div>

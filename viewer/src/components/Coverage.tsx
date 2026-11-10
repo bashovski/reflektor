@@ -30,7 +30,7 @@ export const Coverage = () => {
         {coverage && coverage.percent != null && (
           <div>
             <p className="num text-3xl font-semibold">{coverage.percent}%</p>
-            <p className="mb-4 text-sm text-zinc-500">
+            <p className="mb-4 text-sm text-muted">
               of new lines run during tests ({coverage.covered} of {coverage.covered + coverage.uncovered}). Lines like comments and types do not count.
             </p>
             <ul className="space-y-1.5">
@@ -46,12 +46,12 @@ export const Coverage = () => {
                       <span className="truncate font-mono text-xs">{shortPath(r.path, 3)}</span>
                     </span>
                     <Meter value={r.covered} total={r.total} cells={10} fill={tone(r.pct)} className="h-1.5" />
-                    <span className="num text-right text-xs text-zinc-500">{r.pct}%</span>
+                    <span className="num text-right text-xs text-muted">{r.pct}%</span>
                   </button>
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-[11px] text-zinc-400">
+            <p className="mt-3 text-[11px] text-faint">
               Source: {coverage.sources.map((s) => `${s.format} (${s.file})`).join(", ")}, made{" "}
               {new Date(coverage.sources[0]?.modified ?? Date.now()).toLocaleString()}
             </p>

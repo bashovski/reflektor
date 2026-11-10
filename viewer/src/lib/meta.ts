@@ -170,9 +170,9 @@ export const BEFORE_MERGE: Record<BeforeMergeKind, { label: string; icon: Lucide
 export const FLOW_DETAILS: Record<FlowDetailKind, { label: string; icon: LucideIcon; className: string }> = {
   check: { label: "Check", icon: ShieldCheck, className: "text-blue-600 dark:text-blue-400" },
   rule: { label: "Rule", icon: Scale, className: "text-violet-600 dark:text-violet-400" },
-  effect: { label: "Then", icon: ArrowRight, className: "text-zinc-500" },
+  effect: { label: "Then", icon: ArrowRight, className: "text-muted" },
   error: { label: "Problem", icon: CircleX, className: "text-danger-600 dark:text-danger-400" },
-  note: { label: "Note", icon: Info, className: "text-zinc-500" },
+  note: { label: "Note", icon: Info, className: "text-muted" },
 };
 
 export const STEP_STATUS: Record<FlowStep["status"], { label: string; className: string; node: string }> = {

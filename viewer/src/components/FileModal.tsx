@@ -57,7 +57,7 @@ export const FileModal = () => {
             <FileIcon path={modal.path} />
             <span className="min-w-0 truncate font-mono text-sm font-medium">{modal.path}</span>
             {diffFile && <LocCount additions={diffFile.additions} deletions={diffFile.deletions} />}
-            {!diffFile && <span className="text-xs text-zinc-500">Not changed in this branch</span>}
+            {!diffFile && <span className="text-xs text-muted">Not changed in this branch</span>}
             <div className="ml-auto flex items-center gap-2">
               {diffFile && plainFile && (
                 <div className="inline-flex rounded-control bg-zinc-500/10 p-0.5">
@@ -68,7 +68,7 @@ export const FileModal = () => {
                       onClick={() => setMode(m)}
                       className={cx(
                         "rounded-control px-2 py-1 text-xs font-medium",
-                        mode === m ? "surface" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200",
+                        mode === m ? "surface" : "text-muted hover:text-zinc-800 dark:hover:text-zinc-200",
                       )}
                     >
                       {m === "changes" ? "Changes in full file" : "Final file"}
@@ -76,7 +76,7 @@ export const FileModal = () => {
                   ))}
                 </div>
               )}
-              <button type="button" onClick={() => openModal(null)} className="rounded-control p-1.5 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
+              <button type="button" onClick={() => openModal(null)} className="rounded-control p-1.5 text-muted hover:bg-zinc-500/10" title="Close (Esc)">
                 <X className="size-4" />
               </button>
             </div>
@@ -91,7 +91,7 @@ export const FileModal = () => {
             ) : plainFile ? (
               <CodeFile file={plainFile} options={fileOptions} selectedLines={line ? { start: line, end: line } : null} />
             ) : (
-              <p className="p-6 text-sm text-zinc-500">This file is not included in the report.</p>
+              <p className="p-6 text-sm text-muted">This file is not included in the report.</p>
             )}
           </div>
         </div>

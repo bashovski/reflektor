@@ -144,7 +144,7 @@ export const FileIcon = ({ path, className }: { path: string; className?: string
   const { bundle } = useReport();
   const svg = bundle.fileIcons ? bundle.fileIcons.icons[bundle.fileIcons.byPath[path]] : undefined;
   const src = useMemo(() => (svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` : null), [svg]);
-  if (!src) return <FileText className={cx("size-4 shrink-0 text-zinc-400", className)} aria-hidden />;
+  if (!src) return <FileText className={cx("size-4 shrink-0 text-faint", className)} aria-hidden />;
   return <img src={src} alt="" aria-hidden className={cx("size-4 shrink-0", className)} />;
 };
 
@@ -179,7 +179,7 @@ export const RefLink = ({ refTo, keep = 1, className }: { refTo: Ref; keep?: num
       onClick={() => jumpTo(refTo)}
       title={`${refTo.path}${refTo.line ? `:${refTo.line}` : ""}`}
       className={cx(
-        "inline-flex max-w-full min-w-0 shrink-0 items-center rounded-control px-1.5 py-0.5 font-mono text-[11px] text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100",
+        "inline-flex max-w-full min-w-0 shrink-0 items-center rounded-control px-1.5 py-0.5 font-mono text-[11px] text-muted hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100",
         className,
       )}
     >
@@ -211,7 +211,7 @@ export const Card = ({ className, children, id }: { className?: string; children
 
 export const SectionTitle = ({ children, right }: { children: ReactNode; right?: ReactNode }) => (
   <div className="mb-3 flex items-end justify-between gap-4">
-    <h2 className="label-caps text-xs text-zinc-500">{children}</h2>
+    <h2 className="label-caps text-xs text-muted">{children}</h2>
     {right}
   </div>
 );

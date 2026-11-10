@@ -16,15 +16,15 @@ const FlowTrace = ({ flow }: { flow: FlowData }) => {
   return (
     <Card className="overflow-hidden" id={`flow-${flow.id}`}>
       <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-start gap-3 px-4 py-3.5 text-left hover:bg-zinc-500/[0.04] sm:px-5">
-        <ChevronRight className={cx("mt-0.5 size-4 shrink-0 text-zinc-400 transition-transform", open && "rotate-90")} />
+        <ChevronRight className={cx("mt-0.5 size-4 shrink-0 text-faint transition-transform", open && "rotate-90")} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="font-semibold">{flow.title}</span>
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-muted">
               {flow.steps.length} steps, {newCount} new or changed
             </span>
           </div>
-          <p className="mt-0.5 text-sm text-zinc-500">{flow.trigger}</p>
+          <p className="mt-0.5 text-sm text-muted">{flow.trigger}</p>
         </div>
       </button>
 
@@ -35,7 +35,7 @@ const FlowTrace = ({ flow }: { flow: FlowData }) => {
             const last = i === flow.steps.length - 1;
             return (
               <li key={i} className="grid grid-cols-[88px_20px_1fr] gap-x-2 sm:grid-cols-[112px_20px_1fr]">
-                <span className="label-caps pt-[3px] text-right text-[11px] text-zinc-500">{step.layer}</span>
+                <span className="label-caps pt-[3px] text-right text-[11px] text-muted">{step.layer}</span>
                 <span className="relative flex justify-center">
                   <span className={cx("relative z-10 mt-[7px] size-2.5 rounded-full border-2", status.node)} />
                   {!last && <span className="absolute top-[18px] bottom-[-7px] w-px bg-zinc-300 dark:bg-zinc-700" />}
@@ -90,7 +90,7 @@ export const Flows = () => {
     <div id="flows">
       <SectionTitle
         right={
-          <span className="hidden items-center gap-3 text-[11px] text-zinc-500 sm:inline-flex">
+          <span className="hidden items-center gap-3 text-[11px] text-muted sm:inline-flex">
             {(["new", "changed", "existing"] as const).map((s) => (
               <span key={s} className="inline-flex items-center gap-1.5">
                 <span className={cx("size-2 rounded-full border-2", STEP_STATUS[s].node)} />
