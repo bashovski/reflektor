@@ -6,8 +6,9 @@ import { useReport } from "../lib/state";
 
 export const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(" ");
 
+// A badge: a short status or kind, in the label style (see `label-caps` in index.css).
 export const Pill = ({ className, children }: { className: string; children: ReactNode }) => (
-  <span className={cx("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset", className)}>
+  <span className={cx("label-caps inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs ring-1 ring-inset", className)}>
     {children}
   </span>
 );
@@ -187,7 +188,7 @@ export const Card = ({ className, children, id }: { className?: string; children
 
 export const SectionTitle = ({ children, right }: { children: ReactNode; right?: ReactNode }) => (
   <div className="mb-3 flex items-end justify-between gap-4">
-    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-zinc-500">{children}</h2>
+    <h2 className="label-caps text-xs text-zinc-500">{children}</h2>
     {right}
   </div>
 );

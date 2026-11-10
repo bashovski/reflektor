@@ -35,7 +35,7 @@ const FlowTrace = ({ flow }: { flow: FlowData }) => {
             const last = i === flow.steps.length - 1;
             return (
               <li key={i} className="grid grid-cols-[88px_20px_1fr] gap-x-2 sm:grid-cols-[112px_20px_1fr]">
-                <span className="pt-[3px] text-right text-[11px] font-medium uppercase tracking-wide text-zinc-500">{step.layer}</span>
+                <span className="label-caps pt-[3px] text-right text-[11px] text-zinc-500">{step.layer}</span>
                 <span className="relative flex justify-center">
                   <span className={cx("relative z-10 mt-[7px] size-2.5 rounded-full border-2", status.node)} />
                   {!last && <span className="absolute top-[18px] bottom-[-7px] w-px bg-zinc-300 dark:bg-zinc-700" />}
@@ -43,7 +43,7 @@ const FlowTrace = ({ flow }: { flow: FlowData }) => {
                 <div className={cx("min-w-0", !last && "pb-4")}>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <code className="font-mono text-[13px] font-medium">{step.symbol}</code>
-                    <Pill className={cx("px-1.5 py-0 text-[10px] uppercase tracking-wide", status.className)}>{status.label}</Pill>
+                    <Pill className={cx("px-1.5 py-0 text-[10px]", status.className)}>{status.label}</Pill>
                     {!step.verified && (
                       <span title="The build could not find this name in the file" className="inline-flex items-center gap-1 text-[11px] text-amber-600">
                         <CircleHelp className="size-3" /> unverified

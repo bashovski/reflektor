@@ -28,7 +28,7 @@ export const BeforeMerge = () => {
           const target: CommentTarget = { type: "before-merge", index: i, text: item.text };
           return (
             <li key={i} id={`bm-${i}`} className="group/row flex flex-wrap items-start gap-x-3 gap-y-1 text-sm">
-              <span className={cx("mt-0.5 inline-flex w-28 shrink-0 items-center gap-1.5 text-xs font-medium", merged ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400")}>
+              <span className={cx("label-caps mt-0.5 inline-flex w-28 shrink-0 items-center gap-1.5 text-[11px]", merged ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400")}>
                 <Icon className="size-3.5" />
                 {meta.label}
               </span>
