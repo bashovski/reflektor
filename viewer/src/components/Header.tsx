@@ -89,7 +89,7 @@ export const Hero = () => {
             <GitCommitHorizontal className="size-3.5" />
             {scopeText}
             {stats.uncommittedFiles > 0 && (
-              <span className="text-amber-600 dark:text-amber-400"> + {stats.uncommittedFiles} uncommitted files</span>
+              <span className="text-warn-600 dark:text-warn-400"> + {stats.uncommittedFiles} uncommitted files</span>
             )}
           </summary>
           <ol className="surface absolute left-0 z-20 mt-2 w-[min(520px,90vw)] space-y-1 rounded-control border p-3 shadow-float">
@@ -120,7 +120,7 @@ export const Hero = () => {
           {report.title}
         </h1>
         {bundle.draft ? (
-          <p className="inline-flex max-w-3xl items-center gap-2 text-[15px] leading-relaxed text-violet-700 dark:text-violet-300">
+          <p className="inline-flex max-w-3xl items-center gap-2 text-[15px] leading-relaxed text-agent-700 dark:text-agent-300">
             <Loader2 className="size-4 shrink-0 animate-spin" />
             {agent.Name} is reading the change and writing the notes. The diffs and checks are already here, and this page fills in by itself.
           </p>
@@ -148,7 +148,7 @@ export const Hero = () => {
         )}
         {!bundle.draft && <LevelBar counts={levelCounts} />}
         {failedChecks > 0 && (
-          <a href="#project-checks" className="inline-flex items-center gap-1.5 font-medium text-red-600 hover:underline dark:text-red-400">
+          <a href="#project-checks" className="inline-flex items-center gap-1.5 font-medium text-danger-600 hover:underline dark:text-danger-400">
             <CircleX className="size-4" />
             <span>
               <span className="num">{failedChecks}</span> {failedChecks === 1 ? "check" : "checks"} failed
@@ -161,7 +161,7 @@ export const Hero = () => {
             <span>
               Tests run <span className="num">{coverage.percent}%</span> of new lines
             </span>
-            {coverage.sources.some((s) => s.stale) && <span className="text-xs text-amber-600 dark:text-amber-400">(coverage file is older than the changes)</span>}
+            {coverage.sources.some((s) => s.stale) && <span className="text-xs text-warn-600 dark:text-warn-400">(coverage file is older than the changes)</span>}
           </a>
         )}
         <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">

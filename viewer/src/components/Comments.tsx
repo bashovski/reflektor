@@ -11,7 +11,7 @@ import { cx, Pill, RefLink } from "./ui";
 const button =
   "inline-flex items-center gap-1 rounded-control px-2 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40";
 const ghost = `${button} text-zinc-600 hover:bg-zinc-500/10 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100`;
-const primary = `${button} bg-blue-600 text-white hover:bg-blue-700`;
+const primary = `${button} bg-accent-600 text-white hover:bg-accent-700`;
 
 export const SuggestedFix = ({ text, className }: { text: string; className?: string }) => (
   <div className={cx("flex items-start gap-1.5 text-[13px] text-zinc-500", className)}>
@@ -56,7 +56,7 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
   };
 
   return (
-    <div className="my-1.5 rounded-control border border-blue-500/40 bg-[var(--surface)] p-2.5 font-sans" onClick={(e) => e.stopPropagation()}>
+    <div className="my-1.5 rounded-control border border-accent-500/40 bg-[var(--surface)] p-2.5 font-sans" onClick={(e) => e.stopPropagation()}>
       <p className="mb-1.5 text-[11px] text-zinc-500">{describeTarget(target)}</p>
       <textarea
         ref={ref}
@@ -65,7 +65,7 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
         onKeyDown={onKey}
         rows={3}
         placeholder={placeholder ?? "What should change, or what do you want to know?"}
-        className="w-full resize-y rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-[13px] leading-relaxed outline-none placeholder:text-zinc-400 focus:border-blue-500"
+        className="w-full resize-y rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-[13px] leading-relaxed outline-none placeholder:text-zinc-400 focus:border-accent-500"
       />
       <div className="mt-1.5 flex items-center gap-2">
         <span className="hidden text-[11px] text-zinc-400 sm:inline">
@@ -76,7 +76,7 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
           Cancel
         </button>
         {canAsk && (
-          <button type="button" onClick={askNow} className={cx(ghost, "border border-violet-500/40 text-violet-700 dark:text-violet-300")} disabled={!text.trim()}>
+          <button type="button" onClick={askNow} className={cx(ghost, "border border-agent-500/40 text-agent-700 dark:text-agent-300")} disabled={!text.trim()}>
             <MessageCircleQuestion className="size-3.5" /> Ask {agent.name} now
           </button>
         )}
@@ -102,7 +102,7 @@ export const CommentStatusLine = ({ commentId }: { commentId: string }) => {
   if (!status) return null;
   if (status.status === "working") {
     return (
-      <p className="mt-1 flex items-center gap-1.5 text-xs text-violet-700 dark:text-violet-300">
+      <p className="mt-1 flex items-center gap-1.5 text-xs text-agent-700 dark:text-agent-300">
         <Loader2 className="size-3 animate-spin" /> {agent.Name} is working on this
       </p>
     );
@@ -155,17 +155,17 @@ export const QuestionThread = ({ question }: { question: LiveQuestion }) => {
   }, [question]);
 
   return (
-    <div className="rounded-control border border-violet-500/30 bg-violet-500/[0.05] px-3 py-2 font-sans text-[13px] leading-snug">
+    <div className="rounded-control border border-agent-500/30 bg-agent-500/[0.05] px-3 py-2 font-sans text-[13px] leading-snug">
       <p className="flex items-start gap-2">
-        <MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-violet-500" />
+        <MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-agent-500" />
         <span>
           <span className="font-medium">You asked: </span>
           {question.text}
         </span>
       </p>
       {question.answer ? (
-        <div className="mt-1.5 flex flex-wrap items-start gap-x-2 gap-y-1 border-t border-violet-500/20 pt-1.5">
-          <Sparkles className="mt-0.5 size-3.5 shrink-0 text-violet-500" />
+        <div className="mt-1.5 flex flex-wrap items-start gap-x-2 gap-y-1 border-t border-agent-500/20 pt-1.5">
+          <Sparkles className="mt-0.5 size-3.5 shrink-0 text-agent-500" />
           <RichText text={question.answer.text} className="block min-w-[min(10rem,100%)] flex-1" />
           {question.answer.ref && <RefLink refTo={question.answer.ref} className="ml-auto" />}
         </div>
@@ -219,7 +219,7 @@ export const QuickActions = ({
     return (
       <div className="mt-1">
         <div className="flex flex-wrap items-center justify-end gap-1">
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-ok-700 dark:text-ok-400">
             <Check className="size-3.5" />
             {decided.kind === "accepted"
               ? (labels?.accepted ?? "Marked as fine")
@@ -265,7 +265,7 @@ export const QuickActions = ({
         <MessageSquarePlus className="size-3.5" /> Comment
       </button>
       <span className="inline-flex overflow-hidden rounded-control border border-[var(--border)] text-xs font-medium">
-        <button type="button" className="inline-flex items-center gap-1 px-2.5 py-1 text-blue-700 hover:bg-blue-600/10 dark:text-blue-300" onClick={() => add(target, { kind: "fix" })}>
+        <button type="button" className="inline-flex items-center gap-1 px-2.5 py-1 text-accent-700 hover:bg-accent-600/10 dark:text-accent-300" onClick={() => add(target, { kind: "fix" })}>
           <Wrench className="size-3.5" /> {labels?.fix ?? (variant === "todo" ? "Do this" : "Fix this")}
         </button>
         {variant === "problem" && (

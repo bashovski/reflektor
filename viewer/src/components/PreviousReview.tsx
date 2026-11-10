@@ -20,7 +20,7 @@ export const PreviousReview = () => {
   return (
     <section className="surface border p-4 sm:p-5">
       <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
-        <MessagesSquare className="size-4 text-blue-500" />
+        <MessagesSquare className="size-4 text-accent-500" />
         Your review, round {previous.round}
       </h2>
       <p className="mb-3 text-xs text-zinc-500">
@@ -51,7 +51,7 @@ export const PreviousReview = () => {
                     {reply.ref && <RefLink refTo={reply.ref} className="ml-auto" />}
                   </>
                 ) : (
-                  <span className="text-xs text-amber-600 dark:text-amber-400">{agent.Name} did not reply to this comment.</span>
+                  <span className="text-xs text-warn-600 dark:text-warn-400">{agent.Name} did not reply to this comment.</span>
                 )}
               </div>
             </li>

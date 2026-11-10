@@ -16,9 +16,9 @@ const SOURCES: Record<Identity["source"], string> = {
 };
 const FORGE_NAMES: Record<string, string> = { github: "GitHub", gitlab: "GitLab", bitbucket: "Bitbucket" };
 const LINKS: Record<Link, { dot: string; label: string }> = {
-  up: { dot: "bg-emerald-500", label: "Daemon up" },
-  restarting: { dot: "bg-amber-500 animate-pulse", label: "Daemon restarting" },
-  down: { dot: "bg-red-500", label: "Daemon unavailable" },
+  up: { dot: "bg-ok-500", label: "Daemon up" },
+  restarting: { dot: "bg-warn-500 animate-pulse", label: "Daemon restarting" },
+  down: { dot: "bg-danger-500", label: "Daemon unavailable" },
 };
 
 // Round, unlike the owner's square avatar on the left, so the two are not mistaken for each other.
@@ -95,7 +95,7 @@ const PurgeDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) 
             {result ? "Close" : "Cancel"}
           </button>
           {!result && (
-            <button type="button" onClick={purge} disabled={busy} className="rounded-control bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60">
+            <button type="button" onClick={purge} disabled={busy} className="rounded-control bg-danger-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-danger-700 disabled:opacity-60">
               {busy ? "Purging…" : "Purge"}
             </button>
           )}

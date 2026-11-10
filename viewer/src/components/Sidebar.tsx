@@ -56,7 +56,7 @@ export const Sidebar = () => {
             {viewedCount}/{total}
           </span>
         </div>
-        <Meter value={viewedCount} total={total} fill="bg-emerald-500" className="h-1.5" />
+        <Meter value={viewedCount} total={total} fill="bg-ok-500" className="h-1.5" />
       </div>
 
       <ol className="space-y-0.5">
@@ -76,7 +76,7 @@ export const Sidebar = () => {
                 <span className="flex w-full items-center gap-2.5">
                   <span
                     title={level.label}
-                    className={cx("flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold", complete ? "bg-emerald-500 text-white" : level.badge)}
+                    className={cx("flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold", complete ? "bg-ok-500 text-white" : level.badge)}
                   >
                     {complete ? <Check className="size-3" /> : <Digit>{i + 1}</Digit>}
                   </span>
@@ -88,7 +88,7 @@ export const Sidebar = () => {
                   </span>
                 </span>
                 {/* How much of this section is viewed, a dash for each file, in the level's color until it is complete. */}
-                <Meter value={done} total={paths.length} fill={complete ? "bg-emerald-500" : level.rail} className="ml-[30px] h-0.5 w-[calc(100%-30px)]" />
+                <Meter value={done} total={paths.length} fill={complete ? "bg-ok-500" : level.rail} className="ml-[30px] h-0.5 w-[calc(100%-30px)]" />
               </button>
             </li>
           );

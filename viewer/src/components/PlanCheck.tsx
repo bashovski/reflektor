@@ -7,10 +7,10 @@ import { RichText } from "./RichText";
 import { cx, Meter, RefLink } from "./ui";
 
 const STATUS: Record<PlanStatus, { label: string; icon: typeof CircleCheck; className: string }> = {
-  done: { label: "Done", icon: CircleCheck, className: "text-emerald-600 dark:text-emerald-400" },
-  partial: { label: "Partly done", icon: CircleDot, className: "text-amber-600 dark:text-amber-400" },
-  missing: { label: "Not done", icon: CircleDashed, className: "text-red-600 dark:text-red-400" },
-  extra: { label: "Not in the plan", icon: CirclePlus, className: "text-violet-600 dark:text-violet-400" },
+  done: { label: "Done", icon: CircleCheck, className: "text-ok-600 dark:text-ok-400" },
+  partial: { label: "Partly done", icon: CircleDot, className: "text-warn-600 dark:text-warn-400" },
+  missing: { label: "Not done", icon: CircleDashed, className: "text-danger-600 dark:text-danger-400" },
+  extra: { label: "Not in the plan", icon: CirclePlus, className: "text-agent-600 dark:text-agent-400" },
 };
 
 const planLabels = (agent: Agent) => ({ fix: "Finish it", fine: "Not needed", queued: `Queued: ${agent.name} finishes it`, accepted: "Marked as not needed" });
@@ -30,14 +30,14 @@ export const PlanCheck = () => {
     <section id="plan" className="surface border p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <ListChecks className="size-4 text-blue-500" />
+          <ListChecks className="size-4 text-accent-500" />
           Plan check
         </h2>
         <span className="text-sm text-zinc-600 dark:text-zinc-400">
           <span className="num">{done}</span> of <span className="num">{planned.length}</span> planned items done
         </span>
         {/* A plan with nothing planned counts as done, so its one cell is full. */}
-        <Meter value={planned.length ? done : 1} total={planned.length || 1} fill={pct === 100 ? "bg-emerald-500" : "bg-amber-500"} className="h-1.5 w-28" />
+        <Meter value={planned.length ? done : 1} total={planned.length || 1} fill={pct === 100 ? "bg-ok-500" : "bg-warn-500"} className="h-1.5 w-28" />
         <span className="w-full text-xs text-zinc-500">Plan: {plan.source}</span>
       </div>
       <ul className="space-y-1.5">

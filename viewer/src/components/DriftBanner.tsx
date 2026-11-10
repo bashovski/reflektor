@@ -23,9 +23,9 @@ export const DriftBanner = () => {
     : `${plural(drift.fileCount, "file")} changed after this report was built${drift.commits ? ` (${plural(drift.commits, "new commit")})` : ""}: ${shown.join(", ")}${more > 0 ? ` and ${more} more` : ""}.`;
 
   return (
-    <div className="border-b border-amber-500/30 bg-amber-50 dark:bg-amber-950/60">
+    <div className="border-b border-warn-500/30 bg-warn-50 dark:bg-warn-950/60">
       <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 text-sm sm:px-6">
-        <TriangleAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <TriangleAlert className="size-4 shrink-0 text-warn-600 dark:text-warn-400" />
         <span>{what}</span>
         <span className="text-zinc-600 dark:text-zinc-400">The report and its line numbers show the code as it was.</span>
         {phase === "reviewing" && !drift.branch && (
@@ -36,7 +36,7 @@ export const DriftBanner = () => {
               setAsked(true);
               await requestRefresh();
             }}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-control border border-amber-500/40 px-2.5 py-1 text-xs font-medium hover:bg-amber-500/10 disabled:opacity-60"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-control border border-warn-500/40 px-2.5 py-1 text-xs font-medium hover:bg-warn-500/10 disabled:opacity-60"
           >
             <RefreshCw className="size-3.5" />
             {asked ? `Asked ${agent.name} to update the report` : `Ask ${agent.name} to update the report`}

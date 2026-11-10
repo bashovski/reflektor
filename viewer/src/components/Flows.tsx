@@ -45,7 +45,7 @@ const FlowTrace = ({ flow }: { flow: FlowData }) => {
                     <code className="font-mono text-[13px] font-medium">{step.symbol}</code>
                     <Pill className={cx("px-1.5 py-0 text-[10px]", status.className)}>{status.label}</Pill>
                     {!step.verified && (
-                      <span title="The build could not find this name in the file" className="inline-flex items-center gap-1 text-[11px] text-amber-600">
+                      <span title="The build could not find this name in the file" className="inline-flex items-center gap-1 text-[11px] text-warn-600">
                         <CircleHelp className="size-3" /> unverified
                       </span>
                     )}
@@ -61,7 +61,7 @@ const FlowTrace = ({ flow }: { flow: FlowData }) => {
                           <li key={di} className="group/row relative flex items-start gap-2 text-[13px] leading-snug">
                             <Icon className={cx("mt-[2px] size-3.5 shrink-0", meta.className)} />
                             <div className="min-w-0 flex-1">
-                              <RichText text={d.text} className={cx("block", d.kind === "error" ? "text-red-700 dark:text-red-300" : "text-zinc-600 dark:text-zinc-400")} />
+                              <RichText text={d.text} className={cx("block", d.kind === "error" ? "text-danger-700 dark:text-danger-300" : "text-zinc-600 dark:text-zinc-400")} />
                               {d.fix && <SuggestedFix text={d.fix} className="mt-1" />}
                               <QuickActions target={target} variant={d.kind === "error" ? "problem" : "info"} />
                               <TargetComments target={target} />

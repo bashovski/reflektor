@@ -10,7 +10,7 @@ export const Findings = () => {
 
   if (!findings.length) {
     return (
-      <p className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
+      <p className="flex items-center gap-2 text-sm text-ok-700 dark:text-ok-400">
         <ShieldCheck className="size-4" />
         Automatic checks found no likely secrets or risky migrations.
       </p>
@@ -20,7 +20,7 @@ export const Findings = () => {
   return (
     <section id="findings" className="surface border p-4 sm:p-5">
       <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
-        <ShieldAlert className="size-4 text-red-500" />
+        <ShieldAlert className="size-4 text-danger-500" />
         Automatic checks
       </h2>
       <p className="mb-3 text-xs text-zinc-500">Fixed rules on the added lines, not AI. Secret values are masked.</p>

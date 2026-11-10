@@ -11,15 +11,15 @@ import { Card, cx, Pill, RefLink, SectionTitle } from "./ui";
 const KIND: Record<ContractKind, string> = { type: "type", interface: "interface", enum: "enum", constant: "const" };
 
 const STATUS: Record<ContractStatus, { label: string; pill: string }> = {
-  new: { label: "New", pill: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300" },
-  changed: { label: "Changed", pill: "bg-amber-500/10 text-amber-700 ring-amber-500/30 dark:text-amber-300" },
-  removed: { label: "Removed", pill: "bg-red-500/10 text-red-700 ring-red-500/30 dark:text-red-300" },
+  new: { label: "New", pill: "bg-ok-500/10 text-ok-700 ring-ok-500/30 dark:text-ok-300" },
+  changed: { label: "Changed", pill: "bg-warn-500/10 text-warn-700 ring-warn-500/30 dark:text-warn-300" },
+  removed: { label: "Removed", pill: "bg-danger-500/10 text-danger-700 ring-danger-500/30 dark:text-danger-300" },
 };
 
 const MEMBER: Record<MemberChange, { sign: string; className: string }> = {
-  added: { sign: "+", className: "text-emerald-600 dark:text-emerald-400" },
-  removed: { sign: "−", className: "text-red-600 dark:text-red-400" },
-  changed: { sign: "~", className: "text-amber-600 dark:text-amber-400" },
+  added: { sign: "+", className: "text-ok-600 dark:text-ok-400" },
+  removed: { sign: "−", className: "text-danger-600 dark:text-danger-400" },
+  changed: { sign: "~", className: "text-warn-600 dark:text-warn-400" },
 };
 
 const ContractRow = ({ contract: c }: { contract: Contract }) => (
@@ -40,9 +40,9 @@ const ContractRow = ({ contract: c }: { contract: Contract }) => (
     {c.note && <RichText text={c.note} className="mt-1 block text-sm leading-relaxed text-zinc-600 sm:pl-[72px] dark:text-zinc-400" />}
     {c.kind === "constant" && (c.value || c.was) && (
       <div className="mt-1.5 font-mono text-xs sm:pl-[72px]">
-        {c.was && <span className={cx("text-red-600 dark:text-red-400", c.value && "line-through decoration-red-400/50")}>{c.was}</span>}
+        {c.was && <span className={cx("text-danger-600 dark:text-danger-400", c.value && "line-through decoration-danger-400/50")}>{c.was}</span>}
         {c.was && c.value && <span className="px-1.5 text-zinc-400">→</span>}
-        {c.value && <span className="text-emerald-700 dark:text-emerald-400">{c.value}</span>}
+        {c.value && <span className="text-ok-700 dark:text-ok-400">{c.value}</span>}
       </div>
     )}
     {!!c.members?.length && (
@@ -50,11 +50,11 @@ const ContractRow = ({ contract: c }: { contract: Contract }) => (
         {c.members.map((m) => (
           <li key={`${m.change}-${m.name}`} className="flex gap-2">
             <span className={cx("w-2.5 shrink-0 font-semibold", MEMBER[m.change].className)}>{MEMBER[m.change].sign}</span>
-            <span className={cx(m.change === "removed" && "text-zinc-500 line-through decoration-red-400/50")}>
+            <span className={cx(m.change === "removed" && "text-zinc-500 line-through decoration-danger-400/50")}>
               {m.name}
               {m.type && (
                 <span className="text-zinc-500">
-                  : {m.was && <span className="text-red-600 line-through decoration-red-400/50 dark:text-red-400">{m.was}</span>}
+                  : {m.was && <span className="text-danger-600 line-through decoration-danger-400/50 dark:text-danger-400">{m.was}</span>}
                   {m.was && <span className="px-1 text-zinc-400">→</span>}
                   {m.type}
                 </span>

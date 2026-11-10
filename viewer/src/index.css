@@ -14,6 +14,31 @@
      comment boxes (`rounded-control`). One size, so changing it here changes them all. Blocks on the page have
      no rounding, and only dots, avatars of people and number marks are round. */
   --radius-control: 2px;
+
+  /* Color roles. A color that carries a meaning is written by its role and never by its hue, so the palette can
+     be retuned here in one place. Each role is a full scale and takes the usual shade numbers, such as
+     `text-danger-600 dark:text-danger-400` or `bg-ok-500/10`. Greys are zinc. A color that only tells categories
+     apart is not a role and keeps its hue (see lib/meta.ts). The rules are in DESIGN.md at the repo root. */
+  /* danger: something is wrong, or must be read. */
+  --color-danger-50: var(--color-red-50); --color-danger-100: var(--color-red-100); --color-danger-200: var(--color-red-200); --color-danger-300: var(--color-red-300);
+  --color-danger-400: var(--color-red-400); --color-danger-500: var(--color-red-500); --color-danger-600: var(--color-red-600); --color-danger-700: var(--color-red-700);
+  --color-danger-800: var(--color-red-800); --color-danger-900: var(--color-red-900); --color-danger-950: var(--color-red-950);
+  /* warn: needs a look. Changed, unsure, not decided. */
+  --color-warn-50: var(--color-amber-50); --color-warn-100: var(--color-amber-100); --color-warn-200: var(--color-amber-200); --color-warn-300: var(--color-amber-300);
+  --color-warn-400: var(--color-amber-400); --color-warn-500: var(--color-amber-500); --color-warn-600: var(--color-amber-600); --color-warn-700: var(--color-amber-700);
+  --color-warn-800: var(--color-amber-800); --color-warn-900: var(--color-amber-900); --color-warn-950: var(--color-amber-950);
+  /* ok: done, passed, new. */
+  --color-ok-50: var(--color-emerald-50); --color-ok-100: var(--color-emerald-100); --color-ok-200: var(--color-emerald-200); --color-ok-300: var(--color-emerald-300);
+  --color-ok-400: var(--color-emerald-400); --color-ok-500: var(--color-emerald-500); --color-ok-600: var(--color-emerald-600); --color-ok-700: var(--color-emerald-700);
+  --color-ok-800: var(--color-emerald-800); --color-ok-900: var(--color-emerald-900); --color-ok-950: var(--color-emerald-950);
+  /* accent: what you can act on. Main buttons, links, focus, your own comments. */
+  --color-accent-50: var(--color-blue-50); --color-accent-100: var(--color-blue-100); --color-accent-200: var(--color-blue-200); --color-accent-300: var(--color-blue-300);
+  --color-accent-400: var(--color-blue-400); --color-accent-500: var(--color-blue-500); --color-accent-600: var(--color-blue-600); --color-accent-700: var(--color-blue-700);
+  --color-accent-800: var(--color-blue-800); --color-accent-900: var(--color-blue-900); --color-accent-950: var(--color-blue-950);
+  /* agent: the agent's side. Its work in progress, its questions and answers. */
+  --color-agent-50: var(--color-violet-50); --color-agent-100: var(--color-violet-100); --color-agent-200: var(--color-violet-200); --color-agent-300: var(--color-violet-300);
+  --color-agent-400: var(--color-violet-400); --color-agent-500: var(--color-violet-500); --color-agent-600: var(--color-violet-600); --color-agent-700: var(--color-violet-700);
+  --color-agent-800: var(--color-violet-800); --color-agent-900: var(--color-violet-900); --color-agent-950: var(--color-violet-950);
 }
 
 /* Tailwind v4 gives buttons the default arrow cursor. */
@@ -128,10 +153,10 @@ body {
 
 @keyframes flash {
   0% {
-    box-shadow: 0 0 0 3px rgb(59 130 246 / 0.55);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 55%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 3px rgb(59 130 246 / 0);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 0%, transparent);
   }
 }
 

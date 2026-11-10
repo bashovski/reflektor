@@ -5,9 +5,9 @@ import { useReport } from "../lib/state";
 import { cx, Pill, RefLink } from "./ui";
 
 const STATUS: Record<SchemaStatus, { label: string; pill: string; row: string }> = {
-  new: { label: "New", pill: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300", row: "bg-emerald-500/[0.07]" },
-  changed: { label: "Changed", pill: "bg-amber-500/10 text-amber-700 ring-amber-500/30 dark:text-amber-300", row: "bg-amber-500/[0.07]" },
-  removed: { label: "Removed", pill: "bg-red-500/10 text-red-700 ring-red-500/30 dark:text-red-300", row: "bg-red-500/[0.07] line-through" },
+  new: { label: "New", pill: "bg-ok-500/10 text-ok-700 ring-ok-500/30 dark:text-ok-300", row: "bg-ok-500/[0.07]" },
+  changed: { label: "Changed", pill: "bg-warn-500/10 text-warn-700 ring-warn-500/30 dark:text-warn-300", row: "bg-warn-500/[0.07]" },
+  removed: { label: "Removed", pill: "bg-danger-500/10 text-danger-700 ring-danger-500/30 dark:text-danger-300", row: "bg-danger-500/[0.07] line-through" },
   existing: { label: "Existing", pill: "bg-zinc-500/10 text-zinc-600 ring-zinc-500/25 dark:text-zinc-400", row: "text-zinc-500" },
 };
 
@@ -33,12 +33,12 @@ const TableCard = ({ table, register }: { table: SchemaTable; register: (key: st
           className={cx("flex items-center gap-2 px-3 py-1 font-mono text-xs", STATUS[c.status].row)}
         >
           <span className="w-3.5 shrink-0">
-            {c.key === "pk" ? <KeyRound className="size-3 text-amber-500" /> : c.references ? <Link2 className="size-3 text-blue-500" /> : null}
+            {c.key === "pk" ? <KeyRound className="size-3 text-warn-500" /> : c.references ? <Link2 className="size-3 text-accent-500" /> : null}
           </span>
           <span className="font-medium">{c.name}</span>
           <span className="text-zinc-500">{c.type}</span>
           {c.key === "unique" && <span className="font-sans text-[10px] text-zinc-500">unique</span>}
-          {c.note && <span className={cx("ml-auto font-sans text-[11px]", c.enforced === false ? "text-red-600 dark:text-red-400" : "text-zinc-500")}>{c.note}</span>}
+          {c.note && <span className={cx("ml-auto font-sans text-[11px]", c.enforced === false ? "text-danger-600 dark:text-danger-400" : "text-zinc-500")}>{c.note}</span>}
         </li>
       ))}
     </ul>
@@ -110,7 +110,7 @@ export const SchemaDiagram = () => {
         </div>
         <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" aria-hidden>
           {lines.map((l) => (
-            <g key={l.key} className={l.enforced ? "text-zinc-400" : "text-red-500"}>
+            <g key={l.key} className={l.enforced ? "text-zinc-400" : "text-danger-500"}>
               <path d={l.d} fill="none" stroke="currentColor" strokeWidth={1.5} strokeDasharray={l.enforced ? undefined : "5 4"} />
               <circle cx={l.end.x} cy={l.end.y} r={3} fill="currentColor" />
             </g>
@@ -122,13 +122,13 @@ export const SchemaDiagram = () => {
           <span className="h-px w-5 bg-zinc-400" /> foreign key
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="w-5 border-t border-dashed border-red-500" /> points to a table without a foreign key
+          <span className="w-5 border-t border-dashed border-danger-500" /> points to a table without a foreign key
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-control bg-emerald-500/30" /> new
+          <span className="size-2.5 rounded-control bg-ok-500/30" /> new
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-control bg-amber-500/30" /> changed
+          <span className="size-2.5 rounded-control bg-warn-500/30" /> changed
         </span>
       </p>
     </div>

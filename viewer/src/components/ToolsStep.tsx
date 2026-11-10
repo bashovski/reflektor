@@ -143,7 +143,7 @@ export const ToolsStep = () => {
               onClick={() => setOpen(open === tool.key ? null : tool.key)}
               className={cx(
                 "relative flex flex-col items-start gap-3 rounded-control border p-4 text-left",
-                open === tool.key ? "border-blue-500 ring-1 ring-blue-500" : "border-[var(--border)] hover:bg-zinc-500/[0.04]",
+                open === tool.key ? "border-accent-500 ring-1 ring-accent-500" : "border-[var(--border)] hover:bg-zinc-500/[0.04]",
               )}
             >
               <span className="text-zinc-800 dark:text-zinc-100">{tool.icon}</span>
@@ -154,7 +154,7 @@ export const ToolsStep = () => {
               <span
                 className={cx(
                   "absolute right-3 bottom-3 grid size-6 place-items-center rounded-full",
-                  ok ? "bg-emerald-500 text-white" : "border border-[var(--border)] text-zinc-400",
+                  ok ? "bg-ok-500 text-white" : "border border-[var(--border)] text-zinc-400",
                 )}
                 title={ok ? "Connected" : "Not connected"}
               >
@@ -168,7 +168,7 @@ export const ToolsStep = () => {
         <div className="space-y-3 rounded-control border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm">
           <p className="text-zinc-600 dark:text-zinc-400">{shown.gives}</p>
           {connected(shown.key) ? (
-            <p className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+            <p className="inline-flex items-center gap-1.5 text-ok-700 dark:text-ok-400">
               <Check className="size-4" /> Connected. Nothing to do here.
             </p>
           ) : (
