@@ -6,7 +6,7 @@
 // Usage: node scripts/check.mjs [--open]
 
 import { execFile, execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -75,6 +75,10 @@ try {
   const notices = readFileSync(join(root, "skill/THIRD-PARTY-NOTICES.md"), "utf8");
   for (const dep of Object.keys(JSON.parse(readFileSync(join(root, "viewer/package.json"), "utf8")).dependencies))
     if (!notices.includes(`## ${dep} `)) fail(`THIRD-PARTY-NOTICES.md does not cover ${dep}; run node scripts/build-notices.mjs`);
+  // So must source that was copied into the viewer by hand: each folder in viewer/src/vendor.
+  const vendor = join(root, "viewer/src/vendor");
+  for (const folder of existsSync(vendor) ? readdirSync(vendor) : [])
+    if (!notices.includes(`## ${folder} `)) fail(`THIRD-PARTY-NOTICES.md does not cover viewer/src/vendor/${folder}; add it to COPIED in scripts/build-notices.mjs and run it`);
 
   const lucideName = (icon) => icon[0].toLowerCase() + icon.slice(1);
   const viewerTags = Object.fromEntries(

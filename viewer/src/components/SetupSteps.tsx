@@ -4,7 +4,8 @@ import { type ReactNode, useCallback, useEffect, useMemo } from "react";
 import type { BundledTheme } from "shiki/themes";
 import { type ThemeChoice, usePrefs } from "../lib/prefs";
 import { afterSetup, markSetupDone } from "../lib/setup";
-import { codeThemesFor, HIGHLIGHTER } from "../lib/themes";
+import { codeThemesFor, HIGHLIGHTER, type ThemeMode } from "../lib/themes";
+import Dither, { type DitherProps } from "../vendor/react-bits/Dither";
 import { Choice } from "./Settings";
 import { cx, Kbd } from "./ui";
 
@@ -46,6 +47,30 @@ const Primary = ({ label, onClick }: { label: string; onClick: () => void }) => 
   </button>
 );
 
+// The wizard's background: slow dithered waves (vendor/react-bits/Dither.tsx), with the settings picked in the
+// React Bits playground. The cursor does nothing to it (strength 0, no ripple on a click), so it stays a background.
+const BACKDROP = {
+  ditherMode: "crosshatch",
+  colorNum: 4,
+  pixelSize: 2,
+  waveSpeed: 0.05,
+  waveFrequency: 2.1,
+  waveAmplitude: 0.3,
+  mouseEffect: "ripple",
+  mouseRadius: 0.45,
+  mouseStrength: 0,
+  clickRipple: false,
+} satisfies DitherProps;
+
+// Its shades, from the one that fills most of the page to the crest of a wave. The palette replaces the component's
+// wave and background colors, so those two are not set. There is one palette per theme because the wizard itself
+// asks "Light or dark?" and the page must follow the answer: the dark one is the playground's, the light one is the
+// same blues turned around to start from a light page.
+const BACKDROP_PALETTE: Record<ThemeMode, string[]> = {
+  dark: ["#06121f", "#173d5c", "#5f9ec7", "#e4f3ff"],
+  light: ["#f3f8fc", "#d3e6f5", "#9cc4e4", "#5f9ec7"],
+};
+
 export const SetupFrame = ({
   steps,
   index,
@@ -62,9 +87,17 @@ export const SetupFrame = ({
   children: ReactNode;
 }) => {
   const step = steps[index];
+  const { resolvedTheme } = usePrefs();
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[860px] flex-col justify-center px-4 py-10 sm:px-6">
-      <div className="mb-4 flex items-center justify-between text-xs text-muted">
+    <main className="relative isolate mx-auto flex min-h-screen w-full max-w-[860px] flex-col justify-center px-4 py-10 sm:px-6">
+      {/* Fixed to the window and behind the wizard, out of reach of the pointer and of screen readers. `isolate` on
+          the frame keeps the negative layer above the page's own background color. */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
+        <Dither {...BACKDROP} palette={BACKDROP_PALETTE[resolvedTheme]} />
+      </div>
+      {/* The label and the step marks get the card's surface, as a strip joined to its top: on the moving background
+          itself, small text and the grey marks could not be read over a bright wave. */}
+      <div className="surface flex items-center justify-between border border-b-0 px-6 py-3 text-xs text-muted sm:px-8">
         <span className="font-semibold tracking-tight text-[var(--text)]">pr-report</span>
         <span className="inline-flex items-center gap-1.5" aria-label={`Step ${index + 1} of ${steps.length}`}>
           {steps.map((s, i) => (

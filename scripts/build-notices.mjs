@@ -4,7 +4,11 @@
 // atom-material-icons, and Tailwind generates the stylesheet, so all of those are covered. Apache-2.0,
 // MIT, ISC and OFL all ask for their license text to travel with the code.
 //
-// Run it after changing viewer/package.json; scripts/check.mjs fails when a runtime dependency is missing here.
+// Source that was copied into viewer/src/vendor instead of installed is covered too, from the license file kept
+// next to it.
+//
+// Run it after changing viewer/package.json or viewer/src/vendor; scripts/check.mjs fails when a runtime dependency
+// or a vendor folder is missing here.
 // Usage: node scripts/build-notices.mjs
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -31,6 +35,18 @@ const WHY = {
 };
 
 const packages = [...Object.keys(viewer.dependencies), "tailwindcss", "atom-material-icons"];
+
+// Source copied into the viewer by hand. Each is a folder in viewer/src/vendor that holds the code and its license
+// file, and it gets a section like a package does.
+const COPIED = [
+  {
+    folder: "react-bits",
+    what: "the Dither component",
+    license: "MIT with a Commons Clause",
+    why: "the background of the setup wizard",
+    link: "https://reactbits.dev/backgrounds/dither",
+  },
+];
 
 const licenseText = (dir) => {
   const file = readdirSync(dir).find((name) => /^(LICENSE|LICENCE|COPYING)(\.|$)/i.test(name));
@@ -61,6 +77,15 @@ for (const name of packages) {
       "```\n",
   );
 }
+for (const { folder, what, license, why, link } of COPIED) {
+  const dir = join(root, "viewer", "src", "vendor", folder);
+  const text = existsSync(dir) ? licenseText(dir) : null;
+  if (!text) {
+    missing.push(`viewer/src/vendor/${folder} (no license file)`);
+    continue;
+  }
+  sections.push(`## ${folder} (${what}, copied into viewer/src/vendor/${folder})\n\nLicense: ${license}. Used for ${why}. ${link}\n\n` + "```\n" + `${text}\n` + "```\n");
+}
 if (missing.length) {
   console.error(`Cannot write the notices, these packages are missing or have no license file: ${missing.join(", ")}. Run pnpm install in viewer/ first.`);
   process.exit(1);
@@ -69,8 +94,9 @@ if (missing.length) {
 const header =
   `# Third-party notices\n\n` +
   `pr-report ships the open source packages below inside the skill: the viewer bundles its dependencies into \`skill/assets\`, ` +
-  `the inbox serves Fuse.js, the file type icons come from atom-material-icons, and Tailwind CSS generated the stylesheet. ` +
-  `Each package's license follows. This file is written by \`scripts/build-notices.mjs\` from the installed packages.\n\n`;
+  `the inbox serves Fuse.js, the file type icons come from atom-material-icons, Tailwind CSS generated the stylesheet, ` +
+  `and the setup wizard's background is source copied from React Bits. ` +
+  `Each one's license follows. This file is written by \`scripts/build-notices.mjs\` from the installed packages and from \`viewer/src/vendor\`.\n\n`;
 const out = join(root, "skill", "THIRD-PARTY-NOTICES.md");
 writeFileSync(out, header + sections.join("\n"));
-console.log(`Wrote ${out}: ${sections.length} packages.`);
+console.log(`Wrote ${out}: ${sections.length} sections.`);

@@ -40,6 +40,10 @@ A color that carries a meaning is written by its role, never by its hue. The rol
 - **One focus ring.** Everything you can tab to shows a 2px ring in the accent color, for the keyboard only. It is set once in `index.css`. A field that marks focus with its border turns the ring off with `outline-none`.
 - **Motion is optional.** When the system asks for less motion, nothing rises, flashes or spins, and scrolling from a click is instant. New animations go through the same rule in `index.css`, and a scroll started from code asks `scrollBehavior()` in `viewer/src/lib/motion.ts`.
 
+## The setup wizard
+
+The setup wizard is the one page with a decorative background: slow dithered waves behind the card, drawn by `Dither` (`viewer/src/vendor/react-bits/Dither.tsx`, copied from React Bits). Its settings and its shades for each theme are in `viewer/src/components/SetupSteps.tsx`. It stops by itself when the system asks for less motion. The review page and the inbox have no background of this kind.
+
 ## Meters
 
 Progress is drawn with `Meter` (`viewer/src/components/ui.tsx`): a row of square cells, one for each thing while there are few, with the figure written next to it.
