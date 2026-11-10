@@ -52,7 +52,7 @@ export const Sidebar = () => {
       <div>
         <div className="mb-2 flex items-baseline justify-between">
           <span className="label-caps text-xs text-zinc-500">Review path</span>
-          <span className="text-xs text-zinc-500 tabular-nums">
+          <span className="num text-xs text-zinc-500">
             {viewedCount}/{total}
           </span>
         </div>
@@ -83,7 +83,7 @@ export const Sidebar = () => {
                   <span className={cx("min-w-0 flex-1 truncate", current && "font-medium", complete && "text-zinc-400 line-through decoration-zinc-400/50")}>
                     {s.title ?? SECTIONS[s.kind].label}
                   </span>
-                  <span className="w-7 shrink-0 text-right text-[11px] text-zinc-400 tabular-nums">
+                  <span className="num w-9 shrink-0 text-right text-[11px] text-zinc-400">
                     {done}/{paths.length}
                   </span>
                 </span>
@@ -111,14 +111,18 @@ export const Sidebar = () => {
       {!!report.contracts?.length && (
         <a href="#contracts" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
           <Braces className="size-3.5" />
-          {report.contracts.length} {report.contracts.length === 1 ? "type or constant" : "types and constants"}
+          <span>
+            <span className="num">{report.contracts.length}</span> {report.contracts.length === 1 ? "type or constant" : "types and constants"}
+          </span>
         </a>
       )}
 
       {diff.coverage?.percent != null && (
         <a href="#coverage" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
           <FlaskConical className="size-3.5" />
-          Tests run {diff.coverage.percent}% of new lines{diff.coverage.sources.some((s) => s.stale) && " (old coverage file)"}
+          <span>
+            Tests run <span className="num">{diff.coverage.percent}%</span> of new lines{diff.coverage.sources.some((s) => s.stale) && " (old coverage file)"}
+          </span>
         </a>
       )}
     </nav>

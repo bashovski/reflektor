@@ -42,8 +42,8 @@ export const PlanPanel = () => {
         {plan.steps.map((step, i) => {
           const kind = kinds[i] ?? step.kind;
           return (
-            <li key={i} className={cx("grid grid-cols-[20px_minmax(0,180px)_130px_minmax(0,1fr)] items-start gap-3 text-sm", kind === "skip" && "opacity-50")}>
-              <span className="pt-1 text-right text-xs text-zinc-400 tabular-nums">{i + 1}.</span>
+            <li key={i} className={cx("grid grid-cols-[24px_minmax(0,180px)_130px_minmax(0,1fr)] items-start gap-3 text-sm", kind === "skip" && "opacity-50")}>
+              <span className="num pt-1 text-right text-xs text-zinc-400">{i + 1}.</span>
               <span className="truncate pt-1 font-mono text-xs text-zinc-500" title={step.where}>
                 {step.where}
               </span>

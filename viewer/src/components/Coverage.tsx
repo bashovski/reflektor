@@ -29,7 +29,7 @@ export const Coverage = () => {
       <Card className="grid gap-6 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {coverage && coverage.percent != null && (
           <div>
-            <p className="text-3xl font-semibold tabular-nums">{coverage.percent}%</p>
+            <p className="num text-3xl font-semibold">{coverage.percent}%</p>
             <p className="mb-4 text-sm text-zinc-500">
               of new lines run during tests ({coverage.covered} of {coverage.covered + coverage.uncovered}). Lines like comments and types do not count.
             </p>
@@ -46,7 +46,7 @@ export const Coverage = () => {
                       <span className="truncate font-mono text-xs">{shortPath(r.path, 3)}</span>
                     </span>
                     <Meter value={r.covered} total={r.total} cells={10} fill={tone(r.pct)} className="h-1.5" />
-                    <span className="text-right text-xs text-zinc-500 tabular-nums">{r.pct}%</span>
+                    <span className="num text-right text-xs text-zinc-500">{r.pct}%</span>
                   </button>
                 </li>
               ))}
