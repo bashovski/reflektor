@@ -40,10 +40,11 @@ const SectionCard = ({ section, index, paths }: { section: Section; index: numbe
   const deletions = files.reduce((n, f) => n + f.deletions, 0);
   const viewed = files.filter((f) => isViewed(f.path)).length;
 
+  // The review level colors the card's left border, top to bottom and around the corners, readable while scrolling
+  // past. A border and not a strip laid inside the card: a strip needs the card to clip its content, and a card that
+  // clips stops the file headers inside it from sticking under the top bar.
   return (
-    <section id={sectionDomId(index)} className="surface relative overflow-hidden rounded-xl border">
-      {/* The review level as a rail down the left edge, readable while scrolling past. */}
-      <span aria-hidden className={cx("absolute inset-y-3 left-0 w-[3px] rounded-r-full", review.rail)} />
+    <section id={sectionDomId(index)} className={cx("surface rounded-xl border border-l-[3px]", review.edge)}>
       <button
         type="button"
         onClick={() => setSectionOpen(index, !open)}

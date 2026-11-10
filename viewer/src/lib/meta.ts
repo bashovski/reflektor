@@ -114,14 +114,16 @@ export const SECTIONS: Record<SectionKind, { label: string; icon: LucideIcon }> 
   other: { label: "Other files", icon: Folder },
 };
 
-// The review level is the one color a reader should pick up while scrolling: the pill on a section, the rail on its
-// card, the badge in the sidebar path and the bar in the hero all use these.
-export const REVIEW: Record<ReviewLevel, { label: string; className: string; dot: string; rail: string; badge: string }> = {
+// The review level is the one color a reader should pick up while scrolling: the pill on a section, the left edge of
+// its card, the badge in the sidebar path and the bar in the hero all use these. `edge` is the card's left border;
+// it is marked important because the `.surface` class sets the border color outside Tailwind's layers and would win.
+export const REVIEW: Record<ReviewLevel, { label: string; className: string; dot: string; rail: string; edge: string; badge: string }> = {
   must: {
     label: "Must read",
     className: "bg-red-500/[0.08] text-red-700 ring-red-500/25 dark:text-red-300",
     dot: "bg-red-500",
     rail: "bg-red-500",
+    edge: "border-l-red-500!",
     badge: "bg-red-500/15 text-red-700 dark:text-red-300",
   },
   skim: {
@@ -129,6 +131,7 @@ export const REVIEW: Record<ReviewLevel, { label: string; className: string; dot
     className: "bg-amber-500/[0.08] text-amber-700 ring-amber-500/25 dark:text-amber-300",
     dot: "bg-amber-500",
     rail: "bg-amber-500",
+    edge: "border-l-amber-500!",
     badge: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
   },
   skip: {
@@ -136,6 +139,7 @@ export const REVIEW: Record<ReviewLevel, { label: string; className: string; dot
     className: "bg-zinc-500/[0.08] text-zinc-600 ring-zinc-500/25 dark:text-zinc-400",
     dot: "bg-zinc-400",
     rail: "bg-zinc-400",
+    edge: "border-l-zinc-400!",
     badge: "bg-zinc-500/15 text-zinc-600 dark:text-zinc-300",
   },
 };
