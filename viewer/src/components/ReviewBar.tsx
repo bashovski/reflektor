@@ -12,8 +12,10 @@ import { cx, Kbd, KEY_LABELS, MOD_KEY, Pill } from "./ui";
 const REPORT_TARGET: CommentTarget = { type: "report" };
 
 // The bar floats above the page instead of running edge to edge, so it reads as a control and not as a footer.
-const floating = "pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-3 sm:px-6";
-const panel = "pointer-events-auto w-full max-w-[1100px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 shadow-xl shadow-black/15 backdrop-blur";
+// Its wrapper repeats the page container (max-w-[1440px] px-4 sm:px-6, as in App.tsx and the top bar), so the bar
+// is exactly as wide as the sidebar and the content together, at every window size.
+const floating = "pointer-events-none fixed inset-x-0 bottom-4 z-40 mx-auto max-w-[1440px] px-4 sm:px-6";
+const panel = "pointer-events-auto w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 shadow-xl shadow-black/15 backdrop-blur";
 
 // Every risk, gap, flow error and unfinished plan item is a problem the reviewer should decide on.
 const useProblems = () => {
