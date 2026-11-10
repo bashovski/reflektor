@@ -39,7 +39,7 @@ const Primary = ({ label, onClick }: { label: string; onClick: () => void }) => 
   <button
     type="button"
     onClick={onClick}
-    className="inline-flex items-center gap-2.5 rounded-control bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+    className="inline-flex items-center gap-2.5 rounded-control bg-accent-600 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-700"
   >
     {label}
     <Kbd name="Enter" className="h-[18px] min-w-[18px] border-white/25 bg-white/15 text-white shadow-none" />
@@ -68,7 +68,7 @@ export const SetupFrame = ({
         <span className="font-semibold tracking-tight text-[var(--text)]">pr-report</span>
         <span className="inline-flex items-center gap-1.5" aria-label={`Step ${index + 1} of ${steps.length}`}>
           {steps.map((s, i) => (
-            <span key={s.id} className={cx("h-1.5 transition-all", i === index ? "w-6 bg-blue-600" : "w-1.5 bg-zinc-500/30")} />
+            <span key={s.id} className={cx("h-1.5 transition-all", i === index ? "w-6 bg-accent-600" : "w-1.5 bg-zinc-500/30")} />
           ))}
         </span>
       </div>
@@ -167,7 +167,7 @@ export const CodeThemeStep = () => {
                 onClick={() => setCodeTheme(resolvedTheme, t.id)}
                 className={cx(
                   "flex w-full items-center justify-between rounded-control px-3 py-1.5 text-left text-sm",
-                  t.id === selected ? "bg-blue-600/10 font-medium text-blue-700 dark:text-blue-300" : "hover:bg-zinc-500/[0.06]",
+                  t.id === selected ? "bg-accent-600/10 font-medium text-accent-700 dark:text-accent-300" : "hover:bg-zinc-500/[0.06]",
                 )}
               >
                 {t.name}

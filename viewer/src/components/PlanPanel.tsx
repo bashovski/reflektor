@@ -31,7 +31,7 @@ export const PlanPanel = () => {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <ListOrdered className="size-4 text-violet-500" />
+        <ListOrdered className="size-4 text-agent-500" />
         <span className="font-semibold">
           {agent.Name}'s plan for your {comments.length} {comments.length === 1 ? "comment" : "comments"}
         </span>
@@ -69,7 +69,7 @@ export const PlanPanel = () => {
           onChange={(e) => setNote(e.target.value)}
           rows={1}
           placeholder="Anything to add? (optional)"
-          className="min-w-[240px] flex-1 resize-y rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-[13px] outline-none focus:border-blue-500"
+          className="min-w-[240px] flex-1 resize-y rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-[13px] outline-none focus:border-accent-500"
         />
         <button
           type="button"
@@ -84,7 +84,7 @@ export const PlanPanel = () => {
           type="button"
           disabled={busy}
           onClick={() => decide("approve")}
-          className="inline-flex items-center gap-1.5 rounded-control bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-control bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-40"
         >
           <Check className="size-3.5" /> Go ahead
         </button>

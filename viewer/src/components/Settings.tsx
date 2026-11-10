@@ -34,7 +34,7 @@ export const Choice = <T extends string>({
         onClick={() => onChange(o.value)}
         className={cx(
           "flex flex-col items-start gap-0.5 rounded-control border px-3 py-2 text-left",
-          value === o.value ? "border-blue-500 bg-blue-500/[0.06] ring-1 ring-blue-500" : "border-[var(--border)] hover:bg-zinc-500/[0.06]",
+          value === o.value ? "border-accent-500 bg-accent-500/[0.06] ring-1 ring-accent-500" : "border-[var(--border)] hover:bg-zinc-500/[0.06]",
         )}
       >
         <span className="inline-flex items-center gap-1.5 text-sm font-medium">
@@ -109,7 +109,7 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
                 <select
                   value={codeTheme[mode]}
                   onChange={(e) => setCodeTheme(mode, e.target.value as BundledTheme)}
-                  className="rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-sm text-[var(--text)] outline-none focus:border-blue-500"
+                  className="rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-sm text-[var(--text)] outline-none focus:border-accent-500"
                 >
                   {codeThemesFor(mode).map((t) => (
                     <option key={t.id} value={t.id}>

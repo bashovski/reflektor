@@ -13,11 +13,11 @@ export const SetupBanner = () => {
     setHidden(true);
   };
   return (
-    <div className="border-b border-violet-500/30 bg-violet-50 dark:bg-violet-950/50">
+    <div className="border-b border-agent-500/30 bg-agent-50 dark:bg-agent-950/50">
       <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 text-sm sm:px-6">
-        <Sparkles className="size-4 shrink-0 text-violet-600 dark:text-violet-400" />
+        <Sparkles className="size-4 shrink-0 text-agent-600 dark:text-agent-400" />
         <span>New here? A one-minute setup checks your tools and picks how reports look.</span>
-        <a href="/setup" className="font-medium text-violet-700 underline-offset-2 hover:underline dark:text-violet-300">
+        <a href="/setup" className="font-medium text-agent-700 underline-offset-2 hover:underline dark:text-agent-300">
           Set up pr-report
         </a>
         <button type="button" onClick={dismiss} title="Not now" className="ml-auto rounded-control p-1 text-zinc-500 hover:bg-zinc-500/10">

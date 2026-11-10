@@ -9,14 +9,15 @@ import { cx, RefLink } from "./ui";
 
 export const BeforeMerge = () => {
   const { bundle } = useReport();
-  // Once the pull request is merged, these are behind us: shown done, with nothing left to ask for.
+  // Once the pull request is merged, these are behind us: shown done, with nothing left to ask for. The purple is
+  // GitHub's color for merged, a hue and not a role (see lib/meta.ts).
   const merged = useMerged();
   const items = bundle.report.beforeMerge;
   if (!items.length) return null;
 
   return (
-    <section className={cx("border p-4 sm:p-5", merged ? "border-violet-500/30 bg-violet-500/[0.06]" : "border-amber-500/30 bg-amber-500/[0.06]")}>
-      <h2 className={cx("mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold", merged ? "text-violet-800 dark:text-violet-300" : "text-amber-800 dark:text-amber-300")}>
+    <section className={cx("border p-4 sm:p-5", merged ? "border-violet-500/30 bg-violet-500/[0.06]" : "border-warn-500/30 bg-warn-500/[0.06]")}>
+      <h2 className={cx("mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold", merged ? "text-violet-800 dark:text-violet-300" : "text-warn-800 dark:text-warn-300")}>
         {merged ? <CircleCheck className="size-4" /> : <CircleAlert className="size-4" />}
         Before you merge
         {merged && <span className="font-normal text-zinc-500">Merged, so these are done.</span>}
@@ -28,7 +29,7 @@ export const BeforeMerge = () => {
           const target: CommentTarget = { type: "before-merge", index: i, text: item.text };
           return (
             <li key={i} id={`bm-${i}`} className="group/row flex flex-wrap items-start gap-x-3 gap-y-1 text-sm">
-              <span className={cx("label-caps mt-0.5 inline-flex w-28 shrink-0 items-center gap-1.5 text-[11px]", merged ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400")}>
+              <span className={cx("label-caps mt-0.5 inline-flex w-28 shrink-0 items-center gap-1.5 text-[11px]", merged ? "text-ok-700 dark:text-ok-400" : "text-warn-700 dark:text-warn-400")}>
                 <Icon className="size-3.5" />
                 {meta.label}
               </span>

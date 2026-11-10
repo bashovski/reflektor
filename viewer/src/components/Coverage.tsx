@@ -3,7 +3,7 @@ import { useReport } from "../lib/state";
 import { RichText } from "./RichText";
 import { Card, FileIcon, Meter, SectionTitle, shortPath } from "./ui";
 
-const tone = (pct: number) => (pct === 100 ? "bg-emerald-500" : pct >= 60 ? "bg-amber-500" : "bg-red-500");
+const tone = (pct: number) => (pct === 100 ? "bg-ok-500" : pct >= 60 ? "bg-warn-500" : "bg-danger-500");
 
 export const Coverage = () => {
   const { bundle, jumpTo } = useReport();
@@ -56,7 +56,7 @@ export const Coverage = () => {
               {new Date(coverage.sources[0]?.modified ?? Date.now()).toLocaleString()}
             </p>
             {coverage.sources.some((s) => s.stale) && (
-              <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+              <p className="mt-1 text-[11px] text-warn-600 dark:text-warn-400">
                 The coverage file is older than the latest change, so these numbers may not match the code.
               </p>
             )}
@@ -68,7 +68,7 @@ export const Coverage = () => {
             <ul className="space-y-2">
               {gaps.map((g, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm leading-relaxed">
-                  <CircleDashed className="mt-1 size-3.5 shrink-0 text-amber-500" />
+                  <CircleDashed className="mt-1 size-3.5 shrink-0 text-warn-500" />
                   <RichText text={g} className="block min-w-0" />
                 </li>
               ))}

@@ -28,7 +28,7 @@ const CopyButton = ({ text, label }: { text: string; label: string }) => {
       }}
       className="inline-flex items-center gap-1.5 rounded-control border border-[var(--border)] px-2 py-1 text-xs font-medium hover:bg-zinc-500/10"
     >
-      {done ? <Check className="size-3.5 text-emerald-600" /> : <ClipboardCopy className="size-3.5" />}
+      {done ? <Check className="size-3.5 text-ok-600" /> : <ClipboardCopy className="size-3.5" />}
       {done ? "Copied" : label}
     </button>
   );

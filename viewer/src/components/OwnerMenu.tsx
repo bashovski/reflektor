@@ -131,7 +131,7 @@ export const OwnerMenu = () => {
               <span className="min-w-0 flex-1">
                 <span className="block font-medium">{item.label}</span>
                 <span className="line-clamp-2 block text-xs break-words text-zinc-500">{item.detail}</span>
-                {item.warning && <span className="mt-0.5 block text-xs text-amber-600 dark:text-amber-400">{item.warning}</span>}
+                {item.warning && <span className="mt-0.5 block text-xs text-warn-600 dark:text-warn-400">{item.warning}</span>}
               </span>
               {item.external && <ExternalLink className={cx("mt-0.5 size-3.5 shrink-0 text-zinc-400 opacity-0 group-data-[focus]:opacity-100")} />}
             </a>

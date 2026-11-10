@@ -78,7 +78,7 @@ const Warnings = () => {
   return (
     <details className="border border-[var(--border)] px-4 py-3 text-sm text-zinc-500">
       <summary className="flex cursor-pointer items-center gap-2">
-        <TriangleAlert className="size-4 text-amber-500" />
+        <TriangleAlert className="size-4 text-warn-500" />
         {bundle.warnings.length} build warnings
       </summary>
       <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">

@@ -64,7 +64,7 @@ const SectionCard = ({ section, index, paths }: { section: Section; index: numbe
             <span className="num">{files.length}</span> {files.length === 1 ? "file" : "files"}
           </span>
           <LocCount additions={additions} deletions={deletions} />
-          <span className={cx(viewed === files.length && "text-emerald-600 dark:text-emerald-400")}>
+          <span className={cx(viewed === files.length && "text-ok-600 dark:text-ok-400")}>
             <span className="num">
               {viewed}/{files.length}
             </span>{" "}
@@ -105,12 +105,12 @@ const SectionCard = ({ section, index, paths }: { section: Section; index: numbe
           )}
 
           {section.questions.length > 0 && (
-            <div className="rounded-control border border-violet-500/25 bg-violet-500/[0.05] px-3 py-2.5">
-              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-violet-700 dark:text-violet-300">
+            <div className="rounded-control border border-agent-500/25 bg-agent-500/[0.05] px-3 py-2.5">
+              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-agent-700 dark:text-agent-300">
                 <CircleHelp className="size-3.5" />
                 Answer before you open the PR
               </p>
-              <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed marker:text-violet-400">
+              <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed marker:text-agent-400">
                 {section.questions.map((q, i) => (
                   <QuestionItem key={i} id={`q-${index}-${i}`} target={{ type: "question", section: section.kind, index: i, text: q }} />
                 ))}
@@ -176,7 +176,7 @@ export const Sections = () => {
             <>
               {" "}
               {hidden} {hidden === 1 ? "section has" : "sections have"} no changes since then;{" "}
-              <button type="button" onClick={() => setView("branch")} className="text-blue-600 hover:underline dark:text-blue-400">
+              <button type="button" onClick={() => setView("branch")} className="text-accent-600 hover:underline dark:text-accent-400">
                 show the whole branch
               </button>
               .

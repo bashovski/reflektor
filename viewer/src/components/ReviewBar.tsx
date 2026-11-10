@@ -74,13 +74,13 @@ const ResumeHint = ({ text }: { text: string }) => {
     }
   };
   return (
-    <span className="inline-flex flex-wrap items-center gap-x-1.5 text-xs text-amber-700 dark:text-amber-400">
+    <span className="inline-flex flex-wrap items-center gap-x-1.5 text-xs text-warn-700 dark:text-warn-400">
       {text} {agent.resumeLead}
       <button
         type="button"
         onClick={copy}
         title="Copy"
-        className="inline-flex items-center gap-1 rounded-control bg-amber-500/10 px-1.5 py-0.5 font-mono text-[11px] ring-1 ring-amber-500/25 ring-inset hover:bg-amber-500/20"
+        className="inline-flex items-center gap-1 rounded-control bg-warn-500/10 px-1.5 py-0.5 font-mono text-[11px] ring-1 ring-warn-500/25 ring-inset hover:bg-warn-500/20"
       >
         {agent.resumeCommand}
         <ClipboardCopy className="size-3" />
@@ -159,15 +159,15 @@ export const ReviewBar = () => {
             </div>
           )}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
-          <Icon className={cx("size-4", Icon === Loader2 ? "animate-spin text-violet-500" : Icon === ListOrdered ? "text-violet-500" : "text-emerald-500")} />
+          <Icon className={cx("size-4", Icon === Loader2 ? "animate-spin text-agent-500" : Icon === ListOrdered ? "text-agent-500" : "text-ok-500")} />
           <span>{message}</span>
           {review.phase === "working" && total > 0 && (
-            <Meter value={done} total={total} fill="bg-emerald-500" className="h-1.5 w-32" />
+            <Meter value={done} total={total} fill="bg-ok-500" className="h-1.5 w-32" />
           )}
           {unheard && <ResumeHint text={`No ${agent.noun} session is listening for this review.`} />}
           {stale && <ResumeHint text={`No update from ${agent.name} for 10 minutes. If its session ended,`} />}
-          {!review.connected && <span className="text-xs text-red-600 dark:text-red-400">Not connected to the review server.</span>}
-          {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
+          {!review.connected && <span className="text-xs text-danger-600 dark:text-danger-400">Not connected to the review server.</span>}
+          {error && <span className="text-xs text-danger-600 dark:text-danger-400">{error}</span>}
           </div>
         </div>
       </div>
@@ -215,7 +215,7 @@ export const ReviewBar = () => {
             title={`${problems.length} risks and gaps: ${queued} to fix, ${fine} fine, ${open} not decided`}
             className={cx(
               "inline-flex items-center gap-1.5 rounded-control px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset tabular-nums",
-              open > 0 ? "bg-amber-500/[0.08] text-amber-700 ring-amber-500/25 dark:text-amber-300" : "bg-emerald-500/[0.08] text-emerald-700 ring-emerald-500/25 dark:text-emerald-300",
+              open > 0 ? "bg-warn-500/[0.08] text-warn-700 ring-warn-500/25 dark:text-warn-300" : "bg-ok-500/[0.08] text-ok-700 ring-ok-500/25 dark:text-ok-300",
             )}
           >
             {open > 0 ? <TriangleAlert className="size-3.5" /> : <CircleCheck className="size-3.5" />}
@@ -231,7 +231,7 @@ export const ReviewBar = () => {
           {comments.length} {comments.length === 1 ? "comment" : "comments"}
         </button>
         {review.questions.length > 0 && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-violet-700 dark:text-violet-300">
+          <span className="inline-flex items-center gap-1.5 text-xs text-agent-700 dark:text-agent-300">
             <MessageCircleQuestion className="size-3.5" />
             {review.questions.length} {review.questions.length === 1 ? "question" : "questions"}
             {review.questions.some((q) => !q.answer) && <span className="text-zinc-500">({review.questions.filter((q) => !q.answer).length} waiting)</span>}
@@ -245,8 +245,8 @@ export const ReviewBar = () => {
           <MessageSquarePlus className="size-3.5" />
           General comment
         </button>
-        {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
-        {mode === "server" && !review.connected && <span className="text-xs text-red-600 dark:text-red-400">Not connected to the review server.</span>}
+        {error && <span className="text-xs text-danger-600 dark:text-danger-400">{error}</span>}
+        {mode === "server" && !review.connected && <span className="text-xs text-danger-600 dark:text-danger-400">Not connected to the review server.</span>}
         {unheard && <ResumeHint text={`No ${agent.noun} session is listening, so your questions and requests wait.`} />}
 
         <span className="ml-auto inline-flex items-center gap-3">
@@ -264,7 +264,7 @@ export const ReviewBar = () => {
                       ? `Send your comments to ${agent.name} (${KEY_LABELS[MOD_KEY]}+Enter)`
                       : `Looks good to me: tell ${agent.name} the review is done, with no comments (${KEY_LABELS[MOD_KEY]}+Enter)`
                 }
-                className="inline-flex items-center gap-1.5 rounded-control bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-control bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-50"
               >
                 {draft ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
                 {draft ? `${agent.Name} is writing the notes` : comments.length ? `Send ${comments.length} to ${agent.name}` : "LGTM"}
@@ -284,7 +284,7 @@ export const ReviewBar = () => {
                 type="button"
                 onClick={copy}
                 disabled={!comments.length}
-                className="inline-flex items-center gap-1.5 rounded-control bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-control bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-40"
               >
                 <ClipboardCopy className="size-3.5" />
                 {copied ? `Copied. Paste it to ${agent.name}` : `Copy for ${agent.name}`}

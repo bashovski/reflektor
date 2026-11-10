@@ -61,7 +61,7 @@ export const ProgressRing = ({ value, className }: { value: number; className?: 
         strokeLinecap="round"
         strokeDasharray={c}
         strokeDashoffset={c * (1 - v)}
-        className={cx("transition-[stroke-dashoffset] duration-300", v >= 1 ? "stroke-emerald-500" : "stroke-blue-500")}
+        className={cx("transition-[stroke-dashoffset] duration-300", v >= 1 ? "stroke-ok-500" : "stroke-accent-500")}
       />
     </svg>
   );
@@ -115,8 +115,8 @@ export const TagPill = ({ tag, className }: { tag: Tag; className?: string }) =>
 
 export const LocCount = ({ additions, deletions, className }: { additions: number; deletions: number; className?: string }) => (
   <span className={cx("num text-xs", className)}>
-    <span className="text-emerald-600 dark:text-emerald-400">+{additions}</span>{" "}
-    <span className="text-red-600 dark:text-red-400">−{deletions}</span>
+    <span className="text-ok-600 dark:text-ok-400">+{additions}</span>{" "}
+    <span className="text-danger-600 dark:text-danger-400">−{deletions}</span>
   </span>
 );
 
@@ -131,7 +131,7 @@ export const DiffBar = ({ additions, deletions }: { additions: number; deletions
           key={i}
           className={cx(
             "size-2",
-            i < green ? "bg-emerald-500" : i < green + red ? "bg-red-500" : "bg-zinc-300 dark:bg-zinc-700",
+            i < green ? "bg-ok-500" : i < green + red ? "bg-danger-500" : "bg-zinc-300 dark:bg-zinc-700",
           )}
         />
       ))}
