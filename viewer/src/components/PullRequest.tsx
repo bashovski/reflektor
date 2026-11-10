@@ -16,8 +16,7 @@ export const PrStatePill = ({ state, className }: { state: PrState; className?: 
   );
 };
 
-// Once the pull request is merged, the page says so at the top: the review is over, and the report
-// shows the branch as it was reviewed.
+// Once the pull request is merged, the page says so at the top: the review is over.
 export const MergedBanner = () => {
   const pr = usePr();
   if (pr?.state !== "MERGED") return null;
@@ -30,7 +29,6 @@ export const MergedBanner = () => {
           Pull request #{pr.number} was merged{pr.base ? ` into ${pr.base}` : ""}
           {when ? ` on ${when}` : ""}.
         </span>
-        <span className="text-zinc-600 dark:text-zinc-400">This report shows the branch as it was reviewed.</span>
         <a
           href={pr.url}
           target="_blank"
