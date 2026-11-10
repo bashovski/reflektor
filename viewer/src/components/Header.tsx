@@ -92,7 +92,7 @@ export const Hero = () => {
               <span className="text-amber-600 dark:text-amber-400"> + {stats.uncommittedFiles} uncommitted files</span>
             )}
           </summary>
-          <ol className="surface absolute left-0 z-20 mt-2 w-[min(520px,90vw)] space-y-1 rounded-lg border p-3 shadow-xl">
+          <ol className="surface absolute left-0 z-20 mt-2 w-[min(520px,90vw)] space-y-1 rounded-lg border p-3 shadow-float">
             {commits.map((c) => (
               <li key={c.sha} className="flex gap-3 text-xs">
                 <span className="font-mono text-zinc-400">{c.short}</span>

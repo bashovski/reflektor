@@ -84,7 +84,7 @@ export const PlanPanel = () => {
           type="button"
           disabled={busy}
           onClick={() => decide("approve")}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
         >
           <Check className="size-3.5" /> Go ahead
         </button>

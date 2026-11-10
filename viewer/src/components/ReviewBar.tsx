@@ -16,7 +16,7 @@ const REPORT_TARGET: CommentTarget = { type: "report" };
 // Its wrapper repeats the page container (max-w-[1440px] px-4 sm:px-6, as in App.tsx and the top bar), so the bar
 // is exactly as wide as the sidebar and the content together, at every window size.
 const floating = "pointer-events-none fixed inset-x-0 bottom-4 z-40 mx-auto max-w-[1440px] px-4 sm:px-6";
-const panel = "pointer-events-auto w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 shadow-xl shadow-black/15 backdrop-blur";
+const panel = "pointer-events-auto w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 shadow-float backdrop-blur";
 
 // Every risk, gap, flow error and unfinished plan item is a problem the reviewer should decide on.
 const useProblems = () => {
@@ -266,7 +266,7 @@ export const ReviewBar = () => {
                       ? `Send your comments to ${agent.name} (${KEY_LABELS[MOD_KEY]}+Enter)`
                       : `Looks good to me: tell ${agent.name} the review is done, with no comments (${KEY_LABELS[MOD_KEY]}+Enter)`
                 }
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {draft ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
                 {draft ? `${agent.Name} is writing the notes` : comments.length ? `Send ${comments.length} to ${agent.name}` : "LGTM"}
@@ -286,7 +286,7 @@ export const ReviewBar = () => {
                 type="button"
                 onClick={copy}
                 disabled={!comments.length}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
               >
                 <ClipboardCopy className="size-3.5" />
                 {copied ? `Copied. Paste it to ${agent.name}` : `Copy for ${agent.name}`}

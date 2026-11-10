@@ -7,6 +7,9 @@
 @theme {
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+  /* The one drop shadow in the interface, for what floats over the page: menus, dialogs and the review bar
+     (`shadow-float`). The inbox menus in skill/scripts/daemon.mjs use the same values. */
+  --shadow-float: 0 12px 32px -12px rgb(0 0 0 / 0.3), 0 2px 6px -2px rgb(0 0 0 / 0.12);
 }
 
 /* Tailwind v4 gives buttons the default arrow cursor. */
@@ -56,18 +59,14 @@ body {
 
 /* A block on the page: a section, a file, the plan check and the like. Blocks have square corners, so a card
    takes `surface border` and no rounding. Things that float over the page (menus, dialogs, the review bar) and
-   small controls keep theirs. */
+   small controls keep theirs.
+
+   Blocks are flat: the hairline border is what sets one apart from the page, and nothing that sits on the page
+   has a shadow. A thing that floats adds `shadow-float`. This rule sets no shadow of its own because it is
+   outside Tailwind's layers, where it would win over that class. */
 .surface {
   background: var(--surface);
   border-color: var(--border);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
-}
-
-/* A hairline of light along the top edge and a soft drop, so cards sit on the page instead of in it. */
-[data-theme="dark"] .surface {
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.025),
-    0 1px 2px rgb(0 0 0 / 0.4);
 }
 
 /* The interface's own words: group headings, badges, status words. Capitals in the mono font, a little spaced,

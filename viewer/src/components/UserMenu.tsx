@@ -83,7 +83,7 @@ const PurgeDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) 
   };
 
   return (
-    <dialog ref={ref} onClose={onClose} onClick={(e) => e.target === ref.current && onClose()} className="surface m-auto w-[min(440px,94vw)] rounded-xl border p-0 text-[var(--text)] shadow-2xl">
+    <dialog ref={ref} onClose={onClose} onClick={(e) => e.target === ref.current && onClose()} className="surface m-auto w-[min(440px,94vw)] rounded-xl border p-0 text-[var(--text)] shadow-float">
       <div className="space-y-3 px-5 py-4">
         <h2 className="font-semibold">Purge the daemon&rsquo;s cache?</h2>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -129,7 +129,7 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
         <MenuItems
           anchor="bottom end"
           transition
-          className="surface z-50 w-72 origin-top-right rounded-xl border p-1.5 text-sm shadow-lg shadow-black/10 transition duration-100 ease-out [--anchor-gap:6px] focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0"
+          className="surface z-50 w-72 origin-top-right rounded-xl border p-1.5 text-sm shadow-float transition duration-100 ease-out [--anchor-gap:6px] focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0"
         >
           <div className="flex items-center gap-3 px-2.5 py-2">
             <Avatar avatar={who?.avatar ?? null} className="size-9 text-sm" />
