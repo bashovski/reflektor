@@ -1,6 +1,6 @@
 // Data contract for the PR report.
 // diff.json   = DiffData, written by scripts/collect.mjs (facts from git, never edited by hand)
-// report.json = Report, written by Claude (judgment: words, grouping, flows)
+// report.json = Report, written by the agent (judgment: words, grouping, flows)
 // The viewer receives Bundle, produced by scripts/build.mjs after validation.
 //
 // This file is the only list of allowed values. build.mjs reads every union of string literals
@@ -281,7 +281,7 @@ export type Report = {
 };
 
 // ------------------------------------------------------------------ review (comments from the report page)
-// The page saves comments as you type. "Send to Claude" writes review-<round>.json next to report.json.
+// The page saves comments as you type. Sending the review writes review-<round>.json next to report.json.
 
 export type CommentKind = "fix" | "question" | "nit" | "accepted" | "decision";
 
@@ -302,7 +302,7 @@ export type ReviewComment = {
   target: CommentTarget;
   // What the reviewer typed. Empty for a one-click "Fix this" (do the suggested fix) or "It's fine".
   text: string;
-  // Set when a button decided it ("Fix this", "It's fine", an answer to a question). Otherwise Claude infers it.
+  // Set when a button decided it ("Fix this", "It's fine", an answer to a question). Otherwise the agent infers it.
   kind?: CommentKind;
   createdAt: string;
 };
@@ -330,7 +330,7 @@ export type Review = {
 
 export type ReplyStatus = "fixed" | "answered" | "wontfix" | "noted";
 
-// Claude's answer to one comment, shown at the top of the next report.
+// The agent's answer to one comment, shown at the top of the next report.
 export type Reply = { commentId: string; status: ReplyStatus; text: string; ref?: Ref };
 
 // ------------------------------------------------------------------ bundle (viewer input)
@@ -359,7 +359,7 @@ export type Bundle = {
   // Pull request title and Markdown body, written from this report. Null when the report covers only
   // part of the branch (--since or --files), so it cannot describe the pull request.
   prDescription: { title: string; body: string } | null;
-  // Built with --draft before Claude's report was ready: the page shows the facts and holds back sending.
+  // Built with --draft before the agent's report was ready: the page shows the facts and holds back sending.
   draft?: boolean;
   // The agent that built the report; null or missing when the build could not tell.
   agent?: AgentInfo | null;

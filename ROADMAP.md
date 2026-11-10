@@ -14,25 +14,29 @@
 - Owner avatars in the header and the inbox (github.com and gitlab.com, downloaded once; initials elsewhere)
 - Whole branch every round, with a "since round N" view; the last report carried forward with its line references moved; PR description only from whole-branch reports
 - Reviews outlive their session: the page says when no session is listening, and `/pr-report resume` picks the review up; events stay until the agent acts on them
-- Drift warning: the page lists files changed after the report was built and can ask Claude for an update
-- Draft page with the facts while Claude writes the report
+- Drift warning: the page lists files changed after the report was built and can ask the agent for an update
+- Draft page with the facts while the agent writes the report
 - Inbox archive, restore and delete; one report folder per branch
 - Inbox grouped by repo owner, with group, sort and filter menus, fuzzy search (Fuse.js), and colored type pills with icons
 - Owner menu in the review page: the owner's page, all reports, and the branch's pull request, or a new one filled in from the report
 - Live pull request state: told by the agent when it opens one, polled from GitHub with ETags while the page is open; a state pill in the header, a banner and done before-merge items on merge, a merged status in the inbox
 - Project checks ask first when the branch has commits by someone else
 - Speed: diffs render only near the screen, code colored with WebAssembly lexers, the daemon serves the viewer as cached files and each report is only its data (44-file change: 2.4 s frozen and 161 MB before, under 0.3 s and 37 MB after)
+- Any agent, by name: the page and the inbox name the agent on the other side (`skill/agents.json`, worked out in the agent's shell and sent with every call) and say "your agent" when nobody told them
+- Installs for agents other than Claude Code: `install.mjs --target agents` puts a copy with its own `SKILL.md` in `~/.agents/skills`, the folder Codex reads
 
 ## Later (remind)
 
+- **A whole review with a second agent:** run one end to end with Codex, then add its detection markers to `skill/agents.json`. Only Claude Code's are checked against the real tool so far.
+- **A neutral `PR_REPORT_BASH`:** `gitBash()` reads only `CLAUDE_CODE_GIT_BASH_PATH` before it searches for Git Bash on Windows.
 - **Before/after screenshots** of changed UI pages, when Playwright and a dev server are available.
 - **Tests on other stacks:** fake repos in Go, Python and Rust run by `pnpm check`, to prove the skill works for any stack.
 - **Smaller exported pages:** `build.mjs --html` still writes about 11 MB, almost all of it Shiki grammars kept as a fallback for browsers without WebAssembly. Drop them, or embed only the languages the diff uses. Reports opened through the daemon are not affected.
 
 ## Open decisions
 
-- **Dependency check:** Claude lists changed packages, OSV.dev and deps.dev supply versions, vulnerabilities and licenses. Waiting on answers about scope, online lookups, blocking, and release age.
-- **"Do this" on before-merge items Claude cannot do** (run a production migration, set a production env var): show "Got it" instead.
+- **Dependency check:** the agent lists changed packages, OSV.dev and deps.dev supply versions, vulnerabilities and licenses. Waiting on answers about scope, online lookups, blocking, and release age.
+- **"Do this" on before-merge items the agent cannot do** (run a production migration, set a production env var): show "Got it" instead.
 - **Duplicate items:** the same task can appear as a highlight and as a before-merge item.
 
 ## Not now

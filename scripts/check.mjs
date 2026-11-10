@@ -213,7 +213,7 @@ try {
   ]);
   for (const line of built.split("\n").filter((l) => l.startsWith("warning:"))) fail(line);
 
-  // A draft: the facts before Claude's report, every file listed, nothing that needs the report.
+  // A draft: the facts before the agent's report, every file listed, nothing that needs the report.
   run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--draft", "--out", join(tmp, "draft.json")]);
   const draft = JSON.parse(readFileSync(join(tmp, "draft.json"), "utf8"));
   const listed = draft.report.sections.flatMap((s) => s.files).length;

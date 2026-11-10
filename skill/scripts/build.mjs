@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // Checks report.json against diff.json, then writes the report data (one JSON file per round) that the
 // review daemon serves. --html also writes one self-contained HTML file to keep or send.
-// Problems that Claude should fix are printed as "warning:" lines; hard errors exit with code 1.
+// Problems that the agent should fix are printed as "warning:" lines; hard errors exit with code 1.
 //
 // Usage:
 //   node build.mjs --diff diff.json --report report.json [--out report-r1.json]
 //                  [--html report.html] [--viewer viewer.html] [--open]
 //   node build.mjs --diff diff.json --draft [--report report.json]
 //
-// --draft builds the page before Claude's report is ready: the diffs, checks and coverage, with the
+// --draft builds the page before the agent's report is ready: the diffs, checks and coverage, with the
 // files in one list (or the given report, such as one carried forward by collect --update). The
 // page says the notes are still being written; the real build replaces it in the open tab.
 
@@ -75,7 +75,7 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const diff = JSON.parse(readFileSync(args.diff, "utf8"));
 
-// The facts in report form, for the page that opens before Claude's report: every file in one list.
+// The facts in report form, for the page that opens before the agent's report: every file in one list.
 function draftReport() {
   const changes = diff.stats.additions + diff.stats.deletions;
   const section = (kind, title, review, reason, files) => ({ kind, title, review, reason, highlights: [], questions: [], files: files.map((f) => ({ path: f.path, note: "" })) });
@@ -90,7 +90,7 @@ function draftReport() {
     beforeMerge: [],
     flows: [],
     sections: [
-      section("other", "Changed files", "skim", "Claude has not grouped these yet.", diff.files.filter((f) => !f.generated)),
+      section("other", "Changed files", "skim", "Not grouped yet. The notes are still being written.", diff.files.filter((f) => !f.generated)),
       ...(generated.length ? [section("generated", "Generated files", "skip", "Lockfiles and generated files.", generated)] : []),
     ].filter((s) => s.files.length),
   };
