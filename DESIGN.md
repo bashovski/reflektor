@@ -46,4 +46,4 @@ Progress is drawn with `Meter` (`viewer/src/components/ui.tsx`): a row of square
 
 ## The inbox
 
-The inbox is plain CSS inside `skill/scripts/daemon.mjs` and cannot use the classes above. It follows the same rules by hand: 2px corners, mono capitals for labels, mono figures and the same shadow for menus. A change to a rule here needs the same change there.
+The inbox is plain CSS inside `skill/scripts/daemon.mjs` and cannot use the classes above. It follows the same rules by hand: 2px corners, mono capitals for labels and status words, mono for figures and branch names, the same focus ring and the same shadow for menus. A change to a rule here needs the same change there.

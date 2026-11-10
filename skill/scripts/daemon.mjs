@@ -376,7 +376,9 @@ const PHASES = {
 // whatever round it was in. Nothing more will happen to a merged branch.
 const statusOf = (r) => (r.pr?.state === "MERGED" ? "merged" : r.phase);
 
-// Pull request states: the colors and icons of PR_STATES in viewer/src/lib/meta.ts.
+// Pull request states: the colors and icons of PR_STATES in viewer/src/lib/meta.ts. The colors here and in PHASES
+// are picked for a white page; the stylesheet mixes each a little toward the text color (see `--c`), so a status
+// word is darker on a light page and lighter on a dark one.
 const PR_STATES = {
   OPEN: ["open", "#059669", "gitPullRequest"],
   MERGED: ["merged", "#7c3aed", "gitMerge"],
@@ -428,7 +430,7 @@ const tagPill = (tag) => {
 const prChip = (pr) => {
   if (!pr) return "";
   const [label, color, name] = PR_STATES[pr.state] ?? PR_STATES.OPEN;
-  return `<span class="pr" data-state="${escapeHtml(pr.state)}" style="color:${color}" title="Pull request #${Number(pr.number)}, ${label}${pr.title ? `: ${escapeHtml(pr.title)}` : ""}">${icon(name)}#${Number(pr.number)}</span>`;
+  return `<span class="pr" data-state="${escapeHtml(pr.state)}" style="--c:${color}" title="Pull request #${Number(pr.number)}, ${label}${pr.title ? `: ${escapeHtml(pr.title)}` : ""}">${icon(name)}#${Number(pr.number)}</span>`;
 };
 
 // The review icon from viewer/src/lib/favicon.ts in gray, with a red dot while a review waits on you.
@@ -462,8 +464,8 @@ function inboxRow(r) {
   return `<div class="row" ${Object.entries(data).map(([k, v]) => `data-${k}="${escapeHtml(v)}"`).join(" ")}><a href="/r/${encodeURIComponent(r.id)}">
       <span class="tc">${tagPill(r.tag)}</span>
       <span class="main"><span class="title">${escapeHtml(r.title ?? r.branch)}</span>
-      <span class="meta">${avatarHtml(r.avatar)}<span><span class="repo">${owner ? `<span class="owner">${escapeHtml(owner)}/</span>` : ""}${escapeHtml(r.repo.slice(owner ? owner.length + 1 : 0))} · </span>${escapeHtml(r.branch)} · round ${r.round}${waiting ? ` · ${waiting} question${waiting === 1 ? "" : "s"} waiting` : ""}</span>${prChip(r.pr)}</span></span>
-      <span class="phase" style="color:${color}">${label}</span>
+      <span class="meta">${avatarHtml(r.avatar)}<span><span class="repo">${owner ? `<span class="owner">${escapeHtml(owner)}/</span>` : ""}${escapeHtml(r.repo.slice(owner ? owner.length + 1 : 0))} · </span><span class="br">${escapeHtml(r.branch)}</span> · round ${r.round}${waiting ? ` · ${waiting} question${waiting === 1 ? "" : "s"} waiting` : ""}</span>${prChip(r.pr)}</span></span>
+      <span class="phase" style="--c:${color}">${label}</span>
       <time data-at="${r.updatedAt}"></time></a>${actions}</div>`;
 }
 
@@ -535,8 +537,8 @@ legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--m
 .main{flex:1;min-width:0;display:flex;flex-direction:column}.title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta,time{color:var(--muted);font-size:12px}.meta{display:flex;align-items:center;gap:6px;min-width:0}
 [data-group=owner] .meta .av,[data-group=owner] .owner,[data-group=repo] .meta .av,[data-group=repo] .repo{display:none}
-.av{width:16px;height:16px;flex:none;border-radius:2px;object-fit:cover;display:inline-grid;place-items:center;color:#fff;font:600 8px/1 "Geist Variable",ui-sans-serif,system-ui,sans-serif}.phase{font-size:12px;font-weight:600;white-space:nowrap}time{min-width:64px;text-align:right;white-space:nowrap}
-.pr{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 6px 0 5px;border:1px solid color-mix(in srgb,currentColor 35%,transparent);border-radius:2px;font:600 11px/1 "Geist Variable",ui-sans-serif,system-ui,sans-serif;white-space:nowrap}.pr svg{width:11px;height:11px;stroke-width:2.4}
+.av{width:16px;height:16px;flex:none;border-radius:2px;object-fit:cover;display:inline-grid;place-items:center;color:#fff;font:600 8px/1 "Geist Variable",ui-sans-serif,system-ui,sans-serif}.phase{color:color-mix(in oklab,var(--c) 72%,var(--text));font:500 11px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}time{min-width:64px;text-align:right;white-space:nowrap}
+.pr{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 6px 0 5px;color:color-mix(in oklab,var(--c) 72%,var(--text));border:1px solid color-mix(in srgb,currentColor 35%,transparent);border-radius:2px;font:500 11px/1 "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}.br{font:11.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace}.pr svg{width:11px;height:11px;stroke-width:2.4}
 .act{cursor:pointer;font:500 12px "Geist Variable",ui-sans-serif,system-ui,sans-serif;color:var(--muted);background:none;border:1px solid var(--border);border-radius:2px;padding:3px 8px;margin-left:6px;opacity:0}
 .row:hover .act,.act:focus-visible,.archived .act{opacity:1}.act:hover{color:var(--text)}.danger:hover{color:#dc2626;border-color:#dc2626}
 details{margin-top:28px}summary{cursor:pointer;color:var(--muted);margin-bottom:10px}
