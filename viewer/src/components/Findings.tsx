@@ -18,7 +18,7 @@ export const Findings = () => {
   }
 
   return (
-    <section id="findings" className="surface rounded-xl border p-4 sm:p-5">
+    <section id="findings" className="surface border p-4 sm:p-5">
       <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
         <ShieldAlert className="size-4 text-red-500" />
         Automatic checks

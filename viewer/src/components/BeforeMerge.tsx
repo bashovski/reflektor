@@ -15,7 +15,7 @@ export const BeforeMerge = () => {
   if (!items.length) return null;
 
   return (
-    <section className={cx("rounded-xl border p-4 sm:p-5", merged ? "border-violet-500/30 bg-violet-500/[0.06]" : "border-amber-500/30 bg-amber-500/[0.06]")}>
+    <section className={cx("border p-4 sm:p-5", merged ? "border-violet-500/30 bg-violet-500/[0.06]" : "border-amber-500/30 bg-amber-500/[0.06]")}>
       <h2 className={cx("mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold", merged ? "text-violet-800 dark:text-violet-300" : "text-amber-800 dark:text-amber-300")}>
         {merged ? <CircleCheck className="size-4" /> : <CircleAlert className="size-4" />}
         Before you merge

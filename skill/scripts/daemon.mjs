@@ -526,7 +526,7 @@ legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--m
 .group+.group{margin-top:22px}.gh{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:13px;font-weight:600}
 .gh .av{width:20px;height:20px;border-radius:5px;font-size:9px}.count{color:var(--muted);font-weight:500;font-size:12px}
 .av.local{background:#71717a}.av.local svg{width:12px;height:12px}
-.list{border:1px solid var(--border);border-radius:12px;background:var(--surface);overflow:hidden}
+.list{border:1px solid var(--border);background:var(--surface);overflow:hidden}
 .row{display:flex;align-items:center;border-top:1px solid var(--border);padding-right:12px}.row:first-child{border-top:0}
 .row>a{flex:1;min-width:0;display:flex;gap:12px;align-items:center;padding:12px 16px;color:inherit;text-decoration:none}
 .row:hover{background:var(--hover)}
@@ -544,7 +544,7 @@ details{margin-top:28px}summary{cursor:pointer;color:var(--muted);margin-bottom:
 .intro{padding:44px 24px}.intro h2{margin:0 0 8px;font-size:18px;color:var(--text)}.intro p{max-width:540px;margin:0 auto}
 code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--hover);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--text);white-space:nowrap}
 .cmds{list-style:none;margin:20px auto 0;padding:0;display:grid;gap:8px;max-width:480px;text-align:left}.cmds li{display:flex;align-items:center;gap:12px}.cmds code{flex:none;min-width:156px;text-align:center}
-.hint{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font-size:13px}.hint[hidden]{display:none}.hint a{color:inherit;font-weight:600}.hint button{margin-left:auto;padding:2px 6px;border:0;background:none;color:var(--muted);font:inherit;cursor:pointer}.hint button:hover{color:var(--text)}</style></head><body><main>
+.hint{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:10px 14px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px}.hint[hidden]{display:none}.hint a{color:inherit;font-weight:600}.hint button{margin-left:auto;padding:2px 6px;border:0;background:none;color:var(--muted);font:inherit;cursor:pointer}.hint button:hover{color:var(--text)}</style></head><body><main>
 <h1>PR reports</h1><p>Every review on this machine. Open one to comment, ask questions and send it to your agent.</p>
 <div class="hint" id="setup-hint" hidden><span>New here? A one-minute <a href="/setup">setup</a> checks your tools and picks how reports look.</span><button type="button" id="setup-dismiss" title="Not now">Not now</button></div>
 ${toolbar}<div id="active" data-rows>${active.length ? `<div class="list">${active.map(inboxRow).join("")}</div>` : `<div class="list">${emptyState(welcome, archived.length)}</div>`}</div>

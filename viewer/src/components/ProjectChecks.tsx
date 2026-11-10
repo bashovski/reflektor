@@ -36,7 +36,7 @@ export const ProjectChecks = () => {
       : `${checks.results.length - failed} of ${total} passed`;
 
   return (
-    <section id="project-checks" className="surface rounded-xl border p-4 sm:p-5">
+    <section id="project-checks" className="surface border p-4 sm:p-5">
       <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
         <TerminalSquare className={cx("size-4", running ? "text-violet-500" : failed || checks.status === "stopped" ? "text-red-500" : "text-emerald-500")} />
         Project checks

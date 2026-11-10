@@ -27,7 +27,7 @@ export const PlanCheck = () => {
   const pct = planned.length ? Math.round((done / planned.length) * 100) : 100;
 
   return (
-    <section id="plan" className="surface rounded-xl border p-4 sm:p-5">
+    <section id="plan" className="surface border p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <ListChecks className="size-4 text-blue-500" />

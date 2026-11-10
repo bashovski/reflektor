@@ -72,7 +72,7 @@ export const SetupFrame = ({
           ))}
         </span>
       </div>
-      <section className="surface rounded-2xl border p-6 shadow-sm sm:p-8">
+      <section className="surface border p-6 shadow-sm sm:p-8">
         <h1 className="text-[24px] font-semibold tracking-tight text-balance">{step.title}</h1>
         <div className="mt-4">{children}</div>
         <div className="mt-8 flex flex-wrap items-center gap-3">

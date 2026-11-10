@@ -178,8 +178,9 @@ export const IconButton = ({ className, children, ...rest }: ButtonHTMLAttribute
   </button>
 );
 
+// A block on the page. Its corners are square on purpose: see `.surface` in index.css.
 export const Card = ({ className, children, id }: { className?: string; children: ReactNode; id?: string }) => (
-  <section id={id} className={cx("surface rounded-xl border", className)}>
+  <section id={id} className={cx("surface border", className)}>
     {children}
   </section>
 );
