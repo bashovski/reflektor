@@ -12,7 +12,7 @@
   --shadow-float: 0 12px 32px -12px rgb(0 0 0 / 0.3), 0 2px 6px -2px rgb(0 0 0 / 0.12);
   /* The corner of every control and of everything that floats: buttons, inputs, badges, menus, dialogs and
      comment boxes (`rounded-control`). One size, so changing it here changes them all. Blocks on the page have
-     no rounding, and only dots, avatars of people and number marks are round. */
+     no rounding, and only dots and avatars of people are round. */
   --radius-control: 2px;
 
   /* Color roles. A color that carries a meaning is written by its role and never by its hue, so the palette can

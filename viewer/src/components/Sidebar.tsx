@@ -77,7 +77,7 @@ export const Sidebar = () => {
                 <span className="flex w-full items-center gap-2.5">
                   <span
                     title={level.label}
-                    className={cx("flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold", complete ? "bg-ok-500 text-white" : level.badge)}
+                    className={cx("flex size-5 shrink-0 items-center justify-center rounded-control text-[10px] font-semibold", complete ? "bg-ok-500 text-white" : level.badge)}
                   >
                     {complete ? <Check className="size-3" /> : <Digit>{i + 1}</Digit>}
                   </span>
@@ -100,7 +100,7 @@ export const Sidebar = () => {
         {report.flows.map((f) => (
           <li key={f.id}>
             <a href={`#flow-${f.id}`} className="flex items-center gap-2.5 rounded-control px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-zinc-500/10 text-muted">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-control bg-zinc-500/10 text-muted">
                 <Route className="size-3" />
               </span>
               <span className="min-w-0 flex-1 truncate">{f.title}</span>
