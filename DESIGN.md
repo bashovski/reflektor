@@ -35,6 +35,10 @@ A color that carries a meaning is written by its role, never by its hue. The rol
 - **Category colors are not roles.** A color that only tells categories apart keeps its hue, so retuning a role never moves it: the targets, the PR type tags, the highlight kinds that are not a warning, and the pull request states, which are GitHub's own colors. They live in `viewer/src/lib/meta.ts`.
 - **Color is never the only signal.** A status shows a word or an icon next to its color.
 
+## Focus and motion
+
+- **One focus ring.** Everything you can tab to shows a 2px ring in the accent color, for the keyboard only. It is set once in `index.css`. A field that marks focus with its border turns the ring off with `outline-none`.
+
 ## Meters
 
 Progress is drawn with `Meter` (`viewer/src/components/ui.tsx`): a row of square cells, one for each thing while there are few, with the figure written next to it.
