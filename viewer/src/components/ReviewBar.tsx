@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CommentTarget, ReviewComment } from "../../../skill/schema/types";
 import { useAgent } from "../lib/agent";
 import { COMMENT_KINDS } from "../lib/meta";
+import { scrollBehavior } from "../lib/motion";
 import { describeTarget, targetKey, useReview } from "../lib/review";
 import { useReport } from "../lib/state";
 import { Composer } from "./Comments";
@@ -100,7 +101,7 @@ export const ReviewBar = () => {
     const anchor = targetAnchor(t, bundle.report.sections);
     if (!anchor) return;
     if (anchor.section !== undefined && anchor.section >= 0) setSectionOpen(anchor.section, true);
-    requestAnimationFrame(() => document.getElementById(anchor.id)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    requestAnimationFrame(() => document.getElementById(anchor.id)?.scrollIntoView({ behavior: scrollBehavior(), block: "center" }));
   };
   const review = useReview();
   const agent = useAgent();

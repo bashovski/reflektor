@@ -1,6 +1,7 @@
 import { Braces, Check, FlaskConical, Route } from "lucide-react";
 import { useEffect, useState } from "react";
 import { REVIEW, SECTIONS } from "../lib/meta";
+import { scrollBehavior } from "../lib/motion";
 import { sectionDomId, useReport } from "../lib/state";
 import { cx, Digit, Meter } from "./ui";
 
@@ -44,7 +45,7 @@ export const Sidebar = () => {
 
   const goToSection = (index: number) => {
     setSectionOpen(index, true);
-    requestAnimationFrame(() => document.getElementById(sectionDomId(index))?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    requestAnimationFrame(() => document.getElementById(sectionDomId(index))?.scrollIntoView({ behavior: scrollBehavior(), block: "start" }));
   };
 
   return (
