@@ -29,7 +29,7 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
           {branch.base}
         </span>
         {/* How far the review is, visible wherever the reader has scrolled. */}
-        <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-zinc-500 tabular-nums" title={`${viewedCount} of ${total} files viewed`}>
+        <span className="num ml-auto inline-flex items-center gap-1.5 text-xs text-zinc-500" title={`${viewedCount} of ${total} files viewed`}>
           <ProgressRing value={total ? viewedCount / total : 0} className="size-4" />
           {viewedCount}/{total}
         </span>
@@ -97,14 +97,16 @@ export const Hero = () => {
               <li key={c.sha} className="flex gap-3 text-xs">
                 <span className="font-mono text-zinc-400">{c.short}</span>
                 <span className="min-w-0 flex-1 truncate text-zinc-700 dark:text-zinc-300">{c.subject}</span>
-                <span className="shrink-0 text-zinc-400">{new Date(c.date).toLocaleDateString()}</span>
+                <span className="num shrink-0 text-zinc-400">{new Date(c.date).toLocaleDateString()}</span>
               </li>
             ))}
           </ol>
         </details>
         {pr && (
           <a href={pr.url} target="_blank" rel="noreferrer" title={pr.title ?? undefined} className="inline-flex items-center gap-1.5 underline-offset-2 hover:underline">
-            PR #{pr.number}
+            <span>
+              PR <span className="num">#{pr.number}</span>
+            </span>
             <PrStatePill state={pr.state} className="py-0 text-[11px]" />
           </a>
         )}
@@ -131,26 +133,34 @@ export const Hero = () => {
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5 border-t border-[var(--border)] pt-4 text-sm">
         <span className="inline-flex items-center gap-1.5">
           <FileCode2 className="size-4 text-zinc-400" />
-          {stats.files} files
+          <span>
+            <span className="num">{stats.files}</span> files
+          </span>
           <LocCount additions={stats.additions} deletions={stats.deletions} className="ml-1" />
         </span>
         {!bundle.draft && (
           <span className="inline-flex items-center gap-1.5">
             <Clock className="size-4 text-zinc-400" />
-            About {report.reviewMinutes} min
+            <span>
+              About <span className="num">{report.reviewMinutes}</span> min
+            </span>
           </span>
         )}
         {!bundle.draft && <LevelBar counts={levelCounts} />}
         {failedChecks > 0 && (
           <a href="#project-checks" className="inline-flex items-center gap-1.5 font-medium text-red-600 hover:underline dark:text-red-400">
             <CircleX className="size-4" />
-            {failedChecks} {failedChecks === 1 ? "check" : "checks"} failed
+            <span>
+              <span className="num">{failedChecks}</span> {failedChecks === 1 ? "check" : "checks"} failed
+            </span>
           </a>
         )}
         {coverage?.percent != null && (
           <a href="#coverage" className="inline-flex items-center gap-1.5 hover:underline">
             <FlaskConical className="size-4 text-zinc-400" />
-            Tests run {coverage.percent}% of new lines
+            <span>
+              Tests run <span className="num">{coverage.percent}%</span> of new lines
+            </span>
             {coverage.sources.some((s) => s.stale) && <span className="text-xs text-amber-600 dark:text-amber-400">(coverage file is older than the changes)</span>}
           </a>
         )}
@@ -184,9 +194,11 @@ const LevelBar = ({ counts }: { counts: Record<"must" | "skim" | "skip", number>
           : levels.map((l) => counts[l] > 0 && <span key={l} className={cx("h-full min-w-0 basis-0", REVIEW[l].rail)} style={{ flexGrow: counts[l] }} />)}
       </span>
       {levels.map((l) => (
-        <span key={l} className="inline-flex items-center gap-1 text-zinc-600 tabular-nums dark:text-zinc-400">
+        <span key={l} className="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-400">
           <Dot className={REVIEW[l].dot} />
-          {counts[l]} {REVIEW[l].label.toLowerCase()}
+          <span>
+            <span className="num">{counts[l]}</span> {REVIEW[l].label.toLowerCase()}
+          </span>
         </span>
       ))}
     </span>

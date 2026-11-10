@@ -79,6 +79,14 @@ body {
   text-transform: uppercase;
 }
 
+/* A figure: a count, a share, a duration, a date. Set in the mono font with digits of one width, so it reads as a
+   value and a column of them lines up. Only the figure takes this; the words around it stay in the sans, and
+   so does text a person or the agent wrote. */
+@utility num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Content that has just appeared: a short rise, so a collapse or a new bar reads as a change. */
 .rise {
   animation: rise 0.22s ease-out;

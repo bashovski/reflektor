@@ -524,7 +524,7 @@ legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--m
 .menu .search{margin-bottom:6px;padding:0 8px;height:32px;border:1px solid var(--border);border-radius:7px;cursor:text;color:var(--muted)}.menu .search:hover{background:none}.menu .search:focus-within{border-color:var(--muted)}
 .search input{flex:1;min-width:0;border:0;outline:0;background:none;color:var(--text);font:13px "Geist Variable",ui-sans-serif,system-ui,sans-serif}
 .group+.group{margin-top:22px}.gh{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:13px;font-weight:600}
-.gh .av{width:20px;height:20px;border-radius:5px;font-size:9px}.count{color:var(--muted);font-weight:500;font-size:12px}
+.gh .av{width:20px;height:20px;border-radius:5px;font-size:9px}.count{color:var(--muted);font:500 12px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace}
 .av.local{background:#71717a}.av.local svg{width:12px;height:12px}
 .list{border:1px solid var(--border);background:var(--surface);overflow:hidden}
 .row{display:flex;align-items:center;border-top:1px solid var(--border);padding-right:12px}.row:first-child{border-top:0}

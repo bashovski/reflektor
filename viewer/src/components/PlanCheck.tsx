@@ -34,7 +34,7 @@ export const PlanCheck = () => {
           Plan check
         </h2>
         <span className="text-sm text-zinc-600 dark:text-zinc-400">
-          {done} of {planned.length} planned items done
+          <span className="num">{done}</span> of <span className="num">{planned.length}</span> planned items done
         </span>
         {/* A plan with nothing planned counts as done, so its one cell is full. */}
         <Meter value={planned.length ? done : 1} total={planned.length || 1} fill={pct === 100 ? "bg-emerald-500" : "bg-amber-500"} className="h-1.5 w-28" />

@@ -60,7 +60,7 @@ export const ProjectChecks = () => {
               </span>
               <span className="shrink-0 text-sm font-medium">{r.name}</span>
               <code className="min-w-0 truncate font-mono text-xs text-zinc-500">{r.command}</code>
-              <span className="ml-auto shrink-0 text-xs text-zinc-400 tabular-nums">{seconds(r.durationMs)}</span>
+              <span className="num ml-auto shrink-0 text-xs text-zinc-400">{seconds(r.durationMs)}</span>
             </span>
           );
           if (r.status === "passed") {

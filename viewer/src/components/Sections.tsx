@@ -59,13 +59,16 @@ const SectionCard = ({ section, index, paths }: { section: Section; index: numbe
           </span>
           <span className="mt-0.5 block text-[13px] leading-snug text-zinc-500">{section.reason}</span>
         </span>
-        <span className="ml-auto flex shrink-0 items-center gap-3 pt-0.5 text-xs text-zinc-500 tabular-nums">
+        <span className="ml-auto flex shrink-0 items-center gap-3 pt-0.5 text-xs text-zinc-500">
           <span>
-            {files.length} {files.length === 1 ? "file" : "files"}
+            <span className="num">{files.length}</span> {files.length === 1 ? "file" : "files"}
           </span>
           <LocCount additions={additions} deletions={deletions} />
           <span className={cx(viewed === files.length && "text-emerald-600 dark:text-emerald-400")}>
-            {viewed}/{files.length} viewed
+            <span className="num">
+              {viewed}/{files.length}
+            </span>{" "}
+            viewed
           </span>
         </span>
       </button>
@@ -149,7 +152,7 @@ export const ViewSwitch = () => {
           )}
         >
           {o.label}
-          <span className="tabular-nums text-zinc-400">{o.count}</span>
+          <span className="num text-zinc-400">{o.count}</span>
         </button>
       ))}
     </div>

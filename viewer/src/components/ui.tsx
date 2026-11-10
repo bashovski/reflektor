@@ -42,7 +42,7 @@ export const Meter = ({ value, total, cells, fill, className }: { value: number;
 // line keeps room under the baseline for descenders, and a digit has none. `text-box` cuts the line down to
 // the digit itself, from the top of a capital to the baseline, so the circle centers what the eye sees. Where a
 // browser does not know `text-box` yet, the digit stays where it was.
-export const Digit = ({ children }: { children: ReactNode }) => <span className="leading-none tabular-nums [text-box:trim-both_cap_alphabetic]">{children}</span>;
+export const Digit = ({ children }: { children: ReactNode }) => <span className="num leading-none [text-box:trim-both_cap_alphabetic]">{children}</span>;
 
 // A small ring filled to `value` (0 to 1): how much of the review is viewed, in the top bar.
 export const ProgressRing = ({ value, className }: { value: number; className?: string }) => {
@@ -114,7 +114,7 @@ export const TagPill = ({ tag, className }: { tag: Tag; className?: string }) =>
 };
 
 export const LocCount = ({ additions, deletions, className }: { additions: number; deletions: number; className?: string }) => (
-  <span className={cx("font-mono text-xs tabular-nums", className)}>
+  <span className={cx("num text-xs", className)}>
     <span className="text-emerald-600 dark:text-emerald-400">+{additions}</span>{" "}
     <span className="text-red-600 dark:text-red-400">−{deletions}</span>
   </span>
