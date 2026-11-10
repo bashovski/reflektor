@@ -1,7 +1,7 @@
 import { CircleDashed, FlaskConical } from "lucide-react";
 import { useReport } from "../lib/state";
 import { RichText } from "./RichText";
-import { Card, cx, FileIcon, SectionTitle, shortPath } from "./ui";
+import { Card, FileIcon, Meter, SectionTitle, shortPath } from "./ui";
 
 const tone = (pct: number) => (pct === 100 ? "bg-emerald-500" : pct >= 60 ? "bg-amber-500" : "bg-red-500");
 
@@ -45,9 +45,7 @@ export const Coverage = () => {
                       <FileIcon path={r.path} className="size-3.5" />
                       <span className="truncate font-mono text-xs">{shortPath(r.path, 3)}</span>
                     </span>
-                    <span className="h-1.5 overflow-hidden rounded-full bg-zinc-500/15">
-                      <span className={cx("block h-full rounded-full", tone(r.pct))} style={{ width: `${r.pct}%` }} />
-                    </span>
+                    <Meter value={r.covered} total={r.total} cells={10} fill={tone(r.pct)} className="h-1.5" />
                     <span className="text-right text-xs text-zinc-500 tabular-nums">{r.pct}%</span>
                   </button>
                 </li>

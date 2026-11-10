@@ -8,7 +8,7 @@ import { useReport } from "../lib/state";
 import { Composer } from "./Comments";
 import { PlanPanel } from "./PlanPanel";
 import { RichText } from "./RichText";
-import { cx, Kbd, KEY_LABELS, MOD_KEY, Pill } from "./ui";
+import { cx, Kbd, KEY_LABELS, MOD_KEY, Meter, Pill } from "./ui";
 
 const REPORT_TARGET: CommentTarget = { type: "report" };
 
@@ -162,9 +162,7 @@ export const ReviewBar = () => {
           <Icon className={cx("size-4", Icon === Loader2 ? "animate-spin text-violet-500" : Icon === ListOrdered ? "text-violet-500" : "text-emerald-500")} />
           <span>{message}</span>
           {review.phase === "working" && total > 0 && (
-            <span className="h-1.5 w-32 overflow-hidden rounded-full bg-zinc-500/15">
-              <span className="block h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.round((done / total) * 100)}%` }} />
-            </span>
+            <Meter value={done} total={total} fill="bg-emerald-500" className="h-1.5 w-32" />
           )}
           {unheard && <ResumeHint text={`No ${agent.noun} session is listening for this review.`} />}
           {stale && <ResumeHint text={`No update from ${agent.name} for 10 minutes. If its session ended,`} />}
