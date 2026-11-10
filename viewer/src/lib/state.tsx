@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Bundle, DiffFile, Ref, Section } from "../../../skill/schema/types";
+import { scrollBehavior } from "./motion";
 import { type Preferences, storage, usePrefs } from "./prefs";
 
 export type { DiffStyle, ThemeChoice } from "./prefs";
@@ -191,7 +192,7 @@ export const ReportProvider = ({ bundle, children }: { bundle: Bundle; children:
     const id = window.setTimeout(() => {
       const el = document.getElementById(fileDomId(focus.path));
       if (!el) return;
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
       el.classList.remove("flash");
       void el.offsetWidth;
       el.classList.add("flash");

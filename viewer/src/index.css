@@ -185,6 +185,26 @@ body {
   }
 }
 
+/* For readers who ask their system for less motion: nothing rises, flashes, spins or pulses, and a change of
+   state is instant. The "Saved" note still waits its two seconds before it goes, it just does not fade. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .rise,
+  .flash,
+  .animate-spin,
+  .animate-pulse {
+    animation: none !important;
+  }
+  .fade-out {
+    animation-timing-function: step-end;
+  }
+}
+
 dialog::backdrop {
   background: rgb(0 0 0 / 0.55);
   backdrop-filter: blur(2px);
