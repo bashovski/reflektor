@@ -38,9 +38,9 @@ export const Meter = ({ value, total, cells, fill, className }: { value: number;
   );
 };
 
-// A number inside a small circle. Centering the line of text leaves the digit about a pixel high, because a
+// A number inside a small mark. Centering the line of text leaves the digit about a pixel high, because a
 // line keeps room under the baseline for descenders, and a digit has none. `text-box` cuts the line down to
-// the digit itself, from the top of a capital to the baseline, so the circle centers what the eye sees. Where a
+// the digit itself, from the top of a capital to the baseline, so the mark centers what the eye sees. Where a
 // browser does not know `text-box` yet, the digit stays where it was.
 export const Digit = ({ children }: { children: ReactNode }) => <span className="num leading-none [text-box:trim-both_cap_alphabetic]">{children}</span>;
 

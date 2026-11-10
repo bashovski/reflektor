@@ -43,7 +43,7 @@ export const HelpDialog = ({ open, onClose }: { open: boolean; onClose: () => vo
           <ol className="space-y-2.5 text-sm">
             {steps(agent).map(([title, text], i) => (
               <li key={title} className="flex gap-3">
-                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-zinc-500/10 text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">
+                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-control bg-zinc-500/10 text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">
                   <Digit>{i + 1}</Digit>
                 </span>
                 <span>
