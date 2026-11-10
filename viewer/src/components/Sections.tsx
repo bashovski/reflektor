@@ -55,7 +55,7 @@ const SectionCard = ({ section, index, paths }: { section: Section; index: numbe
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <span className="font-semibold">{section.title ?? meta.label}</span>
-            <Pill className={review.className}>{review.label}</Pill>
+            <Pill className={cx("text-[11px]", review.className)}>{review.label}</Pill>
           </span>
           <span className="mt-0.5 block text-[13px] leading-snug text-zinc-500">{section.reason}</span>
         </span>
@@ -82,7 +82,7 @@ const SectionCard = ({ section, index, paths }: { section: Section; index: numbe
                 const target: CommentTarget = { type: "highlight", section: section.kind, index: i, kind: h.kind, text: h.text, fix: h.fix };
                 return (
                   <li key={i} id={`hl-${index}-${i}`} className="group/row relative flex flex-wrap items-start gap-x-3 gap-y-1 rounded-lg px-2 py-2 hover:bg-zinc-500/[0.04]">
-                    <span className={cx("inline-flex w-[94px] shrink-0 items-center gap-1.5 text-xs font-medium", hm.className)}>
+                    <span className={cx("label-caps inline-flex w-[94px] shrink-0 items-center gap-1.5 text-[11px]", hm.className)}>
                       <span className={cx("inline-flex size-5 shrink-0 items-center justify-center rounded-md", hm.tint)}>
                         <HIcon className="size-3.5" />
                       </span>

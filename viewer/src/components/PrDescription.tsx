@@ -75,14 +75,14 @@ export const PrDescription = () => {
           <div className="min-h-0 flex-1 space-y-4 overflow-auto px-5 py-4">
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[13px] font-semibold uppercase tracking-wide text-zinc-500">Title</span>
+                <span className="label-caps text-xs text-zinc-500">Title</span>
                 <CopyButton text={pr.title} label="Copy title" />
               </div>
               <p className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm">{pr.title}</p>
             </div>
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[13px] font-semibold uppercase tracking-wide text-zinc-500">Body</span>
+                <span className="label-caps text-xs text-zinc-500">Body</span>
                 <CopyButton text={pr.body} label="Copy body" />
               </div>
               <pre className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap">{pr.body}</pre>

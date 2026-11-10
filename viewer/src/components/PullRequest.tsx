@@ -9,7 +9,7 @@ export const PrStatePill = ({ state, className }: { state: PrState; className?: 
   const meta = PR_STATES[state];
   const Icon = meta.icon;
   return (
-    <Pill className={cx(meta.pill, className)}>
+    <Pill className={cx("text-[11px]", meta.pill, className)}>
       <Icon className="size-3" />
       {meta.label}
     </Pill>

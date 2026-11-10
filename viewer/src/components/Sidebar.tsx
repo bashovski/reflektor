@@ -52,7 +52,7 @@ export const Sidebar = () => {
     <nav className="sticky top-[72px] space-y-6 text-sm">
       <div>
         <div className="mb-2 flex items-baseline justify-between">
-          <span className="text-[13px] font-semibold uppercase tracking-wide text-zinc-500">Review path</span>
+          <span className="label-caps text-xs text-zinc-500">Review path</span>
           <span className="text-xs text-zinc-500 tabular-nums">
             {viewedCount}/{total}
           </span>
@@ -102,7 +102,7 @@ export const Sidebar = () => {
           );
         })}
         {report.flows.length > 0 && (
-          <li className="pt-3 pb-1 pl-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">How it works</li>
+          <li className="pt-3 pb-1 pl-2 label-caps text-[11px] text-zinc-400">How it works</li>
         )}
         {report.flows.map((f) => (
           <li key={f.id}>

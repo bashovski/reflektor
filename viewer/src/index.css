@@ -70,6 +70,16 @@ body {
     0 1px 2px rgb(0 0 0 / 0.4);
 }
 
+/* The interface's own words: group headings, badges, status words. Capitals in the mono font, a little spaced,
+   at medium weight, so they read apart from what a person or the agent wrote. Titles and sentences stay in
+   the sans. A label takes this plus a size and a color. */
+@utility label-caps {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* Content that has just appeared: a short rise, so a collapse or a new bar reads as a change. */
 .rise {
   animation: rise 0.22s ease-out;

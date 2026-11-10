@@ -517,7 +517,7 @@ svg{width:14px;height:14px;flex:none}
 .tool b:empty{display:none}.badge{background:var(--text);color:var(--bg);border-radius:999px;padding:0 6px;font-size:10px;line-height:16px}
 .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:10;min-width:210px;max-width:calc(100vw - 32px);padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 30px rgb(0 0 0/.14)}
 fieldset{border:0;margin:0;padding:0}fieldset+fieldset{margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
-legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--muted);font-family:"Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em}
 .menu label{clear:both;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap}.menu label:hover{background:var(--hover)}
 .menu input{margin:0;accent-color:var(--text)}.clear{width:100%;margin-top:6px;padding:6px 8px;border:0;border-top:1px solid var(--border);background:none;color:var(--muted);font:500 12px "Geist Variable",ui-sans-serif,system-ui,sans-serif;text-align:left;cursor:pointer}.clear:hover{color:var(--text)}
 .dot{width:8px;height:8px;border-radius:50%;flex:none}

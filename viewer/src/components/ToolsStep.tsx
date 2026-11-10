@@ -174,11 +174,11 @@ export const ToolsStep = () => {
           ) : (
             <ol className="space-y-2">
               <li className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="w-16 shrink-0 text-xs font-semibold uppercase tracking-wide text-zinc-500">Install</span>
+                <span className="w-16 shrink-0 label-caps text-[11px] text-zinc-500">Install</span>
                 <Command text={shown.install[os]} />
               </li>
               <li className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="w-16 shrink-0 text-xs font-semibold uppercase tracking-wide text-zinc-500">Log in</span>
+                <span className="w-16 shrink-0 label-caps text-[11px] text-zinc-500">Log in</span>
                 <Command text={shown.login} />
               </li>
               <li className="text-xs text-zinc-500">Run these in a terminal. This page checks every few seconds and ticks the box once you are logged in.</li>
