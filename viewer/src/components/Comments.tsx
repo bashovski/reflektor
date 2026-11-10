@@ -56,7 +56,7 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
   };
 
   return (
-    <div className="my-1.5 rounded-lg border border-blue-500/40 bg-[var(--surface)] p-2.5 font-sans shadow-sm" onClick={(e) => e.stopPropagation()}>
+    <div className="my-1.5 rounded-lg border border-blue-500/40 bg-[var(--surface)] p-2.5 font-sans" onClick={(e) => e.stopPropagation()}>
       <p className="mb-1.5 text-[11px] text-zinc-500">{describeTarget(target)}</p>
       <textarea
         ref={ref}
@@ -251,7 +251,7 @@ export const QuickActions = ({
         type="button"
         title="Comment"
         onClick={comment()}
-        className="absolute right-1.5 bottom-1 rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 text-zinc-500 opacity-0 shadow-sm transition-opacity group-hover/row:opacity-100 hover:text-zinc-900 focus:opacity-100 dark:hover:text-zinc-100"
+        className="absolute right-1.5 bottom-1 rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 text-zinc-500 opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-zinc-900 focus:opacity-100 dark:hover:text-zinc-100"
       >
         <MessageSquarePlus className="size-3.5" />
       </button>

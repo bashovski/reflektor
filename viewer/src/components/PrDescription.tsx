@@ -62,7 +62,7 @@ export const PrDescription = () => {
         ref={ref}
         onClose={() => setOpen(false)}
         onClick={(e) => e.target === ref.current && setOpen(false)}
-        className="surface m-auto h-[min(80vh,760px)] w-[min(760px,94vw)] max-w-none overflow-hidden rounded-xl border p-0 text-[var(--text)] shadow-2xl"
+        className="surface m-auto h-[min(80vh,760px)] w-[min(760px,94vw)] max-w-none overflow-hidden rounded-xl border p-0 text-[var(--text)] shadow-float"
       >
         <div className="flex h-full flex-col">
           <div className="flex items-center gap-3 border-b border-[var(--border)] px-5 py-3">

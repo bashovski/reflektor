@@ -64,7 +64,7 @@ export const LineNoteBubble = ({ text }: { text: string }) => (
 );
 
 const FindingBubble = ({ finding }: { finding: Finding }) => (
-  <div className={cx("my-1.5 mr-3 ml-12 flex max-w-2xl items-start gap-2 rounded-lg border bg-[var(--surface)] px-3 py-2 font-sans text-[13px] leading-snug shadow-sm", SEVERITY[finding.severity].border)}>
+  <div className={cx("my-1.5 mr-3 ml-12 flex max-w-2xl items-start gap-2 rounded-lg border bg-[var(--surface)] px-3 py-2 font-sans text-[13px] leading-snug", SEVERITY[finding.severity].border)}>
     <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-red-500" />
     <span>
       {finding.kind === "secret" && <span className="font-semibold">{finding.rule}. </span>}

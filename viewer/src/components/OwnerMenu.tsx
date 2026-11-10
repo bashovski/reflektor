@@ -118,7 +118,7 @@ export const OwnerMenu = () => {
       <MenuItems
         anchor="bottom start"
         transition
-        className="surface z-50 w-80 origin-top-left rounded-xl border p-1.5 text-sm shadow-lg shadow-black/10 transition duration-100 ease-out [--anchor-gap:6px] focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0"
+        className="surface z-50 w-80 origin-top-left rounded-xl border p-1.5 text-sm shadow-float transition duration-100 ease-out [--anchor-gap:6px] focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0"
       >
         {items.map((item) => (
           <MenuItem key={item.key}>

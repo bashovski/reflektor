@@ -49,7 +49,7 @@ export const FileModal = () => {
       ref={ref}
       onClose={() => openModal(null)}
       onClick={(e) => e.target === ref.current && openModal(null)}
-      className="surface m-auto h-[90vh] w-[min(1200px,94vw)] max-w-none overflow-hidden rounded-xl border p-0 text-[var(--text)] shadow-2xl"
+      className="surface m-auto h-[90vh] w-[min(1200px,94vw)] max-w-none overflow-hidden rounded-xl border p-0 text-[var(--text)] shadow-float"
     >
       {modal && (
         <div className="flex h-full flex-col">
@@ -68,7 +68,7 @@ export const FileModal = () => {
                       onClick={() => setMode(m)}
                       className={cx(
                         "rounded-md px-2 py-1 text-xs font-medium",
-                        mode === m ? "surface shadow-sm" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200",
+                        mode === m ? "surface" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200",
                       )}
                     >
                       {m === "changes" ? "Changes in full file" : "Final file"}

@@ -39,7 +39,7 @@ const Primary = ({ label, onClick }: { label: string; onClick: () => void }) => 
   <button
     type="button"
     onClick={onClick}
-    className="inline-flex items-center gap-2.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+    className="inline-flex items-center gap-2.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
   >
     {label}
     <Kbd name="Enter" className="h-[18px] min-w-[18px] border-white/25 bg-white/15 text-white shadow-none" />
@@ -72,7 +72,7 @@ export const SetupFrame = ({
           ))}
         </span>
       </div>
-      <section className="surface border p-6 shadow-sm sm:p-8">
+      <section className="surface border p-6 sm:p-8">
         <h1 className="text-[24px] font-semibold tracking-tight text-balance">{step.title}</h1>
         <div className="mt-4">{children}</div>
         <div className="mt-8 flex flex-wrap items-center gap-3">

@@ -61,7 +61,7 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
       ref={ref}
       onClose={onClose}
       onClick={(e) => e.target === ref.current && onClose()}
-      className="surface m-auto w-[min(480px,94vw)] rounded-xl border p-0 text-[var(--text)] shadow-2xl"
+      className="surface m-auto w-[min(480px,94vw)] rounded-xl border p-0 text-[var(--text)] shadow-float"
     >
       <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
         <h2 className="font-semibold">Settings</h2>
