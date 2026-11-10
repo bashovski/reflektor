@@ -2,7 +2,7 @@ import { Braces, Check, FlaskConical, Route } from "lucide-react";
 import { useEffect, useState } from "react";
 import { REVIEW, SECTIONS } from "../lib/meta";
 import { sectionDomId, useReport } from "../lib/state";
-import { cx } from "./ui";
+import { cx, Digit } from "./ui";
 
 // The section under the sticky top bar right now, so the path can mark where the reader is. Sections
 // far off screen may not be mounted, so the check takes the last mounted one whose top has passed the line.
@@ -81,7 +81,7 @@ export const Sidebar = () => {
                     title={level.label}
                     className={cx("flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold", complete ? "bg-emerald-500 text-white" : level.badge)}
                   >
-                    {complete ? <Check className="size-3" /> : i + 1}
+                    {complete ? <Check className="size-3" /> : <Digit>{i + 1}</Digit>}
                   </span>
                   <span className={cx("min-w-0 flex-1 truncate", current && "font-medium", complete && "text-zinc-400 line-through decoration-zinc-400/50")}>
                     {s.title ?? SECTIONS[s.kind].label}
