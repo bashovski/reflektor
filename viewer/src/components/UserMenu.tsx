@@ -32,12 +32,17 @@ const Avatar = ({ avatar, className }: { avatar: RepoAvatar | null; className: s
   );
 };
 
+// How long the daemon has run, in its two largest units: "up 23min", "up 1h 23min", "up 2d 5h". A unit that is zero
+// is left out ("up 2h"). Nothing is rounded up, so the figure never runs ahead of the clock.
 const uptime = (since: string) => {
   const s = (Date.now() - Date.parse(since)) / 1000;
   if (s < 90) return "just started";
-  if (s < 5400) return `up ${Math.round(s / 60)} min`;
-  if (s < 129_600) return `up ${Math.round(s / 3600)} h`;
-  return `up ${Math.round(s / 86_400)} d`;
+  const minutes = Math.floor(s / 60);
+  const d = Math.floor(minutes / 1440);
+  const h = Math.floor((minutes % 1440) / 60);
+  const min = minutes % 60;
+  const parts = d ? [`${d}d`, h > 0 && `${h}h`] : h ? [`${h}h`, min > 0 && `${min}min`] : [`${min}min`];
+  return `up ${parts.filter(Boolean).join(" ")}`;
 };
 
 // A new-issue link with what a bug report always needs, and nothing from the report itself.
