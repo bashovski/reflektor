@@ -1,5 +1,6 @@
 import { CircleCheck, CircleDashed, CircleDot, CirclePlus, ListChecks } from "lucide-react";
 import type { CommentTarget, PlanStatus } from "../../../skill/schema/types";
+import { type Agent, useAgent } from "../lib/agent";
 import { useReport } from "../lib/state";
 import { QuickActions, TargetComments } from "./Comments";
 import { RichText } from "./RichText";
@@ -12,11 +13,12 @@ const STATUS: Record<PlanStatus, { label: string; icon: typeof CircleCheck; clas
   extra: { label: "Not in the plan", icon: CirclePlus, className: "text-violet-600 dark:text-violet-400" },
 };
 
-const PLAN_LABELS = { fix: "Finish it", fine: "Not needed", queued: "Queued: Claude finishes it", accepted: "Marked as not needed" };
+const planLabels = (agent: Agent) => ({ fix: "Finish it", fine: "Not needed", queued: `Queued: ${agent.name} finishes it`, accepted: "Marked as not needed" });
 
 // Did the change do what this session planned?
 export const PlanCheck = () => {
   const { bundle } = useReport();
+  const agent = useAgent();
   const plan = bundle.report.plan;
   if (!plan?.items.length) return null;
 
@@ -54,7 +56,7 @@ export const PlanCheck = () => {
               <div className="min-w-[min(10rem,100%)] flex-1">
                 <RichText text={item.text} className="block leading-relaxed" />
                 {item.note && <RichText text={item.note} className="block text-[13px] text-zinc-500" />}
-                <QuickActions target={target} variant={unfinished ? "problem" : "info"} labels={unfinished ? PLAN_LABELS : undefined} />
+                <QuickActions target={target} variant={unfinished ? "problem" : "info"} labels={unfinished ? planLabels(agent) : undefined} />
                 <TargetComments target={target} />
               </div>
               {item.ref && <RefLink refTo={item.ref} className="ml-auto" />}

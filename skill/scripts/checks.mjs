@@ -292,7 +292,7 @@ if (picked.changed?.length) console.log(`warning: ${picked.changed.join(", ")} c
 
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
 
-// Claude Code on Windows runs commands in Git Bash, so the checks it saves are bash commands: they run
+// An agent on Windows runs its commands in Git Bash (Claude Code does), so the checks it saves are bash commands: they run
 // in that bash, or in cmd.exe when there is none. Elsewhere they run in sh, in a process group of their
 // own so a timeout can stop everything they started.
 const windows = process.platform === "win32";

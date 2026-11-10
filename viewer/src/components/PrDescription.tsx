@@ -1,5 +1,6 @@
 import { Check, ClipboardCopy, FileText, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useAgent } from "../lib/agent";
 import { useReport } from "../lib/state";
 
 const copyText = async (text: string) => {
@@ -35,6 +36,7 @@ const CopyButton = ({ text, label }: { text: string; label: string }) => {
 
 // The pull request title and body that build.mjs wrote from this report.
 export const PrDescription = () => {
+  const agent = useAgent();
   const { bundle } = useReport();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDialogElement>(null);
@@ -65,7 +67,7 @@ export const PrDescription = () => {
         <div className="flex h-full flex-col">
           <div className="flex items-center gap-3 border-b border-[var(--border)] px-5 py-3">
             <h2 className="font-semibold">PR description</h2>
-            <span className="text-xs text-zinc-500">Markdown, ready to paste. Claude can also open the PR with it.</span>
+            <span className="text-xs text-zinc-500">Markdown, ready to paste. {agent.Name} can also open the PR with it.</span>
             <button type="button" onClick={() => setOpen(false)} className="ml-auto rounded p-1 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
               <X className="size-4" />
             </button>

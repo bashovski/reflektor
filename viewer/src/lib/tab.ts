@@ -20,7 +20,7 @@ function newsBetween(before: LiveState, after: LiveState): string | null {
   if (after.pr?.state === "MERGED" && before.pr?.state !== "MERGED") return "Pull request merged";
   if (after.pr && !before.pr) return `Pull request #${after.pr.number} opened`;
   const answered = (s: LiveState) => s.questions.filter((q) => q.answer).length;
-  if (answered(after) > answered(before)) return "Claude answered";
+  if (answered(after) > answered(before)) return "Question answered";
   if (before.checks?.status === "running" && after.checks && after.checks.status !== "running") {
     const failed = after.checks.results.filter((r) => r.status !== "passed").length;
     return after.checks.status === "stopped" ? "Checks stopped" : failed ? `${failed} ${failed === 1 ? "check" : "checks"} failed` : "Checks passed";

@@ -19,6 +19,7 @@ import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { readChecksRun } from "./checks-run.mjs";
+import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mjs";
 import { purgeCache, whoAmI } from "./identity.mjs";
 import { replaceFile } from "./repo.mjs";
 
@@ -126,6 +127,7 @@ function loadReview(entry) {
     statuses: saved.statuses ?? {},
     plan: saved.plan ?? null,
     pr: saved.pr ?? null,
+    agent: cleanAgent(saved.agent),
     // Events saved before handling was tracked count as handled once delivered.
     events: (saved.events ?? []).map((e) => ("handledAt" in e ? e : { ...e, handledAt: e.deliveredAt })),
     lastAgentActivity: saved.lastAgentActivity ?? null,
@@ -155,6 +157,7 @@ function save(r) {
     statuses: r.statuses,
     plan: r.plan,
     pr: r.pr ?? null,
+    agent: r.agent ?? null,
     events: r.events,
     lastAgentActivity: r.lastAgentActivity,
     updatedAt: r.updatedAt,
@@ -210,12 +213,24 @@ const liveState = (r) => ({
   // The branch's pull request as last seen: told by the agent, or polled from GitHub. The page
   // prefers it to the one frozen in the report, which may be older.
   pr: r.pr ?? null,
+  // The agent that called last, in the words the page shows; null until one has said who it is.
+  agent: r.agent ?? null,
   // Whether an agent waits for this review's events, and since when the oldest event waits for one.
   // The page warns when nobody picks up what the reviewer sent.
   listening: listening(r),
   undeliveredSince: r.events.find((e) => !e.deliveredAt && !answered(r, e))?.at ?? null,
   updatedAt: r.updatedAt,
 });
+
+// Every call from review.mjs says which agent makes it (agent.mjs). The review keeps the last one, so the page
+// names whoever is on the other side now, also after another agent picked the review up. A call that names
+// nobody, such as one typed by hand, changes nothing. True when the agent changed.
+function noteAgent(r, req) {
+  const agent = decodeAgent(req.headers[AGENT_HEADER]);
+  if (!agent || JSON.stringify(agent) === JSON.stringify(r.agent ?? null)) return false;
+  r.agent = agent;
+  return true;
+}
 
 // ------------------------------------------------------------------ live stream to pages (SSE)
 
@@ -352,8 +367,8 @@ function avatarHtml(avatar) {
 const PHASES = {
   reviewing: ["Waiting on you", "#b45309"],
   planning: ["Plan ready", "#7c3aed"],
-  sent: ["Sent to Claude", "#2563eb"],
-  working: ["Claude working", "#2563eb"],
+  sent: ["Sent to the agent", "#2563eb"],
+  working: ["Agent working", "#2563eb"],
   done: ["Done", "#059669"],
   merged: ["Merged", "#7c3aed"],
 };
@@ -433,7 +448,10 @@ const ownerOf = (repo) => (repo.includes("/") ? repo.slice(0, repo.lastIndexOf("
 // One review. The data attributes are what the page groups, sorts and filters by.
 function inboxRow(r) {
   const status = statusOf(r);
-  const [label, color] = r.archived ? ["Archived", "#71717a"] : (PHASES[status] ?? [status, "#71717a"]);
+  const [phaseLabel, color] = r.archived ? ["Archived", "#71717a"] : (PHASES[status] ?? [status, "#71717a"]);
+  // A row names its own agent; the groups and filters above keep the neutral words, since they span agents.
+  const who = r.agent?.name;
+  const label = r.archived || !who ? phaseLabel : status === "sent" ? `Sent to ${escapeHtml(who)}` : status === "working" ? `${escapeHtml(who)} working` : phaseLabel;
   const waiting = r.questions.filter((q) => !q.answer).length;
   const id = escapeHtml(r.id);
   const owner = ownerOf(r.repo);
@@ -527,7 +545,7 @@ details{margin-top:28px}summary{cursor:pointer;color:var(--muted);margin-bottom:
 code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--hover);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--text);white-space:nowrap}
 .cmds{list-style:none;margin:20px auto 0;padding:0;display:grid;gap:8px;max-width:480px;text-align:left}.cmds li{display:flex;align-items:center;gap:12px}.cmds code{flex:none;min-width:156px;text-align:center}
 .hint{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font-size:13px}.hint[hidden]{display:none}.hint a{color:inherit;font-weight:600}.hint button{margin-left:auto;padding:2px 6px;border:0;background:none;color:var(--muted);font:inherit;cursor:pointer}.hint button:hover{color:var(--text)}</style></head><body><main>
-<h1>PR reports</h1><p>Every review on this machine. Open one to comment, ask questions and send it to Claude.</p>
+<h1>PR reports</h1><p>Every review on this machine. Open one to comment, ask questions and send it to your agent.</p>
 <div class="hint" id="setup-hint" hidden><span>New here? A one-minute <a href="/setup">setup</a> checks your tools and picks how reports look.</span><button type="button" id="setup-dismiss" title="Not now">Not now</button></div>
 ${toolbar}<div id="active" data-rows>${active.length ? `<div class="list">${active.map(inboxRow).join("")}</div>` : `<div class="list">${emptyState(welcome, archived.length)}</div>`}</div>
 ${archived.length ? `<details><summary>Archived (${archived.length}): finished reviews after 3 quiet days, others after 14</summary><div class="archived" data-rows><div class="list">${archived.map(inboxRow).join("")}</div></div></details>` : ""}
@@ -662,7 +680,7 @@ const ASSET_TYPES = {
 function emptyState(welcome, archivedCount) {
   if (archivedCount) return '<div class="empty">Nothing open. The archived reviews are below.</div>';
   return `<div class="empty intro"><h2>${welcome ? "You're all set" : "No reviews yet"}</h2>
-<p>Open Claude Code in a repo, on a branch with changes, and type <code>/pr-report</code>. The report opens in a new tab, and every review on this machine shows up here.</p>
+<p>Open your coding agent in a repo, on a branch with changes, and ask it for a PR report. In Claude Code, type <code>/pr-report</code>. The report opens in a new tab, and every review on this machine shows up here.</p>
 <ul class="cmds"><li><code>/pr-report</code><span>compare with the PR base or the default branch</span></li><li><code>/pr-report develop</code><span>compare with another branch</span></li><li><code>/pr-report resume</code><span>pick a review up in a new Claude Code session</span></li></ul></div>`;
 }
 
@@ -677,7 +695,7 @@ function setupPage() {
 function reviewPage(r, round) {
   const entry = r.rounds.find((x) => x.round === round) ?? r.rounds.at(-1);
   if (!entry || !existsSync(roundFile(entry))) return null;
-  const config = { live: true, id: r.id, round: entry.round, token: pageToken, api: `/api/r/${encodeURIComponent(r.id)}` };
+  const config = { live: true, id: r.id, round: entry.round, token: pageToken, api: `/api/r/${encodeURIComponent(r.id)}`, agent: r.agent ?? null };
   // The page's base title (see viewer/src/lib/tab.ts), so the tab is right before the report loads.
   const title = `${r.branch} · ${r.repo.split("/").at(-1)}${entry.round > 1 ? ` · round ${entry.round}` : ""}`;
   return readFileSync(join(APP_DIR, "index.html"), "utf8")
@@ -1104,6 +1122,9 @@ async function handle(req, res, port) {
     r.drift = null;
     markHandled(r, "refresh");
     seedPr(r, bundle);
+    // Who published: the caller says so. Failing that, the build names the agent that made it.
+    noteAgent(r, req);
+    r.agent ??= cleanAgent(bundle.agent);
     if (!republished && round !== r.round) {
       r.round = round;
       r.phase = "reviewing";
@@ -1125,6 +1146,7 @@ async function handle(req, res, port) {
   const action = parts[3];
 
   if (admin) {
+    if (noteAgent(r, req)) broadcast(r);
     if (req.method === "GET" && action === "next-event") {
       if (deliver(r, res)) return;
       const wasListening = listening(r);

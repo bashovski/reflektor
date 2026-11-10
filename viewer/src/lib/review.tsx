@@ -4,7 +4,7 @@ import { type AgentPlan, type CommentStatus, type LiveState, type Phase, useLive
 import { SECTIONS } from "./meta";
 
 // Review comments live here. Served by the pr-report daemon, the page saves them to the repo's git
-// folder, asks live questions, and sends the review to Claude. Opened as a plain file, comments stay
+// folder, asks live questions, and sends the review to the agent. Opened as a plain file, comments stay
 // in this browser and can be copied.
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
@@ -26,7 +26,7 @@ type ReviewState = {
   openComposer: (target: CommentTarget, options?: { editingId?: string; kind?: CommentKind }) => void;
   closeComposer: () => void;
   submit: () => Promise<void>;
-  copyForClaude: () => Promise<boolean>;
+  copyForAgent: () => Promise<boolean>;
   questions: LiveQuestion[];
   questionsFor: (target: CommentTarget) => LiveQuestion[];
   ask: (target: CommentTarget, text: string) => Promise<void>;
@@ -270,7 +270,7 @@ export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children:
     }
   }, [api, draft, branch]);
 
-  const copyForClaude = useCallback(() => copyText(toMarkdown(bundle, round, comments)), [bundle, round, comments]);
+  const copyForAgent = useCallback(() => copyText(toMarkdown(bundle, round, comments)), [bundle, round, comments]);
 
   // Live questions: the daemon streams them back with answers. Asked ones show at once, before the stream confirms them.
   const [asked, setAsked] = useState<LiveQuestion[]>([]);
@@ -338,7 +338,7 @@ export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children:
     openComposer,
     closeComposer,
     submit,
-    copyForClaude,
+    copyForAgent,
     questions,
     questionsFor,
     ask,

@@ -456,7 +456,7 @@ if (!files.length) {
 // Every round shows the whole branch, so the reviewer approves what will be merged. sinceRound holds
 // what changed since the round the reviewer sent, for the page's "since round N" view. The last
 // report.json is carried forward: its line references move to where those lines are now, and the
-// ones on changed lines are listed for Claude to check.
+// ones on changed lines are listed for the agent to check.
 
 const commitExists = (sha) => Boolean(sha) && tryGit("cat-file", "-e", `${sha}^{commit}`) !== null;
 const toHead = to === "HEAD" ? headSha : to;
@@ -565,7 +565,7 @@ if (args.update) {
 
 // ------------------------------------------------------------------ safety checks
 // Fixed rules on added lines: likely secrets, and database migrations that can break a deploy.
-// These are facts for Claude to judge; secret values are never printed in full.
+// These are facts for the agent to judge; secret values are never printed in full.
 
 const SECRET_RULES = [
   ["aws-key", "AWS access key", /\b((?:AKIA|ASIA)[0-9A-Z]{16})\b/],

@@ -5,7 +5,7 @@ import { fetchRound } from "../lib/live";
 import { useReview } from "../lib/review";
 import { useRounds } from "../lib/rounds";
 
-// When Claude publishes a newer round, the open page offers it instead of reloading by itself.
+// When the agent publishes a newer round, the open page offers it instead of reloading by itself.
 export const RoundBanner = () => {
   const { round, latestRound, mode } = useReview();
   const { showRound } = useRounds();

@@ -1,0 +1,30 @@
+{
+  "claude-code": {
+    "name": "Claude",
+    "product": "Claude Code",
+    "resume": "/pr-report resume",
+    "env": ["CLAUDECODE"],
+    "paths": ["/.claude/skills/"],
+    "aliases": ["claude"]
+  },
+  "codex": {
+    "name": "Codex",
+    "product": "Codex",
+    "aliases": ["openai codex", "codex cli"]
+  },
+  "cursor": {
+    "name": "Cursor",
+    "product": "Cursor",
+    "aliases": ["cursor agent"]
+  },
+  "gemini-cli": {
+    "name": "Gemini",
+    "product": "Gemini CLI",
+    "aliases": ["gemini"]
+  },
+  "copilot": {
+    "name": "Copilot",
+    "product": "GitHub Copilot",
+    "aliases": ["github copilot", "copilot cli"]
+  }
+}

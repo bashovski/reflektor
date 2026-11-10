@@ -1,13 +1,15 @@
 import { MessagesSquare } from "lucide-react";
+import { useAgent } from "../lib/agent";
 import { COMMENT_KINDS, REPLY_STATUS } from "../lib/meta";
 import { describeTarget } from "../lib/review";
 import { useReport } from "../lib/state";
 import { RichText } from "./RichText";
 import { cx, Pill, RefLink } from "./ui";
 
-// The comments from the last review round, each with Claude's reply.
+// The comments from the last review round, each with the agent's reply.
 export const PreviousReview = () => {
   const { bundle } = useReport();
+  const agent = useAgent();
   const previous = bundle.previousReview;
   const replies = bundle.report.review?.replies ?? [];
   if (!previous) return null;
@@ -49,7 +51,7 @@ export const PreviousReview = () => {
                     {reply.ref && <RefLink refTo={reply.ref} className="ml-auto" />}
                   </>
                 ) : (
-                  <span className="text-xs text-amber-600 dark:text-amber-400">Claude did not reply to this comment.</span>
+                  <span className="text-xs text-amber-600 dark:text-amber-400">{agent.Name} did not reply to this comment.</span>
                 )}
               </div>
             </li>

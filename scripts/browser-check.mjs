@@ -34,6 +34,8 @@ const env = {
   PR_REPORT_GITHUB_TOKEN: "stub-token",
   PR_REPORT_PR_POLL_SECONDS: "1",
   GH_CONFIG_DIR: join(tmp, "gh-config"),
+  // The suite's calls say which agent they are, so the page words are the same wherever the suite runs.
+  PR_REPORT_AGENT: "claude-code",
 };
 
 const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
@@ -106,6 +108,14 @@ try {
   await expectVisible(page.getByRole("heading", { name: /Save and list books in the library/ }), "the report after the draft");
   await expectVisible(page.getByRole("button", { name: "LGTM" }), "Send once the report is ready");
 
+  // The page names the agent on the other side, and follows when another one picks the review up. One the table
+  // does not know is shown under the name made from its id.
+  await expectVisible(page.getByText(/were written by Claude and may be wrong/), "the agent's name in the page");
+  review("resume", "--id", id, "--agent", "zed-agent");
+  await expectVisible(page.getByText(/were written by Zed Agent and may be wrong/), "the name of another agent that picked the review up");
+  review("resume", "--id", id);
+  await expectVisible(page.getByText(/were written by Claude and may be wrong/), "the first agent's name once it calls again");
+
   // The owner menu links to the owner's page, the inbox, and a new pull request filled in from the report.
   await page.getByRole("button", { name: /acme-labs/ }).click();
   await expectVisible(page.getByRole("menuitem", { name: /Open Owner Page/ }), "the owner page link");
@@ -145,6 +155,9 @@ try {
   await page.keyboard.press("Control+Enter");
   await expectVisible(page.getByText("Sent round 1 with 2 comments"), "the sent state");
   await expectVisible(page.getByText("No Claude session is listening for this review."), "the warning that no session listens", 25_000);
+  // The inbox row names the review's own agent; its groups and filters keep the neutral words, since they span agents.
+  const sentInbox = await (await fetch(`http://127.0.0.1:${port}/`)).text();
+  if (!sentInbox.includes(">Sent to Claude</span>") || !sentInbox.includes('"Sent to the agent"')) fail("the inbox does not name the agent a review was sent to");
   await expectVisible(page.getByRole("button", { name: "/pr-report resume" }), "the resume command");
 
   // 5. The agent picks it up, posts a plan, the reviewer approves it in the page, progress shows.
@@ -236,7 +249,7 @@ try {
   const unexpected = errors.filter((e) => !/favicon/.test(e));
   if (unexpected.length) fail(`errors in the page:\n${unexpected.join("\n")}`);
   console.log(
-    "browser: setup page, draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, user menu, changed-code warning, pull request opened and merged, inbox grouping and search, and the setup offer all worked",
+    "browser: setup page, draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, user menu, agent name, changed-code warning, pull request opened and merged, inbox grouping and search, and the setup offer all worked",
   );
 } catch (e) {
   fail(e.stderr?.toString() || e.stack || e.message);

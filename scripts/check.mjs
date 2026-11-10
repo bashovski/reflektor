@@ -32,6 +32,43 @@ const fail = (message) => {
 try {
   run(bash, [join(root, "fixtures", "make-books-repo.sh"), repo]);
 
+  // The copy of the skill for an agent other than Claude Code: the folder written out in every command, Claude Code's
+  // own front matter left out, and the two fields every agent needs kept.
+  const { portableSkillText } = await import("./portable-skill.mjs");
+  const portable = portableSkillText(readFileSync(join(root, "skill/SKILL.md"), "utf8"), "C:\\Users\\x\\.agents\\skills\\pr-report");
+  const frontMatter = portable.slice(0, portable.indexOf("\n---", 4));
+  if (portable.includes("CLAUDE_SKILL_DIR") || /^(allowed-tools|argument-hint):/m.test(frontMatter) || !/^name: pr-report$/m.test(frontMatter) || !/^description: /m.test(frontMatter))
+    fail("the skill text for other agents still has Claude Code's placeholder or front matter, or lost its name or description");
+  if (!portable.includes('node "C:/Users/x/.agents/skills/pr-report/scripts/collect.mjs" --repo .')) fail("the skill text for other agents does not spell out the skill's folder in its commands");
+
+  // Which agent runs pr-report: said outright, read from the shell's variables, from the skills folder a script was
+  // started from, or from the agent's own answer, in that order. Every case names its own variables, so the result does
+  // not depend on the shell this check runs in.
+  const { detectAgent, decodeAgent, encodeAgent } = await import("../skill/scripts/agent.mjs");
+  const elsewhere = join(root, "skill/scripts/review.mjs");
+  const who = (options) => {
+    const a = detectAgent({ env: {}, launchPath: elsewhere, ...options });
+    return a ? `${a.id}|${a.name}|${a.product}|${a.resume}|${a.version}|${a.source}` : "nobody";
+  };
+  const agentCases = [
+    ["a flag wins over the shell", { id: "codex", env: { CLAUDECODE: "1" } }, "codex|Codex|Codex|null|null|flag"],
+    ["PR_REPORT_AGENT", { env: { PR_REPORT_AGENT: "claude-code", AI_AGENT: "codex" } }, "claude-code|Claude|Claude Code|/pr-report resume|null|flag"],
+    ["AI_AGENT with a version", { env: { AI_AGENT: "claude-code_2-1-321_agent" } }, "claude-code|Claude|Claude Code|/pr-report resume|2.1.321|env"],
+    ["AI_AGENT of an agent with no entry", { env: { AI_AGENT: "some-new-agent_0-9_agent" } }, "some-new-agent|Some New Agent|Some New Agent|null|0.9|env"],
+    ["a marker only one agent sets", { env: { CLAUDECODE: "1" } }, "claude-code|Claude|Claude Code|/pr-report resume|null|env"],
+    ["the skills folder, Windows", { launchPath: "C:\\Users\\k\\.claude\\skills\\pr-report\\scripts\\review.mjs" }, "claude-code|Claude|Claude Code|/pr-report resume|null|path"],
+    ["the skills folder, POSIX", { launchPath: "/home/k/.claude/skills/pr-report/scripts/review.mjs" }, "claude-code|Claude|Claude Code|/pr-report resume|null|path"],
+    ["a worktree under .claude is not a skills folder", { launchPath: "/code/app/.claude/worktrees/x/skill/scripts/review.mjs" }, "nobody"],
+    ["the agent's own answer, known", { name: "Gemini CLI" }, "gemini-cli|Gemini|Gemini CLI|null|null|self"],
+    ["the agent's own answer, unknown and untidy", { name: "  Zed\n Agent " }, "zed-agent|Zed Agent|Zed Agent|null|null|self"],
+    ["nothing to go on", {}, "nobody"],
+  ];
+  for (const [what, options, expected] of agentCases) if (who(options) !== expected) fail(`agent detection, ${what}: got ${who(options)}, expected ${expected}`);
+  // What travels in the header is cleaned on arrival: one line, capped, and nothing without a name.
+  const arrived = decodeAgent(encodeAgent({ id: "X y", name: `Agent\u0007 ${"z".repeat(80)}`, product: "", resume: null }));
+  if (arrived?.name.length !== 40 || /[\u0000-\u001f]/.test(arrived.name) || arrived.product !== arrived.name || decodeAgent(encodeAgent({ id: "x" })) !== null || decodeAgent("%7B") !== null)
+    fail(`an agent sent to the daemon is not cleaned: ${JSON.stringify(arrived)}`);
+
   // The PR type pill is drawn twice, by the viewer (TAGS in meta.ts) and by the inbox (TAGS in daemon.mjs), from two lists
   // that cannot share code: the daemon uses Node built-ins only. So the lists are compared here instead.
   // The third-party notices file ships with the skill and must name every package the viewer bundles.
@@ -176,7 +213,7 @@ try {
   ]);
   for (const line of built.split("\n").filter((l) => l.startsWith("warning:"))) fail(line);
 
-  // A draft: the facts before Claude's report, every file listed, nothing that needs the report.
+  // A draft: the facts before the agent's report, every file listed, nothing that needs the report.
   run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--draft", "--out", join(tmp, "draft.json")]);
   const draft = JSON.parse(readFileSync(join(tmp, "draft.json"), "utf8"));
   const listed = draft.report.sections.flatMap((s) => s.files).length;
@@ -253,6 +290,7 @@ async function daemonFlow() {
     PR_REPORT_GITHUB_TOKEN: "stub-token",
     PR_REPORT_PR_POLL_SECONDS: "1",
     GH_CONFIG_DIR: join(tmp, "gh-config"),
+    PR_REPORT_AGENT: "claude-code",
   };
   const reviewDir = join(tmp, "review");
   const review = (...args) => run("node", [join(root, "skill/scripts/review.mjs"), ...args], env);
@@ -319,6 +357,16 @@ async function daemonFlow() {
     writeFileSync(join(env.PR_REPORT_HOME, "cache", "avatars", "stale"), "x");
     const purged = await (await fetch(`${base}/api/cache/purge`, { method: "POST", headers: { "x-review-token": config.token } })).json();
     if (!(purged.removed >= 1) || existsSync(join(env.PR_REPORT_HOME, "cache")) || !existsSync(join(env.PR_REPORT_HOME, "daemon.json"))) fail("purging the cache did not remove exactly the cache folder");
+
+    // The page is told which agent it talks to: in its config, and live from whoever called last.
+    if (config.agent?.name !== "Claude" || (await state()).agent?.product !== "Claude Code") fail(`the page does not know the agent that opened the review: ${JSON.stringify(config.agent)}`);
+    review("resume", "--id", id, "--agent", "codex");
+    if ((await state()).agent?.name !== "Codex") fail("a call from another agent did not change the agent the page shows");
+    // A call that names nobody, such as one typed in a plain terminal, leaves the agent as it was.
+    run("node", [join(root, "skill/scripts/review.mjs"), "resume", "--id", id], { ...env, PR_REPORT_AGENT: "", AI_AGENT: "", CLAUDECODE: "" });
+    if ((await state()).agent?.name !== "Codex") fail("a call that names no agent cleared the one the page shows");
+    review("resume", "--id", id);
+    if ((await state()).agent?.name !== "Claude") fail("the agent did not change back with the next call");
 
     // The inbox reloads on state events; the first one on connect must match what it shows, or it reloads forever.
     const inbox = await (await fetch(`${base}/`)).text();

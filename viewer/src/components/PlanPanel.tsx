@@ -1,5 +1,6 @@
 import { Check, ListOrdered, RotateCcw } from "lucide-react";
 import { useState } from "react";
+import { useAgent } from "../lib/agent";
 import { useReview } from "../lib/review";
 import { RichText } from "./RichText";
 import { cx } from "./ui";
@@ -11,13 +12,14 @@ const KINDS = [
   ["skip", "Skip"],
 ] as const;
 
-// Claude's plan for the sent comments. The reviewer can change a step's kind, add a note,
+// The agent's plan for the sent comments. The reviewer can change a step's kind, add a note,
 // and approve it or ask for a new plan.
 export const PlanPanel = () => {
   const { plan, comments, decidePlan } = useReview();
   const [kinds, setKinds] = useState<Record<number, string>>({});
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const agent = useAgent();
   if (!plan) return null;
 
   const decide = async (decision: "approve" | "changes") => {
@@ -31,9 +33,9 @@ export const PlanPanel = () => {
       <div className="flex items-center gap-2">
         <ListOrdered className="size-4 text-violet-500" />
         <span className="font-semibold">
-          Claude's plan for your {comments.length} {comments.length === 1 ? "comment" : "comments"}
+          {agent.Name}'s plan for your {comments.length} {comments.length === 1 ? "comment" : "comments"}
         </span>
-        <span className="text-xs text-zinc-500">Change a kind if Claude read a comment wrong.</span>
+        <span className="text-xs text-zinc-500">Change a kind if {agent.name} read a comment wrong.</span>
       </div>
       {plan.note && <RichText text={plan.note} className="block text-sm text-zinc-600 dark:text-zinc-400" />}
       <ol className="space-y-1.5">
