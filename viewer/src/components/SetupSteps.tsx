@@ -68,7 +68,7 @@ export const SetupFrame = ({
         <span className="font-semibold tracking-tight text-[var(--text)]">pr-report</span>
         <span className="inline-flex items-center gap-1.5" aria-label={`Step ${index + 1} of ${steps.length}`}>
           {steps.map((s, i) => (
-            <span key={s.id} className={cx("h-1.5 rounded-full transition-all", i === index ? "w-6 bg-blue-600" : "w-1.5 bg-zinc-500/30")} />
+            <span key={s.id} className={cx("h-1.5 transition-all", i === index ? "w-6 bg-blue-600" : "w-1.5 bg-zinc-500/30")} />
           ))}
         </span>
       </div>

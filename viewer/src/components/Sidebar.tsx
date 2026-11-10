@@ -2,7 +2,7 @@ import { Braces, Check, FlaskConical, Route } from "lucide-react";
 import { useEffect, useState } from "react";
 import { REVIEW, SECTIONS } from "../lib/meta";
 import { sectionDomId, useReport } from "../lib/state";
-import { cx, Digit } from "./ui";
+import { cx, Digit, Meter } from "./ui";
 
 // The section under the sticky top bar right now, so the path can mark where the reader is. Sections
 // far off screen may not be mounted, so the check takes the last mounted one whose top has passed the line.
@@ -40,7 +40,6 @@ export const Sidebar = () => {
   const { bundle, isViewed, viewedCount, setSectionOpen, shownSections } = useReport();
   const { report, diff } = bundle;
   const total = diff.stats.files;
-  const pct = total ? Math.round((viewedCount / total) * 100) : 0;
   const active = useActiveSection(shownSections.map((s) => s.index));
 
   const goToSection = (index: number) => {
@@ -57,9 +56,7 @@ export const Sidebar = () => {
             {viewedCount}/{total}
           </span>
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-zinc-500/15">
-          <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
-        </div>
+        <Meter value={viewedCount} total={total} fill="bg-emerald-500" className="h-1.5" />
       </div>
 
       <ol className="space-y-0.5">
@@ -90,13 +87,8 @@ export const Sidebar = () => {
                     {done}/{paths.length}
                   </span>
                 </span>
-                {/* How much of this section is viewed, in the level's color until it is complete. */}
-                <span className="ml-[30px] block h-0.5 w-[calc(100%-30px)] overflow-hidden rounded-full bg-zinc-500/10">
-                  <span
-                    className={cx("block h-full rounded-full transition-all", complete ? "bg-emerald-500" : level.rail)}
-                    style={{ width: `${paths.length ? Math.round((done / paths.length) * 100) : 0}%` }}
-                  />
-                </span>
+                {/* How much of this section is viewed, a dash for each file, in the level's color until it is complete. */}
+                <Meter value={done} total={paths.length} fill={complete ? "bg-emerald-500" : level.rail} className="ml-[30px] h-0.5 w-[calc(100%-30px)]" />
               </button>
             </li>
           );

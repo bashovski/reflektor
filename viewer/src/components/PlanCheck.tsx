@@ -4,7 +4,7 @@ import { type Agent, useAgent } from "../lib/agent";
 import { useReport } from "../lib/state";
 import { QuickActions, TargetComments } from "./Comments";
 import { RichText } from "./RichText";
-import { cx, RefLink } from "./ui";
+import { cx, Meter, RefLink } from "./ui";
 
 const STATUS: Record<PlanStatus, { label: string; icon: typeof CircleCheck; className: string }> = {
   done: { label: "Done", icon: CircleCheck, className: "text-emerald-600 dark:text-emerald-400" },
@@ -36,9 +36,8 @@ export const PlanCheck = () => {
         <span className="text-sm text-zinc-600 dark:text-zinc-400">
           {done} of {planned.length} planned items done
         </span>
-        <span className="h-1.5 w-28 overflow-hidden rounded-full bg-zinc-500/15">
-          <span className={cx("block h-full rounded-full", pct === 100 ? "bg-emerald-500" : "bg-amber-500")} style={{ width: `${pct}%` }} />
-        </span>
+        {/* A plan with nothing planned counts as done, so its one cell is full. */}
+        <Meter value={planned.length ? done : 1} total={planned.length || 1} fill={pct === 100 ? "bg-emerald-500" : "bg-amber-500"} className="h-1.5 w-28" />
         <span className="w-full text-xs text-zinc-500">Plan: {plan.source}</span>
       </div>
       <ul className="space-y-1.5">

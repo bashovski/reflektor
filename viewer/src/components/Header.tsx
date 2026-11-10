@@ -170,14 +170,18 @@ export const Hero = () => {
   );
 };
 
-// Must read, skim and skip as one bar, the way the coverage bar is drawn, with the counts beside it.
+// Must read, skim and skip as one meter, with the counts beside it: a cell for each file while they fit, and one
+// part for each level, as wide as its share, when there are more.
+const LEVEL_CELLS = 16;
 const LevelBar = ({ counts }: { counts: Record<"must" | "skim" | "skip", number> }) => {
   const levels = ["must", "skim", "skip"] as const;
   const total = levels.reduce((n, l) => n + counts[l], 0) || 1;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs">
-      <span className="flex h-1.5 w-24 overflow-hidden rounded-full bg-zinc-500/10" aria-hidden>
-        {levels.map((l) => counts[l] > 0 && <span key={l} className={cx("h-full", REVIEW[l].rail)} style={{ width: `${(counts[l] / total) * 100}%` }} />)}
+      <span className="flex h-1.5 w-24 gap-0.5" aria-hidden>
+        {total <= LEVEL_CELLS
+          ? levels.flatMap((l) => Array.from({ length: counts[l] }, (_, i) => <span key={`${l}${i}`} className={cx("h-full min-w-0 flex-1", REVIEW[l].rail)} />))
+          : levels.map((l) => counts[l] > 0 && <span key={l} className={cx("h-full min-w-0 basis-0", REVIEW[l].rail)} style={{ flexGrow: counts[l] }} />)}
       </span>
       {levels.map((l) => (
         <span key={l} className="inline-flex items-center gap-1 text-zinc-600 tabular-nums dark:text-zinc-400">

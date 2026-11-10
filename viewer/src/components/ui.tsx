@@ -15,6 +15,29 @@ export const Pill = ({ className, children }: { className: string; children: Rea
 
 export const Dot = ({ className }: { className: string }) => <span className={cx("size-1.5 shrink-0 rounded-full", className)} />;
 
+// A meter: how much of something is done. A row of square cells and not one round bar, so it reads as a count:
+// one cell for each thing while there are few (the files of a section, the items of a plan), and at most
+// METER_CELLS when there are many. A cell can be part full, so the filled length stays exact either way.
+// `fill` is the color of the filled part, and `className` gives the height and the width. The number is
+// always written next to a meter, so screen readers skip the drawing.
+const METER_CELLS = 24;
+export const Meter = ({ value, total, cells, fill, className }: { value: number; total: number; cells?: number; fill: string; className?: string }) => {
+  const count = cells ?? Math.max(1, Math.min(total, METER_CELLS));
+  const filled = total > 0 ? Math.min(1, Math.max(0, value / total)) * count : 0;
+  return (
+    <span aria-hidden className={cx("flex gap-0.5", className)}>
+      {Array.from({ length: count }, (_, i) => {
+        const part = Math.min(1, Math.max(0, filled - i));
+        return (
+          <span key={i} className="h-full min-w-0 flex-1 bg-zinc-500/15">
+            {part > 0 && <span className={cx("block h-full transition-all", fill)} style={{ width: `${part * 100}%` }} />}
+          </span>
+        );
+      })}
+    </span>
+  );
+};
+
 // A number inside a small circle. Centering the line of text leaves the digit about a pixel high, because a
 // line keeps room under the baseline for descenders, and a digit has none. `text-box` cuts the line down to
 // the digit itself, from the top of a capital to the baseline, so the circle centers what the eye sees. Where a
