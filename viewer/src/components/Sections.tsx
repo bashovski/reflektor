@@ -84,9 +84,9 @@ const SectionCard = ({ section, index, paths }: { section: Section; index: numbe
                 const HIcon = hm.icon;
                 const target: CommentTarget = { type: "highlight", section: section.kind, index: i, kind: h.kind, text: h.text, fix: h.fix };
                 return (
-                  <li key={i} id={`hl-${index}-${i}`} className="group/row relative flex flex-wrap items-start gap-x-3 gap-y-1 rounded-lg px-2 py-2 hover:bg-zinc-500/[0.04]">
+                  <li key={i} id={`hl-${index}-${i}`} className="group/row relative flex flex-wrap items-start gap-x-3 gap-y-1 rounded-control px-2 py-2 hover:bg-zinc-500/[0.04]">
                     <span className={cx("label-caps inline-flex w-[94px] shrink-0 items-center gap-1.5 text-[11px]", hm.className)}>
-                      <span className={cx("inline-flex size-5 shrink-0 items-center justify-center rounded-md", hm.tint)}>
+                      <span className={cx("inline-flex size-5 shrink-0 items-center justify-center rounded-control", hm.tint)}>
                         <HIcon className="size-3.5" />
                       </span>
                       {hm.label}
@@ -105,7 +105,7 @@ const SectionCard = ({ section, index, paths }: { section: Section; index: numbe
           )}
 
           {section.questions.length > 0 && (
-            <div className="rounded-lg border border-violet-500/25 bg-violet-500/[0.05] px-3 py-2.5">
+            <div className="rounded-control border border-violet-500/25 bg-violet-500/[0.05] px-3 py-2.5">
               <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-violet-700 dark:text-violet-300">
                 <CircleHelp className="size-3.5" />
                 Answer before you open the PR
@@ -138,7 +138,7 @@ export const ViewSwitch = () => {
     { value: "branch", label: "Whole branch", count: bundle.diff.files.length },
   ] as const;
   return (
-    <div className="inline-flex rounded-lg border border-[var(--border)] p-0.5 text-xs" role="radiogroup" aria-label="Which changes to show">
+    <div className="inline-flex rounded-control border border-[var(--border)] p-0.5 text-xs" role="radiogroup" aria-label="Which changes to show">
       {options.map((o) => (
         <button
           key={o.value}
@@ -147,7 +147,7 @@ export const ViewSwitch = () => {
           aria-checked={view === o.value}
           onClick={() => setView(o.value)}
           className={cx(
-            "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium",
+            "inline-flex items-center gap-1.5 rounded-control px-2.5 py-1 font-medium",
             view === o.value ? "bg-zinc-500/15 text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300",
           )}
         >

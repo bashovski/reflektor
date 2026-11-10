@@ -9,7 +9,7 @@ import { RichText } from "./RichText";
 import { cx, Pill, RefLink } from "./ui";
 
 const button =
-  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40";
+  "inline-flex items-center gap-1 rounded-control px-2 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40";
 const ghost = `${button} text-zinc-600 hover:bg-zinc-500/10 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100`;
 const primary = `${button} bg-blue-600 text-white hover:bg-blue-700`;
 
@@ -56,7 +56,7 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
   };
 
   return (
-    <div className="my-1.5 rounded-lg border border-blue-500/40 bg-[var(--surface)] p-2.5 font-sans" onClick={(e) => e.stopPropagation()}>
+    <div className="my-1.5 rounded-control border border-blue-500/40 bg-[var(--surface)] p-2.5 font-sans" onClick={(e) => e.stopPropagation()}>
       <p className="mb-1.5 text-[11px] text-zinc-500">{describeTarget(target)}</p>
       <textarea
         ref={ref}
@@ -65,7 +65,7 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
         onKeyDown={onKey}
         rows={3}
         placeholder={placeholder ?? "What should change, or what do you want to know?"}
-        className="w-full resize-y rounded-md border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-[13px] leading-relaxed outline-none placeholder:text-zinc-400 focus:border-blue-500"
+        className="w-full resize-y rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-[13px] leading-relaxed outline-none placeholder:text-zinc-400 focus:border-blue-500"
       />
       <div className="mt-1.5 flex items-center gap-2">
         <span className="hidden text-[11px] text-zinc-400 sm:inline">
@@ -124,7 +124,7 @@ export const CommentItem = ({ comment, compact }: { comment: ReviewComment; comp
   const tone = comment.kind ? COMMENT_KINDS[comment.kind].className : "bg-zinc-500/10 text-zinc-500 ring-zinc-500/25";
 
   return (
-    <div className={cx("group/comment flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] font-sans", compact ? "px-2 py-1.5" : "my-1.5 px-3 py-2")}>
+    <div className={cx("group/comment flex items-start gap-2 rounded-control border border-[var(--border)] bg-[var(--surface-2)] font-sans", compact ? "px-2 py-1.5" : "my-1.5 px-3 py-2")}>
       <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", tone)}>{kindLabel(comment, agent)}</Pill>
       <div className="min-w-0 flex-1 text-[13px] leading-snug">
         {comment.text ? <RichText text={comment.text} /> : null}
@@ -132,10 +132,10 @@ export const CommentItem = ({ comment, compact }: { comment: ReviewComment; comp
       </div>
       {editable && (
         <span className="flex shrink-0 gap-0.5 opacity-60 group-hover/comment:opacity-100">
-          <button type="button" title="Edit" onClick={() => openComposer(comment.target, { editingId: comment.id })} className="rounded p-1 hover:bg-zinc-500/10">
+          <button type="button" title="Edit" onClick={() => openComposer(comment.target, { editingId: comment.id })} className="rounded-control p-1 hover:bg-zinc-500/10">
             <Pencil className="size-3" />
           </button>
-          <button type="button" title="Delete" onClick={() => remove(comment.id)} className="rounded p-1 hover:bg-zinc-500/10">
+          <button type="button" title="Delete" onClick={() => remove(comment.id)} className="rounded-control p-1 hover:bg-zinc-500/10">
             <Trash2 className="size-3" />
           </button>
         </span>
@@ -155,7 +155,7 @@ export const QuestionThread = ({ question }: { question: LiveQuestion }) => {
   }, [question]);
 
   return (
-    <div className="rounded-lg border border-violet-500/30 bg-violet-500/[0.05] px-3 py-2 font-sans text-[13px] leading-snug">
+    <div className="rounded-control border border-violet-500/30 bg-violet-500/[0.05] px-3 py-2 font-sans text-[13px] leading-snug">
       <p className="flex items-start gap-2">
         <MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0 text-violet-500" />
         <span>
@@ -251,7 +251,7 @@ export const QuickActions = ({
         type="button"
         title="Comment"
         onClick={comment()}
-        className="absolute right-1.5 bottom-1 rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 text-zinc-500 opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-zinc-900 focus:opacity-100 dark:hover:text-zinc-100"
+        className="absolute right-1.5 bottom-1 rounded-control border border-[var(--border)] bg-[var(--surface)] p-1 text-zinc-500 opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-zinc-900 focus:opacity-100 dark:hover:text-zinc-100"
       >
         <MessageSquarePlus className="size-3.5" />
       </button>
@@ -264,7 +264,7 @@ export const QuickActions = ({
       <button type="button" className={ghost} onClick={comment()}>
         <MessageSquarePlus className="size-3.5" /> Comment
       </button>
-      <span className="inline-flex overflow-hidden rounded-md border border-[var(--border)] text-xs font-medium">
+      <span className="inline-flex overflow-hidden rounded-control border border-[var(--border)] text-xs font-medium">
         <button type="button" className="inline-flex items-center gap-1 px-2.5 py-1 text-blue-700 hover:bg-blue-600/10 dark:text-blue-300" onClick={() => add(target, { kind: "fix" })}>
           <Wrench className="size-3.5" /> {labels?.fix ?? (variant === "todo" ? "Do this" : "Fix this")}
         </button>

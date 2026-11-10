@@ -20,7 +20,7 @@ export const SetupBanner = () => {
         <a href="/setup" className="font-medium text-violet-700 underline-offset-2 hover:underline dark:text-violet-300">
           Set up pr-report
         </a>
-        <button type="button" onClick={dismiss} title="Not now" className="ml-auto rounded p-1 text-zinc-500 hover:bg-zinc-500/10">
+        <button type="button" onClick={dismiss} title="Not now" className="ml-auto rounded-control p-1 text-zinc-500 hover:bg-zinc-500/10">
           <X className="size-4" />
         </button>
       </div>

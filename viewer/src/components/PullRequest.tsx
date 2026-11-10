@@ -33,7 +33,7 @@ export const MergedBanner = () => {
           href={pr.url}
           target="_blank"
           rel="noreferrer"
-          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 px-2.5 py-1 text-xs font-medium hover:bg-violet-500/10"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-control border border-violet-500/40 px-2.5 py-1 text-xs font-medium hover:bg-violet-500/10"
         >
           View on GitHub <ExternalLink className="size-3" />
         </a>

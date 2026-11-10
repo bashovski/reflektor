@@ -39,7 +39,7 @@ const Primary = ({ label, onClick }: { label: string; onClick: () => void }) => 
   <button
     type="button"
     onClick={onClick}
-    className="inline-flex items-center gap-2.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+    className="inline-flex items-center gap-2.5 rounded-control bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
   >
     {label}
     <Kbd name="Enter" className="h-[18px] min-w-[18px] border-white/25 bg-white/15 text-white shadow-none" />
@@ -77,7 +77,7 @@ export const SetupFrame = ({
         <div className="mt-4">{children}</div>
         <div className="mt-8 flex flex-wrap items-center gap-3">
           {index > 0 && (
-            <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 rounded-control px-2.5 py-2 text-sm text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
               <ArrowLeft className="size-4" /> Back
             </button>
           )}
@@ -156,7 +156,7 @@ export const CodeThemeStep = () => {
         {codeThemesFor(other).find((t) => t.id === codeTheme[other])?.name} stays the {other} mode theme; both can change later in the gear of a report.
       </p>
       <div className="grid gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
-        <ul role="listbox" aria-label="Code theme" className="max-h-[380px] overflow-y-auto rounded-xl border border-[var(--border)] p-1">
+        <ul role="listbox" aria-label="Code theme" className="max-h-[380px] overflow-y-auto rounded-control border border-[var(--border)] p-1">
           {themes.map((t) => (
             <li key={t.id}>
               <button
@@ -166,7 +166,7 @@ export const CodeThemeStep = () => {
                 id={`code-theme-${t.id}`}
                 onClick={() => setCodeTheme(resolvedTheme, t.id)}
                 className={cx(
-                  "flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm",
+                  "flex w-full items-center justify-between rounded-control px-3 py-1.5 text-left text-sm",
                   t.id === selected ? "bg-blue-600/10 font-medium text-blue-700 dark:text-blue-300" : "hover:bg-zinc-500/[0.06]",
                 )}
               >
@@ -176,7 +176,7 @@ export const CodeThemeStep = () => {
             </li>
           ))}
         </ul>
-        <div className="min-w-0 overflow-hidden rounded-xl border border-[var(--border)] text-[12.5px]">
+        <div className="min-w-0 overflow-hidden rounded-control border border-[var(--border)] text-[12.5px]">
           <CodeFile file={{ name: "books.ts", contents: SAMPLE }} options={options} />
         </div>
       </div>

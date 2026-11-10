@@ -57,14 +57,14 @@ export const toDiffInput = (file: DiffFile): DiffInput | null => {
 };
 
 export const LineNoteBubble = ({ text }: { text: string }) => (
-  <div className="my-1.5 mr-3 ml-12 flex max-w-2xl items-start gap-2 rounded-lg border border-blue-500/20 border-l-[3px] border-l-blue-500 bg-blue-500/[0.06] px-3 py-2 font-sans text-[13px] leading-snug text-zinc-800 dark:text-zinc-200">
+  <div className="my-1.5 mr-3 ml-12 flex max-w-2xl items-start gap-2 rounded-control border border-blue-500/20 border-l-[3px] border-l-blue-500 bg-blue-500/[0.06] px-3 py-2 font-sans text-[13px] leading-snug text-zinc-800 dark:text-zinc-200">
     <MessageSquareText className="mt-0.5 size-3.5 shrink-0 text-blue-500" />
     <RichText text={text} />
   </div>
 );
 
 const FindingBubble = ({ finding }: { finding: Finding }) => (
-  <div className={cx("my-1.5 mr-3 ml-12 flex max-w-2xl items-start gap-2 rounded-lg border bg-[var(--surface)] px-3 py-2 font-sans text-[13px] leading-snug", SEVERITY[finding.severity].border)}>
+  <div className={cx("my-1.5 mr-3 ml-12 flex max-w-2xl items-start gap-2 rounded-control border bg-[var(--surface)] px-3 py-2 font-sans text-[13px] leading-snug", SEVERITY[finding.severity].border)}>
     <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-red-500" />
     <span>
       {finding.kind === "secret" && <span className="font-semibold">{finding.rule}. </span>}
@@ -213,7 +213,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
       className={cx("surface overflow-clip border", current === path && "ring-2 ring-blue-500/40")}
     >
       <div className={cx("sticky top-14 z-10 flex items-center gap-2 bg-[var(--surface-2)] px-2 py-1.5 sm:px-3", open && "border-b border-[var(--border)]")}>
-        <button type="button" onClick={() => setFileOpen(path, !open)} className="rounded p-0.5 text-zinc-400 hover:bg-zinc-500/10" title={open ? "Collapse" : "Expand"}>
+        <button type="button" onClick={() => setFileOpen(path, !open)} className="rounded-control p-0.5 text-zinc-400 hover:bg-zinc-500/10" title={open ? "Collapse" : "Expand"}>
           <ChevronRight className={cx("size-4 transition-transform", open && "rotate-90")} />
         </button>
         <span className={cx("w-14 shrink-0 text-[11px] font-medium", status.className)}>{status.label}</span>
@@ -235,7 +235,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
             <LocCount additions={file.additions} deletions={file.deletions} />
             <DiffBar additions={file.additions} deletions={file.deletions} />
           </span>
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[var(--border)] px-2 py-0.5 text-xs text-zinc-600 select-none hover:bg-zinc-500/5 dark:text-zinc-400">
+          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-control border border-[var(--border)] px-2 py-0.5 text-xs text-zinc-600 select-none hover:bg-zinc-500/5 dark:text-zinc-400">
             <input type="checkbox" checked={viewed} onChange={() => toggleViewed(path)} className="size-3.5 accent-blue-600" />
             Viewed
           </label>
@@ -270,7 +270,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
           {coverage && coverage.uncovered.length > 0 && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[var(--border)] px-4 py-2 text-xs text-zinc-600 dark:text-zinc-400">
               <span className="inline-flex items-center gap-1.5 font-medium text-red-600 dark:text-red-400">
-                <span className="h-3 w-[3px] rounded-full bg-red-500" />
+                <span className="h-3 w-[3px] bg-red-500" />
                 Tests never run new lines
               </span>
               {formatRanges(coverage.uncovered).map((r) => {
@@ -280,7 +280,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
                     key={r}
                     type="button"
                     onClick={() => setSelected({ start, end, side: "additions" })}
-                    className="rounded bg-zinc-500/10 px-1.5 py-0.5 font-mono text-[11px] hover:bg-zinc-500/20"
+                    className="rounded-control bg-zinc-500/10 px-1.5 py-0.5 font-mono text-[11px] hover:bg-zinc-500/20"
                   >
                     {r}
                   </button>

@@ -33,7 +33,7 @@ export const Choice = <T extends string>({
         type="button"
         onClick={() => onChange(o.value)}
         className={cx(
-          "flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left",
+          "flex flex-col items-start gap-0.5 rounded-control border px-3 py-2 text-left",
           value === o.value ? "border-blue-500 bg-blue-500/[0.06] ring-1 ring-blue-500" : "border-[var(--border)] hover:bg-zinc-500/[0.06]",
         )}
       >
@@ -61,11 +61,11 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
       ref={ref}
       onClose={onClose}
       onClick={(e) => e.target === ref.current && onClose()}
-      className="surface m-auto w-[min(480px,94vw)] rounded-xl border p-0 text-[var(--text)] shadow-float"
+      className="surface m-auto w-[min(480px,94vw)] rounded-control border p-0 text-[var(--text)] shadow-float"
     >
       <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
         <h2 className="font-semibold">Settings</h2>
-        <button type="button" onClick={onClose} className="rounded p-1 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
+        <button type="button" onClick={onClose} className="rounded-control p-1 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
           <X className="size-4" />
         </button>
       </div>
@@ -109,7 +109,7 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
                 <select
                   value={codeTheme[mode]}
                   onChange={(e) => setCodeTheme(mode, e.target.value as BundledTheme)}
-                  className="rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-sm text-[var(--text)] outline-none focus:border-blue-500"
+                  className="rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-sm text-[var(--text)] outline-none focus:border-blue-500"
                 >
                   {codeThemesFor(mode).map((t) => (
                     <option key={t.id} value={t.id}>

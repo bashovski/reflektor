@@ -10,6 +10,10 @@
   /* The one drop shadow in the interface, for what floats over the page: menus, dialogs and the review bar
      (`shadow-float`). The inbox menus in skill/scripts/daemon.mjs use the same values. */
   --shadow-float: 0 12px 32px -12px rgb(0 0 0 / 0.3), 0 2px 6px -2px rgb(0 0 0 / 0.12);
+  /* The corner of every control and of everything that floats: buttons, inputs, badges, menus, dialogs and
+     comment boxes (`rounded-control`). One size, so changing it here changes them all. Blocks on the page have
+     no rounding, and only dots, avatars of people and number marks are round. */
+  --radius-control: 2px;
 }
 
 /* Tailwind v4 gives buttons the default arrow cursor. */
@@ -59,7 +63,7 @@ body {
 
 /* A block on the page: a section, a file, the plan check and the like. Blocks have square corners, so a card
    takes `surface border` and no rounding. Things that float over the page (menus, dialogs, the review bar) and
-   small controls keep theirs.
+   controls take `rounded-control`.
 
    Blocks are flat: the hairline border is what sets one apart from the page, and nothing that sits on the page
    has a shadow. A thing that floats adds `shadow-float`. This rule sets no shadow of its own because it is

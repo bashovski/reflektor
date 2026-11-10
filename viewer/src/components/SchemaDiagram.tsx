@@ -14,7 +14,7 @@ const STATUS: Record<SchemaStatus, { label: string; pill: string; row: string }>
 type Line = { key: string; d: string; enforced: boolean; end: { x: number; y: number } };
 
 const TableCard = ({ table, register }: { table: SchemaTable; register: (key: string, el: HTMLElement | null) => void }) => (
-  <div className={cx("overflow-hidden rounded-lg border bg-[var(--surface)]", table.status === "existing" ? "border-dashed border-zinc-400/50" : "border-[var(--border)]")}>
+  <div className={cx("overflow-hidden rounded-control border bg-[var(--surface)]", table.status === "existing" ? "border-dashed border-zinc-400/50" : "border-[var(--border)]")}>
     <div ref={(el) => register(`${table.name}.`, el)} className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5">
       <Sheet className="size-3.5 text-zinc-500" />
       <span className="font-mono text-[13px] font-semibold">{table.name}</span>
@@ -96,7 +96,7 @@ export const SchemaDiagram = () => {
   const existing = tables.filter((t) => t.status === "existing");
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--bg)] p-4">
+    <div className="rounded-control border border-[var(--border)] bg-[var(--bg)] p-4">
       <div ref={container} className="relative grid gap-x-20 gap-y-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
         <div className="space-y-4">
           {touched.map((t) => (
@@ -125,10 +125,10 @@ export const SchemaDiagram = () => {
           <span className="w-5 border-t border-dashed border-red-500" /> points to a table without a foreign key
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-sm bg-emerald-500/30" /> new
+          <span className="size-2.5 rounded-control bg-emerald-500/30" /> new
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="size-2.5 rounded-sm bg-amber-500/30" /> changed
+          <span className="size-2.5 rounded-control bg-amber-500/30" /> changed
         </span>
       </p>
     </div>

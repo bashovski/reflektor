@@ -110,7 +110,7 @@ export const OwnerMenu = () => {
     <Menu>
       <MenuButton
         title="Owner, all reports and pull request"
-        className="-ml-1 flex min-w-0 items-center gap-2 rounded-md py-1 pr-1 pl-1 hover:bg-zinc-500/10 focus:outline-none data-[focus]:ring-2 data-[focus]:ring-zinc-400/60 data-[open]:bg-zinc-500/10"
+        className="-ml-1 flex min-w-0 items-center gap-2 rounded-control py-1 pr-1 pl-1 hover:bg-zinc-500/10 focus:outline-none data-[focus]:ring-2 data-[focus]:ring-zinc-400/60 data-[open]:bg-zinc-500/10"
       >
         {owner}
         <ChevronDown className="size-3.5 shrink-0 text-zinc-400" />
@@ -118,14 +118,14 @@ export const OwnerMenu = () => {
       <MenuItems
         anchor="bottom start"
         transition
-        className="surface z-50 w-80 origin-top-left rounded-xl border p-1.5 text-sm shadow-float transition duration-100 ease-out [--anchor-gap:6px] focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0"
+        className="surface z-50 w-80 origin-top-left rounded-control border p-1.5 text-sm shadow-float transition duration-100 ease-out [--anchor-gap:6px] focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0"
       >
         {items.map((item) => (
           <MenuItem key={item.key}>
             <a
               href={item.href}
               {...(item.external ? { target: "_blank", rel: "noreferrer" } : {})}
-              className="group flex items-start gap-3 rounded-lg px-2.5 py-2 data-[focus]:bg-zinc-500/10"
+              className="group flex items-start gap-3 rounded-control px-2.5 py-2 data-[focus]:bg-zinc-500/10"
             >
               <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center text-zinc-500 [&>svg]:size-4">{item.icon}</span>
               <span className="min-w-0 flex-1">

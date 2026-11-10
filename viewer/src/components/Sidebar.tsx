@@ -71,7 +71,7 @@ export const Sidebar = () => {
                 type="button"
                 onClick={() => goToSection(i)}
                 aria-current={current ? "step" : undefined}
-                className={cx("group flex w-full flex-col gap-1.5 rounded-md px-2 py-1.5 text-left hover:bg-zinc-500/10", current && "bg-zinc-500/[0.08]")}
+                className={cx("group flex w-full flex-col gap-1.5 rounded-control px-2 py-1.5 text-left hover:bg-zinc-500/10", current && "bg-zinc-500/[0.08]")}
               >
                 <span className="flex w-full items-center gap-2.5">
                   <span
@@ -98,7 +98,7 @@ export const Sidebar = () => {
         )}
         {report.flows.map((f) => (
           <li key={f.id}>
-            <a href={`#flow-${f.id}`} className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
+            <a href={`#flow-${f.id}`} className="flex items-center gap-2.5 rounded-control px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
               <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-zinc-500/10 text-zinc-500">
                 <Route className="size-3" />
               </span>
@@ -109,7 +109,7 @@ export const Sidebar = () => {
       </ol>
 
       {!!report.contracts?.length && (
-        <a href="#contracts" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
+        <a href="#contracts" className="flex items-center gap-2 rounded-control px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
           <Braces className="size-3.5" />
           <span>
             <span className="num">{report.contracts.length}</span> {report.contracts.length === 1 ? "type or constant" : "types and constants"}
@@ -118,7 +118,7 @@ export const Sidebar = () => {
       )}
 
       {diff.coverage?.percent != null && (
-        <a href="#coverage" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
+        <a href="#coverage" className="flex items-center gap-2 rounded-control px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
           <FlaskConical className="size-3.5" />
           <span>
             Tests run <span className="num">{diff.coverage.percent}%</span> of new lines{diff.coverage.sources.some((s) => s.stale) && " (old coverage file)"}

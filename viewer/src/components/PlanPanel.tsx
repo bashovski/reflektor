@@ -50,7 +50,7 @@ export const PlanPanel = () => {
               <select
                 value={kind}
                 onChange={(e) => setKinds((prev) => ({ ...prev, [i]: e.target.value }))}
-                className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-1.5 py-1 text-xs"
+                className="rounded-control border border-[var(--border)] bg-[var(--bg)] px-1.5 py-1 text-xs"
               >
                 {KINDS.map(([value, label]) => (
                   <option key={value} value={value}>
@@ -69,14 +69,14 @@ export const PlanPanel = () => {
           onChange={(e) => setNote(e.target.value)}
           rows={1}
           placeholder="Anything to add? (optional)"
-          className="min-w-[240px] flex-1 resize-y rounded-md border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-[13px] outline-none focus:border-blue-500"
+          className="min-w-[240px] flex-1 resize-y rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-[13px] outline-none focus:border-blue-500"
         />
         <button
           type="button"
           disabled={busy || !note.trim()}
           onClick={() => decide("changes")}
           title="Write in the note what to change"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:bg-zinc-500/10 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-control border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:bg-zinc-500/10 disabled:opacity-40"
         >
           <RotateCcw className="size-3.5" /> Ask for a new plan
         </button>
@@ -84,7 +84,7 @@ export const PlanPanel = () => {
           type="button"
           disabled={busy}
           onClick={() => decide("approve")}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-control bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
         >
           <Check className="size-3.5" /> Go ahead
         </button>

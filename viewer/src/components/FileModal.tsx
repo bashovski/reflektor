@@ -49,7 +49,7 @@ export const FileModal = () => {
       ref={ref}
       onClose={() => openModal(null)}
       onClick={(e) => e.target === ref.current && openModal(null)}
-      className="surface m-auto h-[90vh] w-[min(1200px,94vw)] max-w-none overflow-hidden rounded-xl border p-0 text-[var(--text)] shadow-float"
+      className="surface m-auto h-[90vh] w-[min(1200px,94vw)] max-w-none overflow-hidden rounded-control border p-0 text-[var(--text)] shadow-float"
     >
       {modal && (
         <div className="flex h-full flex-col">
@@ -60,14 +60,14 @@ export const FileModal = () => {
             {!diffFile && <span className="text-xs text-zinc-500">Not changed in this branch</span>}
             <div className="ml-auto flex items-center gap-2">
               {diffFile && plainFile && (
-                <div className="inline-flex rounded-lg bg-zinc-500/10 p-0.5">
+                <div className="inline-flex rounded-control bg-zinc-500/10 p-0.5">
                   {(["changes", "file"] as const).map((m) => (
                     <button
                       key={m}
                       type="button"
                       onClick={() => setMode(m)}
                       className={cx(
-                        "rounded-md px-2 py-1 text-xs font-medium",
+                        "rounded-control px-2 py-1 text-xs font-medium",
                         mode === m ? "surface" : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200",
                       )}
                     >
@@ -76,7 +76,7 @@ export const FileModal = () => {
                   ))}
                 </div>
               )}
-              <button type="button" onClick={() => openModal(null)} className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
+              <button type="button" onClick={() => openModal(null)} className="rounded-control p-1.5 text-zinc-500 hover:bg-zinc-500/10" title="Close (Esc)">
                 <X className="size-4" />
               </button>
             </div>

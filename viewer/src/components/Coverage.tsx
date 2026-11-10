@@ -39,7 +39,7 @@ export const Coverage = () => {
                   <button
                     type="button"
                     onClick={() => jumpTo({ path: r.path, line: r.first })}
-                    className="grid w-full grid-cols-[minmax(0,1fr)_80px_44px] items-center gap-3 rounded-md px-1.5 py-1 text-left hover:bg-zinc-500/10"
+                    className="grid w-full grid-cols-[minmax(0,1fr)_80px_44px] items-center gap-3 rounded-control px-1.5 py-1 text-left hover:bg-zinc-500/10"
                   >
                     <span className="flex min-w-0 items-center gap-2" title={r.path}>
                       <FileIcon path={r.path} className="size-3.5" />

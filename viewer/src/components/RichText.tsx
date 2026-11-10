@@ -34,7 +34,7 @@ const renderInline = (text: string): ReactNode[] =>
     }
     if (part.length > 2 && part.startsWith("`") && part.endsWith("`")) {
       return (
-        <code key={i} className="rounded bg-zinc-500/10 px-1 py-px font-mono text-[0.9em]">
+        <code key={i} className="rounded-control bg-zinc-500/10 px-1 py-px font-mono text-[0.9em]">
           {part.slice(1, -1)}
         </code>
       );
