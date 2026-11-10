@@ -56,6 +56,19 @@
   }
 }
 
+/* Keyboard focus: one ring for everything you can tab to, in the accent color, with the corner of the thing it
+   is on. It shows for the keyboard only, so a click leaves no ring. A field that marks focus with its border,
+   and a menu that marks its focused row, turn the ring off with `outline-none`. A dialog as a whole gets none. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: 2px;
+  }
+  dialog:focus-visible {
+    outline: none;
+  }
+}
+
 :root {
   --bg: #fafafa;
   --surface: #ffffff;
