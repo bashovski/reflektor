@@ -9,9 +9,9 @@ allowed-tools: Bash(node "${CLAUDE_SKILL_DIR}/scripts/collect.mjs" *), Bash(node
 
 You write the judgment in `report.json`: words, grouping, risks and flows. Scripts handle the facts: git data, diffs, coverage numbers and rendering. Never copy code into report.json. Point at files and lines instead.
 
-Scripts and reference files live in `${CLAUDE_SKILL_DIR}`. Needs git and Node.js 18 or newer. `gh` is optional.
+Scripts and reference files live in `${CLAUDE_SKILL_DIR}`. That is this skill's folder: the folder this file is in. Where a command below still shows a `${...}` name instead of a real path, put the folder's absolute path there, with forward slashes. Needs git and Node.js 18 or newer. `gh` is optional.
 
-Arguments typed after `/pr-report` can be a base branch, `--since last`, `--session` or `resume`. For `resume`, or when the user asks to continue or pick up a review, go to "Pick up a review" at the end and skip the other steps.
+The request can carry arguments: a base branch, `--since last`, `--session` or `resume`. In Claude Code the user types them after `/pr-report`; with another agent they say them in words. For `resume`, or when the user asks to continue or pick up a review, go to "Pick up a review" at the end and skip the other steps.
 
 ## 1. Pick the base branch and scope
 
@@ -67,7 +67,7 @@ node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" --repo . --plan
 
 It prints the commands and where they come from: `checks` in `.pr-report.json` (shared with the team), or the ones saved for this repo in `~/.pr-report/repos/` from an earlier report. It also lists checks it skips because nothing they cover changed.
 
-**When it lists commands and says to start them,** start them in the background. In Claude Code, use the Bash tool with `run_in_background`:
+**When it lists commands and says to start them,** start them as a background process, so you can go on while they run (in Claude Code: the Bash tool with `run_in_background`):
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" --repo .
@@ -81,7 +81,7 @@ node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" --repo .
 2. Give the test command the coverage flag from step 2, so one run gives both the result and the coverage file.
 3. In a monorepo, make one check per package, limited to its folder with `--when`, so a report only runs the packages it changed.
 4. Never install anything, and ask first if a command needs services or looks slow.
-5. Write them for bash, the same as for the Bash tool. On Windows they run in Git Bash.
+5. Write them for bash, the same as the commands you run yourself. On Windows they run in Git Bash.
 6. Save them, naming the files they came from so a later change to those files marks them out of date:
 
 ```bash
@@ -127,7 +127,7 @@ node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" open --report <json file from buil
 
 The page names the agent it talks to. `review.mjs` and `build.mjs` work that out from the shell they run in, so there is normally nothing to do. If `review.mjs open` prints a `note:` line saying the page does not know which agent you are, add `--agent-name "<the product you are running in>"` to every `review.mjs` command from then on.
 
-After `collect --update` in a later round, add `--report <report file>` to the build, so the draft shows the carried report. The page says Claude is still writing the notes and holds back sending until the real report replaces it. Do not start the waiter yet, and say nothing to the user until step 7.
+After `collect --update` in a later round, add `--report <report file>` to the build, so the draft shows the carried report. The page says you are still writing the notes and holds back sending until the real report replaces it. Do not start the waiter yet, and say nothing to the user until step 7.
 
 ## 4. Understand the change
 
@@ -198,7 +198,7 @@ Write report.json to the **Report file** path that collect printed. Its shape is
 - `note`: one sentence on what it is for or what breaks, such as two copies of the same type that can drift apart, or a removed field that callers still read.
 - Generated files are marked by the build. A change there usually comes from a schema or spec; say which one in `note`.
 
-**plan:** when this conversation had a plan, check the diff against it. A plan is an approved plan-mode plan, a task list you kept, a numbered list the user gave or agreed to, or a ticket the user pasted. Without one, leave `plan` out.
+**plan:** when this conversation had a plan, check the diff against it. A plan is a plan the user approved (such as one from plan mode), a task list you kept, a numbered list the user gave or agreed to, or a ticket the user pasted. Without one, leave `plan` out.
 
 - `source`: one line on where the plan came from, like "Plan approved in this session".
 - `items`: every planned item with `status` `done` (with a `ref` to where it happens), `partial` (say what is left in `note`) or `missing`. Then add `extra` items for notable changes the plan did not ask for, so the user can catch scope creep. Leave out small supporting changes.
@@ -224,7 +224,7 @@ Publish the report to the pr-report daemon. It is one local server for every rev
 node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" open --report <json file from build> --open
 ```
 
-It prints the review address and the review id, and opens the browser unless a tab already shows this review (open tabs get a banner for each new round instead). Then start the waiter as a background process. In Claude Code, use the Bash tool with `run_in_background`:
+It prints the review address and the review id, and opens the browser unless a tab already shows this review (open tabs get a banner for each new round instead). Then start the waiter as a background process (in Claude Code: the Bash tool with `run_in_background`):
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" wait --id <review id>
@@ -233,7 +233,7 @@ node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" wait --id <review id>
 Tell the user, in a few lines:
 
 - the title, how many files are must-read, and the top one or two risks
-- that they can comment (hover a line number and click +), use "Fix this" or "It's fine" on problems, answer the questions, ask Claude live with "Ask Claude now", and click "Send to Claude" when done
+- that they can comment (hover a line number and click +), use "Fix this" or "It's fine" on problems, answer the questions, ask you live with the "Ask ... now" button, and send the review with the button at the bottom of the page when done
 
 Do not paste the report into the chat. End your turn and do not poll: the waiter exits when the reviewer does something, and that wakes you. Its output says what happened and what to run next. After handling it, start the waiter again in the background, unless the review is done.
 
@@ -247,7 +247,7 @@ node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" answer --id <review id> --question
 
 **A request for an updated report:** the page tells the reviewer when the code changed after the report was built, and offers to ask you for an update. Run collect.mjs with `--update`, fix the report for the files the waiter names, build, and publish: it stays the same round, and the reviewer's comments stay.
 
-If you cannot run a background process, run build.mjs with `--open` instead. It writes one self-contained HTML page and opens it. The page then shows "Copy for Claude", and the user pastes the comments into the chat. When the user wants a file to keep, pass `--html <file>` to build.mjs.
+If you cannot run a background process, run build.mjs with `--open` instead. It writes one self-contained HTML page and opens it. The page then shows a "Copy for ..." button, and the user pastes the comments into the chat. When the user wants a file to keep, pass `--html <file>` to build.mjs.
 
 ## 7b. When the checks end
 
@@ -318,7 +318,7 @@ build.mjs also writes `pr-description.md` next to the report: the first line is 
 
 ## Pick up a review
 
-A review outlives the session that made it: the page tells the user to run `/pr-report resume` when no session listens for it. In the repo of the review:
+A review outlives the session that made it: when no session listens for it, the page tells the user how to pick it up: `/pr-report resume` in Claude Code, or asking the agent to resume the PR report review. In the repo of the review:
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" resume --repo .
