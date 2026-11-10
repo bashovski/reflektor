@@ -99,7 +99,7 @@ export const IntroStep = () => (
   <div className="space-y-3 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">
     <p>
       pr-report turns a branch into a review page: a plain-English summary, the files in the order to read them, risks with a suggested fix, and
-      diffs with notes. You comment on the page, Claude fixes, and the next round comes back to the same tab.
+      diffs with notes. You comment on the page, your agent fixes, and the next round comes back to the same tab.
     </p>
     <p>This takes a minute: the tools on this machine, then how the page looks.</p>
   </div>

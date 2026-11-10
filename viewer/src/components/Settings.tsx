@@ -13,7 +13,7 @@ export const SHORTCUTS = [
   ["f", "Show the current file in full"],
   ["c", "Comment on the current file"],
   ["?", "Open these settings"],
-  [`${MOD_KEY}+Enter`, "Send the review to Claude"],
+  [`${MOD_KEY}+Enter`, "Send the review"],
 ] as const;
 
 // A row of equal buttons, one of them chosen. Shared with the setup page.

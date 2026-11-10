@@ -1,5 +1,6 @@
 import { ChevronRight, CircleHelp, Layers, MessageSquareReply } from "lucide-react";
 import type { CommentTarget, Section } from "../../../skill/schema/types";
+import { useAgent } from "../lib/agent";
 import { HIGHLIGHTS, REVIEW, SECTIONS } from "../lib/meta";
 import { targetKey, useReview } from "../lib/review";
 import { sectionDomId, useReport } from "../lib/state";
@@ -11,6 +12,7 @@ import { cx, LocCount, Pill, RefLink, SectionTitle } from "./ui";
 
 const QuestionItem = ({ target, id }: { target: Extract<CommentTarget, { type: "question" }>; id: string }) => {
   const { editable, commentsFor, openComposer, composer } = useReview();
+  const agent = useAgent();
   const answered = commentsFor(target).length > 0 || composer?.key === targetKey(target);
   return (
     <li id={id}>
@@ -20,7 +22,7 @@ const QuestionItem = ({ target, id }: { target: Extract<CommentTarget, { type: "
           <MessageSquareReply className="size-3.5" /> Answer
         </button>
       )}
-      <TargetComments target={target} placeholder="Your answer. Claude applies it as a decision." />
+      <TargetComments target={target} placeholder={`Your answer. ${agent.Name} applies it as a decision.`} />
     </li>
   );
 };

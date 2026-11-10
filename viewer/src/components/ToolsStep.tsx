@@ -39,7 +39,7 @@ const TOOLS: Tool[] = [
     key: "gh",
     name: "GitHub",
     icon: <GitHubMark />,
-    gives: "Reports take the base branch from the open pull request and link to it, and Claude can open the pull request for you.",
+    gives: "Reports take the base branch from the open pull request and link to it, and your agent can open the pull request for you.",
     install: { win: "winget install --id GitHub.cli", mac: "brew install gh", linux: "See cli.github.com for your distribution" },
     login: "gh auth login",
   },
@@ -47,7 +47,7 @@ const TOOLS: Tool[] = [
     key: "glab",
     name: "GitLab",
     icon: <GitLabMark />,
-    gives: "Reports take the target branch from the open merge request and link to it, and Claude can open the merge request for you.",
+    gives: "Reports take the target branch from the open merge request and link to it, and your agent can open the merge request for you.",
     install: { win: "winget install --id GLab.GLab", mac: "brew install glab", linux: "See gitlab.com/gitlab-org/cli for your distribution" },
     login: "glab auth login",
   },
@@ -128,7 +128,7 @@ export const ToolsStep = () => {
   return (
     <div className="space-y-4">
       <p className="text-sm text-zinc-500">
-        pr-report works without these. With one of them, a report knows the pull request it belongs to, and Claude can open one for you. Click a
+        pr-report works without these. With one of them, a report knows the pull request it belongs to, and your agent can open one for you. Click a
         tool to see how to connect it.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">

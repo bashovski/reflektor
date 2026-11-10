@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
-import type { Bundle, ChecksRun, CommentKind, LiveQuestion, PrState, Ref, ReviewComment } from "../../../skill/schema/types";
+import type { AgentInfo, Bundle, ChecksRun, CommentKind, LiveQuestion, PrState, Ref, ReviewComment } from "../../../skill/schema/types";
 
 // Live state of a review, streamed from the pr-report daemon.
 //
@@ -7,7 +7,7 @@ import type { Bundle, ChecksRun, CommentKind, LiveQuestion, PrState, Ref, Review
 // So one tab (the holder of a Web Lock) keeps the single event stream and relays it to the other tabs
 // over a BroadcastChannel. When that tab closes, the lock moves to another tab, which opens the stream.
 
-export type ReviewConfig = { live: true; id: string; round: number; token: string; api: string };
+export type ReviewConfig = { live: true; id: string; round: number; token: string; api: string; agent?: AgentInfo | null };
 // The daemon as it introduces itself on the stream: its version and when it started.
 export type DaemonInfo = { version: string; pid: number; node: string; startedAt: string };
 // The page's link to the daemon. "restarting" follows the daemon's own word that it is being replaced.
@@ -52,6 +52,8 @@ export type LiveState = {
   // Null when the daemon knows of no pull request; missing in states from an older daemon.
   pr?: LivePr | null;
   // An agent waits for this review's events (review.mjs wait), and since when the oldest one waits.
+  // The agent that called the daemon last for this review; null until one has said who it is.
+  agent: AgentInfo | null;
   listening: boolean;
   undeliveredSince: string | null;
   updatedAt: string;

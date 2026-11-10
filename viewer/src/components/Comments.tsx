@@ -1,6 +1,7 @@
 import { Check, Loader2, MessageCircleQuestion, MessageSquarePlus, Pencil, Sparkles, Trash2, Undo2, Wrench } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import type { CommentKind, CommentTarget, LiveQuestion, ReviewComment } from "../../../skill/schema/types";
+import { type Agent, useAgent } from "../lib/agent";
 import { COMMENT_KINDS, REPLY_STATUS } from "../lib/meta";
 import { describeTarget, targetKey, useReview } from "../lib/review";
 import { useReport } from "../lib/state";
@@ -25,8 +26,9 @@ export const SuggestedFix = ({ text, className }: { text: string; className?: st
 export const Composer = ({ target, placeholder }: { target: CommentTarget; placeholder?: string }) => {
   const { composer, comments, add, update, closeComposer, mode, ask } = useReview();
   const editing = composer?.editingId ? comments.find((c) => c.id === composer.editingId) : undefined;
-  // While the page is a draft, Claude is still writing the report and not answering yet.
+  // While the page is a draft, the agent is still writing the report and not answering yet.
   const draft = Boolean(useReport().bundle.draft);
+  const agent = useAgent();
   const canAsk = mode === "server" && !editing && composer?.kind !== "decision" && !draft;
   const [text, setText] = useState(editing?.text ?? "");
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -67,7 +69,7 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
       />
       <div className="mt-1.5 flex items-center gap-2">
         <span className="hidden text-[11px] text-zinc-400 sm:inline">
-          {canAsk ? "Ask now: Claude answers while you review. Add comment: saved for Send to Claude." : <>Start with <code>nit:</code> or <code>q:</code> to mark it, or let Claude decide. ⌘↵ saves.</>}
+          {canAsk ? `Ask now: ${agent.name} answers while you review. Add comment: saved until you send the review.` : <>Start with <code>nit:</code> or <code>q:</code> to mark it, or let {agent.name} decide. ⌘↵ saves.</>}
         </span>
         <span className="ml-auto" />
         <button type="button" onClick={closeComposer} className={ghost}>
@@ -75,7 +77,7 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
         </button>
         {canAsk && (
           <button type="button" onClick={askNow} className={cx(ghost, "border border-violet-500/40 text-violet-700 dark:text-violet-300")} disabled={!text.trim()}>
-            <MessageCircleQuestion className="size-3.5" /> Ask Claude now
+            <MessageCircleQuestion className="size-3.5" /> Ask {agent.name} now
           </button>
         )}
         <button type="button" onClick={save} className={primary} disabled={!editing && !text.trim()}>
@@ -86,21 +88,22 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
   );
 };
 
-const kindLabel = (c: ReviewComment) => {
+const kindLabel = (c: ReviewComment, agent: Agent) => {
   if (c.kind === "fix" && !c.text) return "Fix as suggested";
   if (c.kind === "accepted") return "It's fine";
-  return c.kind ? COMMENT_KINDS[c.kind].label : "Claude decides the kind";
+  return c.kind ? COMMENT_KINDS[c.kind].label : `${agent.Name} decides the kind`;
 };
 
-// Claude's progress on a sent comment, streamed live from the daemon.
+// The agent's progress on a sent comment, streamed live from the daemon.
 export const CommentStatusLine = ({ commentId }: { commentId: string }) => {
   const { statusOf } = useReview();
+  const agent = useAgent();
   const status = statusOf(commentId);
   if (!status) return null;
   if (status.status === "working") {
     return (
       <p className="mt-1 flex items-center gap-1.5 text-xs text-violet-700 dark:text-violet-300">
-        <Loader2 className="size-3 animate-spin" /> Claude is working on this
+        <Loader2 className="size-3 animate-spin" /> {agent.Name} is working on this
       </p>
     );
   }
@@ -115,13 +118,14 @@ export const CommentStatusLine = ({ commentId }: { commentId: string }) => {
 };
 
 export const CommentItem = ({ comment, compact }: { comment: ReviewComment; compact?: boolean }) => {
+  const agent = useAgent();
   const { editable, openComposer, remove, composer } = useReview();
   if (composer?.editingId === comment.id) return <Composer target={comment.target} />;
   const tone = comment.kind ? COMMENT_KINDS[comment.kind].className : "bg-zinc-500/10 text-zinc-500 ring-zinc-500/25";
 
   return (
     <div className={cx("group/comment flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] font-sans", compact ? "px-2 py-1.5" : "my-1.5 px-3 py-2")}>
-      <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", tone)}>{kindLabel(comment)}</Pill>
+      <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", tone)}>{kindLabel(comment, agent)}</Pill>
       <div className="min-w-0 flex-1 text-[13px] leading-snug">
         {comment.text ? <RichText text={comment.text} /> : null}
         <CommentStatusLine commentId={comment.id} />
@@ -140,9 +144,10 @@ export const CommentItem = ({ comment, compact }: { comment: ReviewComment; comp
   );
 };
 
-// A live question and, once it arrives, Claude's answer.
+// A live question and, once it arrives, the agent's answer.
 export const QuestionThread = ({ question }: { question: LiveQuestion }) => {
   const [slow, setSlow] = useState(false);
+  const agent = useAgent();
   useEffect(() => {
     if (question.answer) return;
     const timer = window.setTimeout(() => setSlow(true), 90_000 - (Date.now() - Date.parse(question.askedAt)));
@@ -167,7 +172,7 @@ export const QuestionThread = ({ question }: { question: LiveQuestion }) => {
       ) : (
         <p className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
           <Loader2 className="size-3 animate-spin" />
-          {slow ? "Claude has not picked this up yet. Is the Claude session still open?" : "Waiting for Claude…"}
+          {slow ? `${agent.Name} has not picked this up yet. Is the ${agent.noun} session still open?` : `Waiting for ${agent.name}…`}
         </p>
       )}
     </div>
@@ -206,6 +211,7 @@ export const QuickActions = ({
   labels?: { fix: string; fine: string; queued: string; accepted: string };
 }) => {
   const { editable, commentsFor, add, remove, openComposer } = useReview();
+  const agent = useAgent();
   const existing = commentsFor(target);
   const decided = existing.find((c) => c.kind === "fix" || c.kind === "accepted");
 
@@ -217,7 +223,7 @@ export const QuickActions = ({
             <Check className="size-3.5" />
             {decided.kind === "accepted"
               ? (labels?.accepted ?? "Marked as fine")
-              : (labels?.queued ?? (variant === "todo" ? "Queued for Claude" : "Queued: fix as suggested"))}
+              : (labels?.queued ?? (variant === "todo" ? `Queued for ${agent.name}` : "Queued: fix as suggested"))}
           </span>
           {editable && !decided.text && (
             <button type="button" className={ghost} onClick={() => openComposer(target, { editingId: decided.id })}>

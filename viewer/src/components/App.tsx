@@ -3,6 +3,7 @@ import { VirtualizerContext } from "@pierre/diffs/react";
 import { TriangleAlert } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { Bundle } from "../../../skill/schema/types";
+import { useAgent } from "../lib/agent";
 import { ReviewProvider, useReview } from "../lib/review";
 import { ReportProvider, useReport } from "../lib/state";
 import { useTab } from "../lib/tab";
@@ -114,6 +115,7 @@ const Layout = () => {
   const [help, setHelp] = useState(false);
   useShortcuts(() => setSettings(true));
   const { bundle } = useReport();
+  const agent = useAgent();
   useTab();
 
   return (
@@ -140,7 +142,7 @@ const Layout = () => {
           <Coverage />
           <Warnings />
           <footer className="pb-24 text-xs text-zinc-400">
-            Code comes straight from git. Notes, highlights and flows were written by Claude and may be wrong. Built{" "}
+            Code comes straight from git. Notes, highlights and flows were written by {agent.name} and may be wrong. Built{" "}
             {new Date(bundle.builtAt).toLocaleString()}.
           </footer>
         </WindowVirtualizer>

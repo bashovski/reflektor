@@ -13,7 +13,7 @@ import { cx, DiffBar, FileIcon, IconButton, LocCount, Pill } from "./ui";
 
 type LineTarget = Extract<CommentTarget, { type: "line" }>;
 
-// What a line annotation shows: Claude's note, a review comment, or the open comment box.
+// What a line annotation shows: the agent's note, a review comment, or the open comment box.
 export type AnnotationMeta =
   | { type: "note"; text: string }
   | { type: "finding"; finding: Finding }

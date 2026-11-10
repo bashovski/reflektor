@@ -1,4 +1,5 @@
 import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Inbox, Loader2, Settings } from "lucide-react";
+import { useAgent } from "../lib/agent";
 import { useChecks } from "../lib/checks";
 import { BASE_SOURCE, REVIEW, TARGETS } from "../lib/meta";
 import { usePr } from "../lib/pr";
@@ -57,6 +58,7 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
 
 export const Hero = () => {
   const { bundle } = useReport();
+  const agent = useAgent();
   const { diff, report } = bundle;
   const { branch, scope, stats, commits, coverage } = diff;
   const pr = usePr();
@@ -118,7 +120,7 @@ export const Hero = () => {
         {bundle.draft ? (
           <p className="inline-flex max-w-3xl items-center gap-2 text-[15px] leading-relaxed text-violet-700 dark:text-violet-300">
             <Loader2 className="size-4 shrink-0 animate-spin" />
-            Claude is reading the change and writing the notes. The diffs and checks are already here, and this page fills in by itself.
+            {agent.Name} is reading the change and writing the notes. The diffs and checks are already here, and this page fills in by itself.
           </p>
         ) : (
           <p className="max-w-3xl text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">{report.summary}</p>

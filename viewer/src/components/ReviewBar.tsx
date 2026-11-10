@@ -1,6 +1,7 @@
 import { CircleCheck, ClipboardCopy, ListChecks, ListOrdered, Loader2, MessageCircleQuestion, MessageSquarePlus, Send, TriangleAlert, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CommentTarget, ReviewComment } from "../../../skill/schema/types";
+import { useAgent } from "../lib/agent";
 import { COMMENT_KINDS } from "../lib/meta";
 import { describeTarget, targetKey, useReview } from "../lib/review";
 import { useReport } from "../lib/state";
@@ -58,14 +59,14 @@ export const targetAnchor = (t: CommentTarget, sections: { kind: string }[]): { 
   }
 };
 
-// A new Claude session picks up a review with this, for example after the one that made it ended.
-const RESUME = "/pr-report resume";
-
+// How a new session of the agent picks a review up, for example after the one that made it ended. What to type
+// depends on the agent, so the words come from it (lib/agent.ts).
 const ResumeHint = ({ text }: { text: string }) => {
+  const agent = useAgent();
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(RESUME);
+      await navigator.clipboard.writeText(agent.resumeCommand);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -74,14 +75,14 @@ const ResumeHint = ({ text }: { text: string }) => {
   };
   return (
     <span className="inline-flex flex-wrap items-center gap-x-1.5 text-xs text-amber-700 dark:text-amber-400">
-      {text} In Claude Code, run
+      {text} {agent.resumeLead}
       <button
         type="button"
         onClick={copy}
         title="Copy"
         className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-[11px] ring-1 ring-amber-500/25 ring-inset hover:bg-amber-500/20"
       >
-        {RESUME}
+        {agent.resumeCommand}
         <ClipboardCopy className="size-3" />
       </button>
       {copied && <span className="text-zinc-500">Copied</span>}
@@ -102,6 +103,7 @@ export const ReviewBar = () => {
     requestAnimationFrame(() => document.getElementById(anchor.id)?.scrollIntoView({ behavior: "smooth", block: "center" }));
   };
   const review = useReview();
+  const agent = useAgent();
   const problems = useProblems();
   // Re-render every 5 seconds so the warnings about a missing agent can appear without a new event.
   const [, setTick] = useState(0);
@@ -119,7 +121,7 @@ export const ReviewBar = () => {
   const open = problems.length - queued - fine;
   const composingGeneral = composer?.key === "report" && !composer.editingId;
   // Something the reviewer sent has waited 15 seconds and no agent listens for it.
-  // A draft page: Claude is still writing the report and starts listening once it is published.
+  // A draft page: the agent is still writing the report and starts listening once it is published.
   const draft = Boolean(bundle.draft);
   const unheard =
     !draft && mode === "server" && review.connected && !review.listening && review.undeliveredSince !== null && Date.now() - Date.parse(review.undeliveredSince) > 15_000;
@@ -137,15 +139,15 @@ export const ReviewBar = () => {
         ? `This is round ${round}. Round ${review.latestRound} is newer.`
         : review.phase === "done"
           ? total
-            ? `Review finished. Claude handled all ${total} ${total === 1 ? "comment" : "comments"} without changing code, so there is no new round. Claude can open the PR now.`
-            : "Review finished. Claude can open the PR now."
+            ? `Review finished. ${agent.Name} handled all ${total} ${total === 1 ? "comment" : "comments"} without changing code, so there is no new round. ${agent.Name} can open the PR now.`
+            : `Review finished. ${agent.Name} can open the PR now.`
           : review.phase === "sent" && unheard
             ? `Sent round ${round} with ${total} ${total === 1 ? "comment" : "comments"}.`
             : review.phase === "sent"
-            ? `Sent round ${round} with ${total} ${total === 1 ? "comment" : "comments"}. Claude is reading them and will post a plan here.`
+            ? `Sent round ${round} with ${total} ${total === 1 ? "comment" : "comments"}. ${agent.Name} is reading them and will post a plan here.`
             : review.phase === "planning"
-              ? "Claude's plan is ready. Approve it, or ask for a new one."
-              : `Claude is working: ${done} of ${total} done.`;
+              ? `${agent.Name}'s plan is ready. Approve it, or ask for a new one.`
+              : `${agent.Name} is working: ${done} of ${total} done.`;
     const Icon = review.phase === "planning" ? ListOrdered : review.phase === "done" || review.latestRound > round ? CircleCheck : Loader2;
 
     return (
@@ -164,8 +166,8 @@ export const ReviewBar = () => {
               <span className="block h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.round((done / total) * 100)}%` }} />
             </span>
           )}
-          {unheard && <ResumeHint text="No Claude session is listening for this review." />}
-          {stale && <ResumeHint text="No update from Claude for 10 minutes. If its session ended," />}
+          {unheard && <ResumeHint text={`No ${agent.noun} session is listening for this review.`} />}
+          {stale && <ResumeHint text={`No update from ${agent.name} for 10 minutes. If its session ended,`} />}
           {!review.connected && <span className="text-xs text-red-600 dark:text-red-400">Not connected to the review server.</span>}
           {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
           </div>
@@ -175,7 +177,7 @@ export const ReviewBar = () => {
   }
 
   const copy = async () => {
-    setCopied(await review.copyForClaude());
+    setCopied(await review.copyForAgent());
     window.setTimeout(() => setCopied(false), 2500);
   };
 
@@ -191,7 +193,7 @@ export const ReviewBar = () => {
               {comments.map((c) => (
                 <li key={c.id} className="flex items-start gap-2 text-sm">
                   <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", c.kind ? COMMENT_KINDS[c.kind].className : "bg-zinc-500/10 text-zinc-500 ring-zinc-500/25")}>
-                    {c.kind ? COMMENT_KINDS[c.kind].label : "Claude decides"}
+                    {c.kind ? COMMENT_KINDS[c.kind].label : `${agent.Name} decides`}
                   </Pill>
                   <button type="button" onClick={() => goTo(c)} className="shrink-0 font-mono text-xs text-zinc-500 hover:underline">
                     {describeTarget(c.target)}
@@ -247,7 +249,7 @@ export const ReviewBar = () => {
         </button>
         {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
         {mode === "server" && !review.connected && <span className="text-xs text-red-600 dark:text-red-400">Not connected to the review server.</span>}
-        {unheard && <ResumeHint text="No Claude session is listening, so your questions and requests wait." />}
+        {unheard && <ResumeHint text={`No ${agent.noun} session is listening, so your questions and requests wait.`} />}
 
         <span className="ml-auto inline-flex items-center gap-3">
           {mode === "server" ? (
@@ -259,15 +261,15 @@ export const ReviewBar = () => {
                 disabled={draft}
                 title={
                   draft
-                    ? "Claude is still writing the notes. Your comments are saved meanwhile."
+                    ? `${agent.Name} is still writing the notes. Your comments are saved meanwhile.`
                     : comments.length
-                      ? `Send your comments to Claude (${KEY_LABELS[MOD_KEY]}+Enter)`
-                      : `Looks good to me: tell Claude the review is done, with no comments (${KEY_LABELS[MOD_KEY]}+Enter)`
+                      ? `Send your comments to ${agent.name} (${KEY_LABELS[MOD_KEY]}+Enter)`
+                      : `Looks good to me: tell ${agent.name} the review is done, with no comments (${KEY_LABELS[MOD_KEY]}+Enter)`
                 }
                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
               >
                 {draft ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-                {draft ? "Claude is writing the notes" : comments.length ? `Send ${comments.length} to Claude` : "LGTM"}
+                {draft ? `${agent.Name} is writing the notes` : comments.length ? `Send ${comments.length} to ${agent.name}` : "LGTM"}
                 {!draft && (
                   // aria-hidden keeps the button's name to its text; the keys are a hint for sighted users.
                   <span className="ml-0.5 inline-flex items-center gap-0.5" aria-hidden>
@@ -287,7 +289,7 @@ export const ReviewBar = () => {
                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-40"
               >
                 <ClipboardCopy className="size-3.5" />
-                {copied ? "Copied. Paste it to Claude" : "Copy for Claude"}
+                {copied ? `Copied. Paste it to ${agent.name}` : `Copy for ${agent.name}`}
               </button>
             </>
           )}

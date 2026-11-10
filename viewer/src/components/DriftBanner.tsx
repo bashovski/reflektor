@@ -1,5 +1,6 @@
 import { RefreshCw, TriangleAlert } from "lucide-react";
 import { useState } from "react";
+import { useAgent } from "../lib/agent";
 import { useMerged } from "../lib/pr";
 import { useReview } from "../lib/review";
 
@@ -10,6 +11,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 // Not once the pull request is merged: the code is meant to move on then, and an update is moot.
 export const DriftBanner = () => {
   const { drift, phase, mode, requestRefresh } = useReview();
+  const agent = useAgent();
   const merged = useMerged();
   const [asked, setAsked] = useState(false);
   if (mode !== "server" || !drift || merged || (phase !== "reviewing" && phase !== "done")) return null;
@@ -37,7 +39,7 @@ export const DriftBanner = () => {
             className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 px-2.5 py-1 text-xs font-medium hover:bg-amber-500/10 disabled:opacity-60"
           >
             <RefreshCw className="size-3.5" />
-            {asked ? "Asked Claude to update the report" : "Ask Claude to update the report"}
+            {asked ? `Asked ${agent.name} to update the report` : `Ask ${agent.name} to update the report`}
           </button>
         )}
       </div>
