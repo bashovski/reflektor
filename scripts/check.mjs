@@ -32,6 +32,15 @@ const fail = (message) => {
 try {
   run(bash, [join(root, "fixtures", "make-books-repo.sh"), repo]);
 
+  // The copy of the skill for an agent other than Claude Code: the folder written out in every command, Claude Code's
+  // own front matter left out, and the two fields every agent needs kept.
+  const { portableSkillText } = await import("./portable-skill.mjs");
+  const portable = portableSkillText(readFileSync(join(root, "skill/SKILL.md"), "utf8"), "C:\\Users\\x\\.agents\\skills\\pr-report");
+  const frontMatter = portable.slice(0, portable.indexOf("\n---", 4));
+  if (portable.includes("CLAUDE_SKILL_DIR") || /^(allowed-tools|argument-hint):/m.test(frontMatter) || !/^name: pr-report$/m.test(frontMatter) || !/^description: /m.test(frontMatter))
+    fail("the skill text for other agents still has Claude Code's placeholder or front matter, or lost its name or description");
+  if (!portable.includes('node "C:/Users/x/.agents/skills/pr-report/scripts/collect.mjs" --repo .')) fail("the skill text for other agents does not spell out the skill's folder in its commands");
+
   // Which agent runs pr-report: said outright, read from the shell's variables, from the skills folder a script was
   // started from, or from the agent's own answer, in that order. Every case names its own variables, so the result does
   // not depend on the shell this check runs in.
