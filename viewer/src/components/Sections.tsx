@@ -78,20 +78,20 @@ const SectionCard = ({ section, index, paths }: { section: Section; index: numbe
                 const HIcon = hm.icon;
                 const target: CommentTarget = { type: "highlight", section: section.kind, index: i, kind: h.kind, text: h.text, fix: h.fix };
                 return (
-                  <li key={i} id={`hl-${index}-${i}`} className="group/row relative flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-zinc-500/[0.04]">
+                  <li key={i} id={`hl-${index}-${i}`} className="group/row relative flex flex-wrap items-start gap-x-3 gap-y-1 rounded-lg px-2 py-2 hover:bg-zinc-500/[0.04]">
                     <span className={cx("inline-flex w-[94px] shrink-0 items-center gap-1.5 text-xs font-medium", hm.className)}>
                       <span className={cx("inline-flex size-5 shrink-0 items-center justify-center rounded-md", hm.tint)}>
                         <HIcon className="size-3.5" />
                       </span>
                       {hm.label}
                     </span>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-[min(10rem,100%)] flex-1">
                       <RichText text={h.text} className="block text-sm leading-relaxed" />
                       {h.fix && <SuggestedFix text={h.fix} className="mt-1" />}
                       <QuickActions target={target} variant={h.kind === "risk" || h.kind === "gap" ? "problem" : "info"} />
                       <TargetComments target={target} />
                     </div>
-                    {h.ref && <RefLink refTo={h.ref} />}
+                    {h.ref && <RefLink refTo={h.ref} className="ml-auto" />}
                   </li>
                 );
               })}

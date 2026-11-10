@@ -106,10 +106,10 @@ export const CommentStatusLine = ({ commentId }: { commentId: string }) => {
   }
   const meta = REPLY_STATUS[status.status];
   return (
-    <div className="mt-1.5 flex items-start gap-2 border-t border-[var(--border)] pt-1.5 text-[13px]">
+    <div className="mt-1.5 flex flex-wrap items-start gap-x-2 gap-y-1 border-t border-[var(--border)] pt-1.5 text-[13px]">
       <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", meta.className)}>{meta.label}</Pill>
-      {status.text && <RichText text={status.text} className="block min-w-0 flex-1" />}
-      {status.ref && <RefLink refTo={status.ref} />}
+      {status.text && <RichText text={status.text} className="block min-w-[min(10rem,100%)] flex-1" />}
+      {status.ref && <RefLink refTo={status.ref} className="ml-auto" />}
     </div>
   );
 };
@@ -159,10 +159,10 @@ export const QuestionThread = ({ question }: { question: LiveQuestion }) => {
         </span>
       </p>
       {question.answer ? (
-        <div className="mt-1.5 flex items-start gap-2 border-t border-violet-500/20 pt-1.5">
+        <div className="mt-1.5 flex flex-wrap items-start gap-x-2 gap-y-1 border-t border-violet-500/20 pt-1.5">
           <Sparkles className="mt-0.5 size-3.5 shrink-0 text-violet-500" />
-          <RichText text={question.answer.text} className="block min-w-0 flex-1" />
-          {question.answer.ref && <RefLink refTo={question.answer.ref} />}
+          <RichText text={question.answer.text} className="block min-w-[min(10rem,100%)] flex-1" />
+          {question.answer.ref && <RefLink refTo={question.answer.ref} className="ml-auto" />}
         </div>
       ) : (
         <p className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">

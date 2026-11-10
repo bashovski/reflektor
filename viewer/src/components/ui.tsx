@@ -138,17 +138,23 @@ export const shortPath = (path: string, keep = 2) => {
   return parts.length <= keep ? path : `…/${parts.slice(-keep).join("/")}`;
 };
 
-export const RefLink = ({ refTo, keep = 1 }: { refTo: Ref; keep?: number }) => {
+// A file reference chip. It never shrinks next to text, so the rows that hold one wrap it to a line of its own on a
+// narrow screen (flex-wrap on the row, a minimum width on the text). There it is at most as wide as the row: the path
+// truncates, the line number never does. Without this, a long file name pushed the page wider than a phone screen.
+export const RefLink = ({ refTo, keep = 1, className }: { refTo: Ref; keep?: number; className?: string }) => {
   const { jumpTo } = useReport();
   return (
     <button
       type="button"
       onClick={() => jumpTo(refTo)}
       title={`${refTo.path}${refTo.line ? `:${refTo.line}` : ""}`}
-      className="inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-mono text-[11px] text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100"
+      className={cx(
+        "inline-flex max-w-full min-w-0 shrink-0 items-center rounded-md px-1.5 py-0.5 font-mono text-[11px] text-zinc-500 hover:bg-zinc-500/10 hover:text-zinc-900 dark:hover:text-zinc-100",
+        className,
+      )}
     >
-      {shortPath(refTo.path, keep)}
-      {refTo.line ? `:${refTo.line}` : ""}
+      <span className="truncate">{shortPath(refTo.path, keep)}</span>
+      {refTo.line ? <span className="shrink-0">:{refTo.line}</span> : null}
     </button>
   );
 };

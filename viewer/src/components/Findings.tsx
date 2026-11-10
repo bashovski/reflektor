@@ -29,9 +29,9 @@ export const Findings = () => {
           const kind = FINDING_KINDS[f.kind];
           const Icon = kind.icon;
           return (
-            <li key={i} className="flex items-start gap-3 text-sm">
+            <li key={i} className="flex flex-wrap items-start gap-x-3 gap-y-1 text-sm">
               <Pill className={cx("mt-px w-16 shrink-0 justify-center px-2 py-0 text-[10px]", SEVERITY[f.severity].className)}>{SEVERITY[f.severity].label}</Pill>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-[min(10rem,100%)] flex-1">
                 <p className="flex flex-wrap items-center gap-x-2 font-medium">
                   <Icon className="size-3.5 text-zinc-500" />
                   {f.rule}
@@ -39,7 +39,7 @@ export const Findings = () => {
                 </p>
                 <p className="text-[13px] leading-snug text-zinc-600 dark:text-zinc-400">{f.message}</p>
               </div>
-              <RefLink refTo={{ path: f.path, line: f.line ?? undefined }} keep={2} />
+              <RefLink refTo={{ path: f.path, line: f.line ?? undefined }} keep={2} className="ml-auto" />
             </li>
           );
         })}
