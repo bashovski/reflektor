@@ -51,10 +51,13 @@
   --color-on-accent: var(--on-accent);
 }
 
-/* Tailwind v4 gives buttons the default arrow cursor. */
+/* Tailwind v4 gives buttons the default arrow cursor, and a browser gives a checkbox the arrow even inside a label
+   that has the pointer, so the box itself is named here. */
 @layer base {
   button:not(:disabled),
   [role="button"]:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
   summary {
     cursor: pointer;
   }
