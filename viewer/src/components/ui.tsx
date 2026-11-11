@@ -1,5 +1,6 @@
 import { FileText } from "lucide-react";
 import { type ButtonHTMLAttributes, type ReactNode, useMemo } from "react";
+import logoSvg from "../../../skill/brand/reflektor-logo.svg?raw";
 import type { Ref, RepoAvatar, Tag } from "../../../skill/schema/types";
 import { TAGS } from "../lib/meta";
 import { useReport } from "../lib/state";
@@ -85,6 +86,20 @@ export const KEY_LABELS: Record<string, string> = {
 
 // The modifier that pairs with Enter in shortcuts: Cmd on a Mac, Ctrl everywhere else.
 export const MOD_KEY = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "Meta" : "Control";
+
+// The Reflektor mark: a pixel "r" with a soft shape in the four brand colors. The file is skill/brand/reflektor-logo.svg,
+// the one the inbox reads too. It is put into the page as SVG and not as an image, because the letter is drawn in
+// the current text color: white in the dark theme, near-black in the light one. The height comes from `className`
+// and the width follows. With a `label` it is announced as an image; without one it is decoration next to a name.
+export const Logo = ({ label, className }: { label?: string; className?: string }) => (
+  <span
+    role={label ? "img" : undefined}
+    aria-label={label}
+    aria-hidden={label ? undefined : true}
+    className={cx("inline-block shrink-0 text-accent [&>svg]:block [&>svg]:h-full [&>svg]:w-auto", className)}
+    dangerouslySetInnerHTML={{ __html: logoSvg }}
+  />
+);
 
 // A key cap: a small rectangle with a hairline border and a one-pixel ledge under it, the way
 // Linear draws shortcuts. `name` is the key as KeyboardEvent.key gives it ("Enter", "j", "?").

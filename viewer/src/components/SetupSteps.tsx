@@ -7,7 +7,7 @@ import { afterSetup, markSetupDone } from "../lib/setup";
 import { codeThemesFor, HIGHLIGHTER, type ThemeMode } from "../lib/themes";
 import Dither, { type DitherProps } from "../vendor/react-bits/Dither";
 import { Choice } from "./Settings";
-import { cx, Kbd } from "./ui";
+import { cx, Kbd, Logo } from "./ui";
 
 // First-run setup, one screen per step. Enter moves on, Escape skips the rest, and every choice
 // applies as soon as it is clicked, so the page itself shows what a choice does.
@@ -102,7 +102,10 @@ export const SetupFrame = ({
       {/* The label and the step marks get the card's surface, as a strip joined to its top: on the moving background
           itself, small text and the grey marks could not be read over a bright wave. */}
       <div className="surface flex items-center justify-between border border-b-0 px-6 py-3 text-xs text-muted sm:px-8">
-        <span className="font-semibold tracking-tight text-[var(--text)]">pr-report</span>
+        <span className="inline-flex items-center gap-2 font-semibold tracking-tight text-[var(--text)]">
+          <Logo className="h-4" />
+          pr-report
+        </span>
         <span className="inline-flex items-center gap-1.5" aria-label={`Step ${index + 1} of ${steps.length}`}>
           {steps.map((s, i) => (
             <span key={s.id} className={cx("h-1.5 transition-all", i === index ? "w-6 bg-accent" : "w-1.5 bg-zinc-500/30")} />
@@ -110,6 +113,8 @@ export const SetupFrame = ({
         </span>
       </div>
       <section className="surface border p-6 sm:p-8">
+        {/* The first screen a new user sees opens with the mark at full size. */}
+        {index === 0 && <Logo label="Reflektor" className="mb-6 h-14" />}
         <h1 className="text-[24px] font-semibold tracking-tight text-balance">{step.title}</h1>
         <div className="mt-4">{children}</div>
         <div className="mt-8 flex flex-wrap items-center gap-3">
