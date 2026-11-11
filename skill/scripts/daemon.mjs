@@ -558,7 +558,7 @@ svg{width:14px;height:14px;flex:none}
 fieldset{border:0;margin:0;padding:0}fieldset+fieldset{margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
 legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--muted);font-family:"Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em}
 .menu label{clear:both;display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:2px;cursor:pointer;font-size:13px;white-space:nowrap}.menu label:hover{background:var(--hover)}
-.menu input{margin:0;accent-color:var(--text)}.clear{width:100%;margin-top:6px;padding:6px 8px;border:0;border-top:1px solid var(--border);background:none;color:var(--muted);font:500 12px "Geist Variable",ui-sans-serif,system-ui,sans-serif;text-align:left;cursor:pointer}.clear:hover{color:var(--text)}
+.menu input{margin:0;accent-color:var(--text)}.menu input[type=checkbox],.menu input[type=radio]{cursor:pointer}.clear{width:100%;margin-top:6px;padding:6px 8px;border:0;border-top:1px solid var(--border);background:none;color:var(--muted);font:500 12px "Geist Variable",ui-sans-serif,system-ui,sans-serif;text-align:left;cursor:pointer}.clear:hover{color:var(--text)}
 .dot{width:8px;height:8px;border-radius:50%;flex:none}
 .menu .search{margin-bottom:6px;padding:0 8px;height:32px;border:1px solid var(--border);border-radius:2px;cursor:text;color:var(--muted)}.menu .search:hover{background:none}.menu .search:focus-within{border-color:var(--muted)}
 .search input{flex:1;min-width:0;border:0;outline:0;background:none;color:var(--text);font:13px "Geist Variable",ui-sans-serif,system-ui,sans-serif}
