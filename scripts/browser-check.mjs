@@ -244,6 +244,30 @@ try {
   await page.evaluate(() => localStorage.removeItem("pr-report:setup"));
   await page.goto(`http://127.0.0.1:${port}/r/${id}`);
   await expectVisible(page.getByRole("link", { name: "Set up Reflektor" }), "the setup offer above a report");
+  // The top of the page must not jump between a report and the inbox: the mark, the reader's avatar and the setup
+  // offer under the bar sit at the same place and have the same size on both.
+  const topOfPage = async () => {
+    const box = async (locator) => {
+      const b = await locator.boundingBox();
+      return b && [b.x, b.y, b.width, b.height];
+    };
+    const offer = page.getByRole("link", { name: "Set up Reflektor" });
+    return {
+      "the mark": await box(page.getByRole("link", { name: "All reviews" }).first()),
+      "the reader's avatar": await box(page.getByRole("button", { name: "Your account and the daemon" })),
+      "the setup offer": await box(offer.locator("xpath=../..")),
+      "the link in the setup offer": await box(offer),
+    };
+  };
+  const onReport = await topOfPage();
+  await page.goto(`http://127.0.0.1:${port}/`);
+  await expectVisible(page.getByRole("link", { name: "Set up Reflektor" }), "the setup offer in the inbox");
+  const onInbox = await topOfPage();
+  for (const [what, a] of Object.entries(onReport)) {
+    const b = onInbox[what];
+    if (!a || !b || a.some((v, i) => Math.abs(v - b[i]) > 0.5)) fail(`${what} moves between a report and the inbox: ${JSON.stringify(a)} on a report, ${JSON.stringify(b)} in the inbox`);
+  }
+  await page.goto(`http://127.0.0.1:${port}/r/${id}`);
   await page.getByRole("button", { name: "Not now" }).click();
   await page.goto(`http://127.0.0.1:${port}/`);
   await expectVisible(page.getByRole("heading", { name: "All reviews" }), "the inbox again");
