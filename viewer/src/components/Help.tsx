@@ -14,9 +14,12 @@ const steps = (agent: Agent): [string, string][] => [
   ["Send it", `Sending hands your comments over. ${agent.Name} posts a plan for you to approve, makes the changes, and publishes the next round here.`],
 ];
 
-export const HelpDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
+// In a report, Help names the agent the review talks to.
+export const HelpDialog = (props: { open: boolean; onClose: () => void }) => <HelpPanel {...props} agent={useAgent()} />;
+
+// The dialog itself, for whoever knows which agent to name (see Panel.tsx for the one without a report).
+export const HelpPanel = ({ open, onClose, agent }: { open: boolean; onClose: () => void; agent: Agent }) => {
   const ref = useRef<HTMLDialogElement>(null);
-  const agent = useAgent();
 
   useEffect(() => {
     if (open && !ref.current?.open) ref.current?.showModal();

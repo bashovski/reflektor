@@ -5,6 +5,7 @@ import type { Bundle, RepoAvatar } from "../../../skill/schema/types";
 import { type Identity, useIdentity } from "../lib/identity";
 import { type DaemonInfo, type Link, useLive } from "../lib/live";
 import { PROJECT } from "../lib/meta";
+import { pageToken } from "../lib/panel";
 import { useReport } from "../lib/state";
 import { cx } from "./ui";
 
@@ -61,7 +62,7 @@ const bugReportUrl = (daemon: DaemonInfo | null, bundle: Bundle) => {
 
 const item = "group flex w-full items-center gap-3 rounded-control px-2.5 py-2 text-left data-[focus]:bg-zinc-500/10 [&>svg:first-child]:size-4 [&>svg:first-child]:shrink-0 [&>svg:first-child]:text-muted";
 
-const PurgeDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
+export const PurgeDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   const ref = useRef<HTMLDialogElement>(null);
   const [result, setResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -77,7 +78,7 @@ const PurgeDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) 
   const purge = async () => {
     setBusy(true);
     try {
-      const res = await fetch("/api/cache/purge", { method: "POST", headers: { "x-review-token": window.__PR_REVIEW__!.token } });
+      const res = await fetch("/api/cache/purge", { method: "POST", headers: { "x-review-token": pageToken() } });
       const data = res.ok ? ((await res.json()) as { removed: number }) : null;
       setResult(data ? `Removed ${data.removed} cached ${data.removed === 1 ? "file" : "files"}.` : "The daemon did not answer.");
     } catch {

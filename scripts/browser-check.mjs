@@ -249,6 +249,16 @@ try {
   await expectVisible(page.getByRole("heading", { name: "All reviews" }), "the inbox again");
   await expectVisible(page.getByRole("button", { name: "Your account and the daemon" }), "the top bar of the inbox, with the reader's menu");
   await expectVisible(page.getByRole("link", { name: "Star us on GitHub" }), "the star link in the inbox's top bar");
+  // The inbox's menu has the options of a report's menu, and opens the report's own dialogs in a frame over the page.
+  await page.getByRole("button", { name: "Your account and the daemon" }).click();
+  await page.getByRole("button", { name: /^Settings/ }).click();
+  const panel = page.frameLocator("iframe.panel");
+  await expectVisible(panel.getByRole("heading", { name: "Settings" }), "Settings, opened from the inbox's menu");
+  await panel.getByRole("button", { name: /^Close/ }).click();
+  await page
+    .locator("iframe.panel")
+    .waitFor({ state: "hidden", timeout: 5_000 })
+    .catch(() => fail("the frame of the dialogs stays over the inbox after Settings is closed"));
   if (await page.locator("#setup-hint").isVisible()) fail("the inbox offers the setup again after Not now");
 
   const unexpected = errors.filter((e) => !/favicon/.test(e));
