@@ -509,7 +509,7 @@ ${FONT_CSS}
 :root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--hover:color-mix(in srgb,var(--text) 5%,transparent);color-scheme:light}
 :root[data-theme=dark]{--bg:#09090b;--surface:#111113;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;color-scheme:dark}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Geist Variable",ui-sans-serif,system-ui,sans-serif}
-main{max-width:900px;margin:0 auto;padding:40px 16px}h1{font-size:20px;margin:0 0 4px}p{color:var(--muted);margin:0 0 20px}
+main{max-width:900px;margin:0 auto;padding:40px 16px}h1{font-size:20px;margin:0 0 4px;display:flex;align-items:center;gap:10px}.logo{display:inline-flex;height:26px;color:var(--text)}.logo svg{display:block;height:100%;width:auto}p{color:var(--muted);margin:0 0 20px}
 svg{width:14px;height:14px;flex:none}
 .bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}#summary{color:var(--muted);font-size:13px}
 .only{display:inline-flex;align-items:center;gap:2px;margin-left:10px;padding:1px 2px 1px 9px;border:1px solid var(--border);border-radius:2px;background:var(--surface);font-size:12px}.only a{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;color:var(--muted);text-decoration:none}.only a:hover{background:var(--hover);color:var(--text)}
@@ -548,7 +548,7 @@ details{margin-top:28px}summary{cursor:pointer;color:var(--muted);margin-bottom:
 code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--hover);border:1px solid var(--border);border-radius:2px;padding:1px 6px;color:var(--text);white-space:nowrap}
 .cmds{list-style:none;margin:20px auto 0;padding:0;display:grid;gap:8px;max-width:480px;text-align:left}.cmds li{display:flex;align-items:center;gap:12px}.cmds code{flex:none;min-width:156px;text-align:center}
 .hint{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:10px 14px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px}.hint[hidden]{display:none}.hint a{color:inherit;font-weight:600}.hint button{margin-left:auto;padding:2px 6px;border:0;background:none;color:var(--muted);font:inherit;cursor:pointer}.hint button:hover{color:var(--text)}</style></head><body><main>
-<h1>PR reports</h1><p>Every review on this machine. Open one to comment, ask questions and send it to your agent.</p>
+<h1>${LOGO && `<span class="logo" aria-hidden="true">${LOGO}</span>`}PR reports</h1><p>Every review on this machine. Open one to comment, ask questions and send it to your agent.</p>
 <div class="hint" id="setup-hint" hidden><span>New here? A one-minute <a href="/setup">setup</a> checks your tools and picks how reports look.</span><button type="button" id="setup-dismiss" title="Not now">Not now</button></div>
 ${toolbar}<div id="active" data-rows>${active.length ? `<div class="list">${active.map(inboxRow).join("")}</div>` : `<div class="list">${emptyState(welcome, archived.length)}</div>`}</div>
 ${archived.length ? `<details><summary>Archived (${archived.length}): finished reviews after 3 quiet days, others after 14</summary><div class="archived" data-rows><div class="list">${archived.map(inboxRow).join("")}</div></div></details>` : ""}
@@ -652,6 +652,10 @@ if(!res.ok)alert((await res.json().catch(()=>({}))).error||"Could not do that");
 
 // The viewer's app build. Every review page is the same app; it loads its round's data from the API.
 const here = dirname(fileURLToPath(import.meta.url));
+// The Reflektor mark, the same file the review page draws. Its letter takes the text color, so it is put into the
+// page as SVG. Without the file the inbox simply has no mark.
+const LOGO_FILE = join(here, "../brand/reflektor-logo.svg");
+const LOGO = existsSync(LOGO_FILE) ? readFileSync(LOGO_FILE, "utf8").trim() : "";
 const APP_DIR = [join(here, "../assets/app"), join(here, "../../viewer/dist/app")].find((d) => existsSync(join(d, "index.html")));
 // Fuse.js for the inbox search: copied next to the app by install.mjs, or read from the viewer's
 // packages in a checkout that is not built. Without it the inbox falls back to a plain substring match.

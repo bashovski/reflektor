@@ -8,7 +8,7 @@ import { OwnerMenu } from "./OwnerMenu";
 import { PrDescription } from "./PrDescription";
 import { PrStatePill } from "./PullRequest";
 import { UserMenu } from "./UserMenu";
-import { cx, Dot, LocCount, ProgressRing, TagPill } from "./ui";
+import { cx, Dot, LocCount, Logo, ProgressRing, TagPill } from "./ui";
 
 export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp: () => void }) => {
   const { bundle, viewedCount } = useReport();
@@ -17,6 +17,15 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg)]/85 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-3 px-4 sm:px-6">
+        {/* The mark, top left on every page. With a daemon behind the page it is the way back to the inbox. */}
+        {window.__PR_REVIEW__ ? (
+          <a href="/" title="All reviews" aria-label="All reviews" className="inline-flex shrink-0 rounded-control p-1 hover:bg-zinc-500/10">
+            <Logo className="h-6" />
+          </a>
+        ) : (
+          <Logo label="Reflektor" className="h-6" />
+        )}
+        <span aria-hidden className="h-5 w-px shrink-0 bg-[var(--border)]" />
         <div className="flex min-w-0 items-center gap-2 text-sm">
           <OwnerMenu />
           {repo.owner && <span className="text-faint">/</span>}
