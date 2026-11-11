@@ -243,8 +243,4 @@ export const FINDING_KINDS: Record<FindingKind, { label: string; icon: LucideIco
 };
 
 // Where the project lives, for the help and bug report links in the user menu.
-export const PROJECT = {
-  repo: "https://github.com/bashovski/pr-report",
-  issues: "https://github.com/bashovski/pr-report/issues/new",
-  readme: "https://github.com/bashovski/pr-report#readme",
-};
+export const PROJECT = { issues: "https://github.com/bashovski/pr-report/issues/new", readme: "https://github.com/bashovski/pr-report#readme" };
