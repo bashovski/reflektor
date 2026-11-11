@@ -1,7 +1,7 @@
-import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Inbox, Loader2, Settings } from "lucide-react";
+import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Inbox, Loader2, Settings, Star } from "lucide-react";
 import { useAgent } from "../lib/agent";
 import { useChecks } from "../lib/checks";
-import { BASE_SOURCE, REVIEW, TARGETS } from "../lib/meta";
+import { BASE_SOURCE, PROJECT, REVIEW, TARGETS } from "../lib/meta";
 import { usePr } from "../lib/pr";
 import { useReport } from "../lib/state";
 import { OwnerMenu } from "./OwnerMenu";
@@ -45,6 +45,18 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
         {window.__PR_REVIEW__ && (
           <a href="/" className="inline-flex items-center gap-1.5 rounded-control px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
             <Inbox className="size-3.5" /> All reviews
+          </a>
+        )}
+        {/* An invitation to star the project, left of the reader's avatar. The inbox has the same link. It is left
+            out where the bar is tight. */}
+        {window.__PR_REVIEW__ && (
+          <a
+            href={PROJECT.repo}
+            target="_blank"
+            rel="noreferrer"
+            className="hidden items-center gap-1.5 rounded-control border border-[var(--border)] px-2 py-1 text-xs font-medium hover:bg-zinc-500/10 md:inline-flex"
+          >
+            <Star className="size-3.5 text-muted" /> Star us on GitHub
           </a>
         )}
         {window.__PR_REVIEW__ ? (

@@ -248,6 +248,7 @@ try {
   await page.goto(`http://127.0.0.1:${port}/`);
   await expectVisible(page.getByRole("heading", { name: "All reviews" }), "the inbox again");
   await expectVisible(page.getByRole("button", { name: "Your account and the daemon" }), "the top bar of the inbox, with the reader's menu");
+  await expectVisible(page.getByRole("link", { name: "Star us on GitHub" }), "the star link in the inbox's top bar");
   if (await page.locator("#setup-hint").isVisible()) fail("the inbox offers the setup again after Not now");
 
   const unexpected = errors.filter((e) => !/favicon/.test(e));
