@@ -11,7 +11,7 @@ import { cx, Pill, RefLink } from "./ui";
 const button =
   "inline-flex items-center gap-1 rounded-control px-2 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40";
 const ghost = `${button} text-zinc-600 hover:bg-zinc-500/10 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100`;
-const primary = `${button} bg-accent-600 text-white hover:bg-accent-700`;
+const primary = `${button} bg-accent text-on-accent hover:bg-accent/85`;
 
 export const SuggestedFix = ({ text, className }: { text: string; className?: string }) => (
   <div className={cx("flex items-start gap-1.5 text-[13px] text-muted", className)}>
@@ -56,7 +56,7 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
   };
 
   return (
-    <div className="my-1.5 rounded-control border border-accent-500/40 bg-[var(--surface)] p-2.5 font-sans" onClick={(e) => e.stopPropagation()}>
+    <div className="my-1.5 rounded-control border border-accent/40 bg-[var(--surface)] p-2.5 font-sans" onClick={(e) => e.stopPropagation()}>
       <p className="mb-1.5 text-[11px] text-muted">{describeTarget(target)}</p>
       <textarea
         ref={ref}
@@ -65,7 +65,7 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
         onKeyDown={onKey}
         rows={3}
         placeholder={placeholder ?? "What should change, or what do you want to know?"}
-        className="w-full resize-y rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-[13px] leading-relaxed outline-none placeholder:text-faint focus:border-accent-500"
+        className="w-full resize-y rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-[13px] leading-relaxed outline-none placeholder:text-faint focus:border-accent"
       />
       <div className="mt-1.5 flex items-center gap-2">
         <span className="hidden text-[11px] text-faint sm:inline">
@@ -265,7 +265,7 @@ export const QuickActions = ({
         <MessageSquarePlus className="size-3.5" /> Comment
       </button>
       <span className="inline-flex overflow-hidden rounded-control border border-[var(--border)] text-xs font-medium">
-        <button type="button" className="inline-flex items-center gap-1 px-2.5 py-1 text-accent-700 hover:bg-accent-600/10 dark:text-accent-300" onClick={() => add(target, { kind: "fix" })}>
+        <button type="button" className="inline-flex items-center gap-1 px-2.5 py-1 text-accent hover:bg-accent/10" onClick={() => add(target, { kind: "fix" })}>
           <Wrench className="size-3.5" /> {labels?.fix ?? (variant === "todo" ? "Do this" : "Fix this")}
         </button>
         {variant === "problem" && (

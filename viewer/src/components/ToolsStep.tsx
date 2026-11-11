@@ -143,7 +143,7 @@ export const ToolsStep = () => {
               onClick={() => setOpen(open === tool.key ? null : tool.key)}
               className={cx(
                 "relative flex flex-col items-start gap-3 rounded-control border p-4 text-left",
-                open === tool.key ? "border-accent-500 ring-1 ring-accent-500" : "border-[var(--border)] hover:bg-zinc-500/[0.04]",
+                open === tool.key ? "border-accent ring-1 ring-accent" : "border-[var(--border)] hover:bg-zinc-500/[0.04]",
               )}
             >
               <span className="text-zinc-800 dark:text-zinc-100">{tool.icon}</span>

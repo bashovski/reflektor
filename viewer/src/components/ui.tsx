@@ -61,7 +61,7 @@ export const ProgressRing = ({ value, className }: { value: number; className?: 
         strokeLinecap="round"
         strokeDasharray={c}
         strokeDashoffset={c * (1 - v)}
-        className={cx("transition-[stroke-dashoffset] duration-300", v >= 1 ? "stroke-ok-500" : "stroke-accent-500")}
+        className={cx("transition-[stroke-dashoffset] duration-300", v >= 1 ? "stroke-ok-500" : "stroke-accent")}
       />
     </svg>
   );

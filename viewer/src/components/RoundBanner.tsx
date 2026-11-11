@@ -30,15 +30,15 @@ export const RoundBanner = () => {
   ].filter(Boolean);
 
   return (
-    <div className="sticky top-14 z-20 border-b border-accent-500/30 bg-accent-50 dark:bg-accent-950">
+    <div className="sticky top-14 z-20 border-b border-accent/30 bg-[var(--surface-2)]">
       <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-3 px-4 py-2.5 text-sm sm:px-6">
-        <Sparkles className="size-4 text-accent-600 dark:text-accent-400" />
+        <Sparkles className="size-4 text-accent" />
         <span className="font-medium">Round {latestRound} is ready.</span>
         {parts.length > 0 && <span className="text-zinc-600 dark:text-zinc-400">{parts.join(", ")}.</span>}
         <button
           type="button"
           onClick={() => showRound(latestRound)}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-control bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-700"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent/85"
         >
           Show round {latestRound} <ArrowRight className="size-3.5" />
         </button>

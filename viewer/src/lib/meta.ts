@@ -217,7 +217,7 @@ export const BASE_SOURCE: Record<BaseSource, string> = {
 };
 
 export const COMMENT_KINDS: Record<CommentKind, { label: string; className: string }> = {
-  fix: { label: "Fix", className: "bg-accent-500/10 text-accent-700 ring-accent-500/30 dark:text-accent-300" },
+  fix: { label: "Fix", className: "bg-accent/10 text-accent ring-accent/30" },
   question: { label: "Question", className: "bg-agent-500/10 text-agent-700 ring-agent-500/30 dark:text-agent-300" },
   nit: { label: "Nit", className: "bg-zinc-500/10 text-zinc-600 ring-zinc-500/25 dark:text-zinc-400" },
   accepted: { label: "It's fine", className: "bg-ok-500/10 text-ok-700 ring-ok-500/30 dark:text-ok-300" },
@@ -226,7 +226,7 @@ export const COMMENT_KINDS: Record<CommentKind, { label: string; className: stri
 
 export const REPLY_STATUS: Record<ReplyStatus, { label: string; className: string }> = {
   fixed: { label: "Fixed", className: "bg-ok-500/10 text-ok-700 ring-ok-500/30 dark:text-ok-300" },
-  answered: { label: "Answered", className: "bg-accent-500/10 text-accent-700 ring-accent-500/30 dark:text-accent-300" },
+  answered: { label: "Answered", className: "bg-accent/10 text-accent ring-accent/30" },
   wontfix: { label: "Won't fix", className: "bg-warn-500/10 text-warn-700 ring-warn-500/30 dark:text-warn-300" },
   noted: { label: "Noted", className: "bg-zinc-500/10 text-zinc-600 ring-zinc-500/25 dark:text-zinc-400" },
 };

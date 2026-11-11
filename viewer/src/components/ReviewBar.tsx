@@ -266,15 +266,15 @@ export const ReviewBar = () => {
                       ? `Send your comments to ${agent.name} (${KEY_LABELS[MOD_KEY]}+Enter)`
                       : `Looks good to me: tell ${agent.name} the review is done, with no comments (${KEY_LABELS[MOD_KEY]}+Enter)`
                 }
-                className="inline-flex items-center gap-1.5 rounded-control bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent/85 disabled:opacity-50"
               >
                 {draft ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
                 {draft ? `${agent.Name} is writing the notes` : comments.length ? `Send ${comments.length} to ${agent.name}` : "LGTM"}
                 {!draft && (
                   // aria-hidden keeps the button's name to its text; the keys are a hint for sighted users.
                   <span className="ml-0.5 inline-flex items-center gap-0.5" aria-hidden>
-                    <Kbd name={MOD_KEY} className="h-[18px] min-w-[18px] border-white/25 bg-white/15 text-white shadow-none" />
-                    <Kbd name="Enter" className="h-[18px] min-w-[18px] border-white/25 bg-white/15 text-white shadow-none" />
+                    <Kbd name={MOD_KEY} className="h-[18px] min-w-[18px] border-on-accent/25 bg-on-accent/10 text-on-accent! shadow-none" />
+                    <Kbd name="Enter" className="h-[18px] min-w-[18px] border-on-accent/25 bg-on-accent/10 text-on-accent! shadow-none" />
                   </span>
                 )}
               </button>
@@ -286,7 +286,7 @@ export const ReviewBar = () => {
                 type="button"
                 onClick={copy}
                 disabled={!comments.length}
-                className="inline-flex items-center gap-1.5 rounded-control bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-control bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent/85 disabled:opacity-40"
               >
                 <ClipboardCopy className="size-3.5" />
                 {copied ? `Copied. Paste it to ${agent.name}` : `Copy for ${agent.name}`}
