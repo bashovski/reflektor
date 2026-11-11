@@ -401,6 +401,12 @@ const ICONS = {
   layers:
     '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/>',
   sort: '<path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/>',
+  // For the inbox's top bar and the reader's menu, the same Lucide icons the report's menu uses.
+  user: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+  settings:
+    '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
+  external: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   filter: '<path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
   search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
@@ -486,6 +492,19 @@ function inboxPage(welcome = false) {
   // Filters offer only the statuses and tags some review has.
   const phases = Object.keys(PHASES).filter((p) => all.some((r) => statusOf(r) === p));
   const tags = Object.keys(TAGS).filter((t) => all.some((r) => r.tag === t));
+  // Whose account the top bar shows. A report asks about its own repo; the inbox spans repos, so it asks about the
+  // newest review's: the forge account when that host's CLI is logged in, else the repo's git identity.
+  let newest = null;
+  for (const r of all) {
+    const facts = roundFacts(r);
+    if (facts?.root) {
+      newest = facts;
+      break;
+    }
+  }
+  const host = newest?.host ?? "";
+  const me = { host, forge: /github/i.test(host) ? "github" : /gitlab/i.test(host) ? "gitlab" : "", root: newest?.root ?? "" };
+  const external = `<span class="ext">${icon("external")}</span>`;
   const toolbar = all.length
     ? `<div class="bar"><span class="left"><span id="summary"></span></span><div class="tools">${menu(
         "group",
@@ -506,10 +525,21 @@ function inboxPage(welcome = false) {
 <script>(()=>{let saved="system";const read=(v)=>{try{saved=JSON.parse(v??'"system"')}catch{saved="system"}};read(localStorage.getItem("pr-report:theme"));const mq=matchMedia("(prefers-color-scheme: dark)");const apply=()=>{document.documentElement.dataset.theme=saved==="dark"||saved==="light"?saved:mq.matches?"dark":"light"};apply();mq.addEventListener("change",apply);addEventListener("storage",(e)=>{if(e.key==="pr-report:theme"){read(e.newValue);apply()}})})()</script>
 <title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}Reflektor</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}">${FUSE_FILE ? '<link rel="modulepreload" href="/fuse.mjs">' : ""}<style>
 ${FONT_CSS}
-:root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--hover:color-mix(in srgb,var(--text) 5%,transparent);color-scheme:light}
-:root[data-theme=dark]{--bg:#09090b;--surface:#111113;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;color-scheme:dark}
+:root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--faint:#83838c;--lead:#52525b;--accent:#18181b;--hover:color-mix(in srgb,var(--text) 5%,transparent);--hover-2:color-mix(in oklab,oklch(55.2% .016 285.938) 10%,transparent);color-scheme:light}
+:root[data-theme=dark]{--bg:#09090b;--surface:#141417;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;--faint:#71717a;--lead:#a1a1aa;--accent:#fff;color-scheme:dark}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Geist Variable",ui-sans-serif,system-ui,sans-serif}
-main{max-width:900px;margin:0 auto;padding:40px 16px}h1{font-size:20px;margin:0 0 4px;display:flex;align-items:center;gap:10px}.logo{display:inline-flex;height:26px;color:var(--text)}.logo svg{display:block;height:100%;width:auto}p{color:var(--muted);margin:0 0 20px}
+.wrap{box-sizing:border-box;max-width:1440px;margin:0 auto;padding-left:16px;padding-right:16px}@media (min-width:640px){.wrap{padding-left:24px;padding-right:24px}}
+main{padding-top:32px;padding-bottom:48px}h1{margin:0 0 8px;font-size:26px;font-weight:600;line-height:1.25;letter-spacing:-.025em}p{color:var(--muted);margin:0 0 20px}.lead{max-width:48rem;margin-bottom:24px;color:var(--lead);font-size:15px;line-height:1.625}
+.nav{position:sticky;top:0;z-index:30;border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--bg) 85%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}.nav .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.brand{display:inline-flex;flex:none;padding:4px;border-radius:2px}.brand:hover{background:var(--hover-2)}.logo{display:inline-flex;height:24px;color:var(--accent)}.logo svg{display:block;height:100%;width:auto}
+.sep{flex:none;width:1px;height:20px;background:var(--border)}.here{font-weight:600;white-space:nowrap}.grow{flex:1}
+.me{margin-left:4px}.who{display:flex;align-items:center;padding:0;border:0;border-radius:50%;background:none;cursor:pointer}.who[aria-expanded=true]{box-shadow:0 0 0 2px color-mix(in oklab,oklch(70.5% .015 286.067) 40%,transparent)}
+.face{display:inline-grid;place-items:center;flex:none;width:28px;height:28px;border-radius:50%;object-fit:cover;background:color-mix(in oklab,oklch(55.2% .016 285.938) 20%,transparent);color:#fff;font:600 11px/1 "Geist Variable",ui-sans-serif,system-ui,sans-serif}.face.big{width:36px;height:36px;font-size:14px}
+.me .menu{box-sizing:border-box;width:288px;font-size:14px}.id{display:flex;align-items:center;gap:12px;padding:8px 10px}.id div{min-width:0}.id b,.id span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.id b{font-weight:500}.id span{color:var(--muted);font-size:12px}
+.me hr{height:1px;margin:4px 0;border:0;background:var(--border)}.cap{padding:6px 10px 6px;color:var(--muted);font:500 11px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;text-transform:uppercase}
+.mi{display:flex;align-items:center;gap:12px;box-sizing:border-box;width:100%;padding:8px 10px;border-radius:2px;color:inherit;text-decoration:none}.mi[hidden]{display:none}.mi:hover,.mi:focus-visible{background:var(--hover-2)}.mi>svg{width:16px;height:16px;color:var(--muted)}.mi>span:not(.ext){flex:1}.ext{display:inline-flex;color:var(--faint);opacity:0}.mi:hover .ext,.mi:focus-visible .ext{opacity:1}
+.themes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0 10px 8px}.themes button{padding:5px 0;border:1px solid var(--border);border-radius:2px;background:none;color:inherit;font:500 12px "Geist Variable",ui-sans-serif,system-ui,sans-serif;cursor:pointer}.themes button:hover{background:var(--hover-2)}.themes button[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.status{display:flex;align-items:center;gap:8px;padding:8px 10px;color:var(--muted);font-size:12px}.status i{flex:none;width:8px;height:8px;border-radius:50%;background:oklch(69.6% .17 162.48)}.status.down i{background:oklch(63.7% .237 25.331)}
 svg{width:14px;height:14px;flex:none}
 .bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}#summary{color:var(--muted);font-size:13px}
 .only{display:inline-flex;align-items:center;gap:2px;margin-left:10px;padding:1px 2px 1px 9px;border:1px solid var(--border);border-radius:2px;background:var(--surface);font-size:12px}.only a{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;color:var(--muted);text-decoration:none}.only a:hover{background:var(--hover);color:var(--text)}
@@ -547,9 +577,22 @@ details{margin-top:28px}summary{cursor:pointer;color:var(--muted);margin-bottom:
 .intro{padding:44px 24px}.intro h2{margin:0 0 8px;font-size:18px;color:var(--text)}.intro p{max-width:540px;margin:0 auto}
 code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--hover);border:1px solid var(--border);border-radius:2px;padding:1px 6px;color:var(--text);white-space:nowrap}
 .cmds{list-style:none;margin:20px auto 0;padding:0;display:grid;gap:8px;max-width:480px;text-align:left}.cmds li{display:flex;align-items:center;gap:12px}.cmds code{flex:none;min-width:156px;text-align:center}
-.hint{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:10px 14px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px}.hint[hidden]{display:none}.hint a{color:inherit;font-weight:600}.hint button{margin-left:auto;padding:2px 6px;border:0;background:none;color:var(--muted);font:inherit;cursor:pointer}.hint button:hover{color:var(--text)}</style></head><body><main>
-<h1>${LOGO && `<span class="logo" aria-hidden="true">${LOGO}</span>`}Reflektor</h1><p>Every review on this machine. Open one to comment, ask questions and send it to your agent.</p>
-<div class="hint" id="setup-hint" hidden><span>New here? A one-minute <a href="/setup">setup</a> checks your tools and picks how reports look.</span><button type="button" id="setup-dismiss" title="Not now">Not now</button></div>
+.hint{border-bottom:1px solid color-mix(in oklab,oklch(60.6% .25 292.717) 30%,transparent);background:oklch(96.9% .016 293.756)}:root[data-theme=dark] .hint{background:color-mix(in oklab,oklch(28.3% .141 291.089) 50%,transparent)}.hint[hidden]{display:none}
+.hint .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding-top:8px;padding-bottom:8px}.hint .wrap>svg{width:16px;height:16px;color:oklch(54.1% .281 293.009)}:root[data-theme=dark] .hint .wrap>svg{color:oklch(70.2% .183 293.541)}
+.hint a{color:oklch(49.1% .27 292.581);font-weight:500;text-decoration:none;text-underline-offset:2px}.hint a:hover{text-decoration:underline}:root[data-theme=dark] .hint a{color:oklch(81.1% .111 293.571)}
+.hint button{display:inline-flex;margin-left:auto;padding:4px;border:0;border-radius:2px;background:none;color:var(--muted);cursor:pointer}.hint button:hover{background:var(--hover-2)}</style></head><body>
+<header class="nav"><div class="wrap">${LOGO && `<a class="brand" href="/" title="All reviews" aria-label="All reviews"><span class="logo" aria-hidden="true">${LOGO}</span></a><span class="sep" aria-hidden="true"></span>`}<span class="here">Reflektor</span><span class="grow"></span>
+<div class="dd me"><button type="button" class="who" aria-haspopup="true" aria-expanded="false" title="Your account and the daemon" aria-label="Your account and the daemon"><span class="face" id="me-face"></span></button><div class="menu" hidden>
+<div class="id"><span class="face big" id="me-face-big"></span><div><b id="me-name">Looking you up…</b><span id="me-sub"></span></div></div><hr>
+<a class="mi" id="me-profile" target="_blank" rel="noreferrer" hidden>${icon("user")}<span>Open profile</span>${external}</a>
+<a class="mi" href="/setup">${icon("settings")}<span>Run the first-time setup again</span></a>
+<a class="mi" id="me-bug" target="_blank" rel="noreferrer" href="https://github.com/bashovski/pr-report/issues/new">${icon("bug")}<span>Report a bug</span>${external}</a><hr>
+<div class="cap">Theme</div><div class="themes"><button type="button" data-theme-pick="system">System</button><button type="button" data-theme-pick="light">Light</button><button type="button" data-theme-pick="dark">Dark</button></div><hr>
+<div class="status" id="me-status" role="status"><i aria-hidden="true"></i><span></span></div>
+</div></div></div></header>
+<div class="hint" id="setup-hint" hidden><div class="wrap">${icon("sparkles")}<span>New here? A one-minute setup checks your tools and picks how reports look.</span><a href="/setup">Set up Reflektor</a><button type="button" id="setup-dismiss" title="Not now" aria-label="Not now">${icon("x")}</button></div></div>
+<main class="wrap">
+<h1>All reviews</h1><p class="lead">Every review on this machine. Open one to comment, ask questions and send it to your agent.</p>
 ${toolbar}<div id="active" data-rows>${active.length ? `<div class="list">${active.map(inboxRow).join("")}</div>` : `<div class="list">${emptyState(welcome, archived.length)}</div>`}</div>
 ${archived.length ? `<details><summary>Archived (${archived.length}): finished reviews after 3 quiet days, others after 14</summary><div class="archived" data-rows><div class="list">${archived.map(inboxRow).join("")}</div></div></details>` : ""}
 </main>
@@ -624,17 +667,17 @@ const setQuery=(q)=>{query=q;try{sessionStorage.setItem("pr-report-inbox-q",q)}c
 document.addEventListener("input",(e)=>{if(e.target===searchBox)setQuery(searchBox.value)});
 // Menus: one open at a time; a click outside or Escape closes them.
 const dds=[...document.querySelectorAll(".dd")],openMenu=()=>dds.find((d)=>!d.querySelector(".menu").hidden);
-const toggle=(dd,open)=>{dd.querySelector(".menu").hidden=!open;dd.querySelector(".tool").setAttribute("aria-expanded",String(open));if(open&&dd.contains(searchBox))searchBox.focus()};
+const toggle=(dd,open)=>{dd.querySelector(".menu").hidden=!open;dd.querySelector("[aria-haspopup]").setAttribute("aria-expanded",String(open));if(open&&dd.contains(searchBox))searchBox.focus()};
 let reloadLater=false;
 document.addEventListener("click",(e)=>{
   const dd=e.target.closest(".dd");for(const d of dds)if(d!==dd)toggle(d,false);
-  if(dd&&e.target.closest(".tool"))toggle(dd,dd.querySelector(".menu").hidden);
+  if(dd&&e.target.closest("[aria-haspopup]"))toggle(dd,dd.querySelector(".menu").hidden);
   if(e.target.closest(".clear,.clear-all")){prefs.phase=[];prefs.tag=[];save();if(searchBox)searchBox.value="";setQuery("")}
   if(reloadLater&&!openMenu())location.reload();
 });
 // "/" opens the filter menu at the search box, as on GitHub.
 document.addEventListener("keydown",(e)=>{if(e.key!=="/"||e.metaKey||e.ctrlKey||e.altKey||e.target.closest("input,textarea")||!searchBox)return;e.preventDefault();for(const d of dds)toggle(d,d.contains(searchBox))});
-document.addEventListener("keydown",(e)=>{const d=openMenu();if(e.key==="Escape"&&d){toggle(d,false);d.querySelector(".tool").focus();if(reloadLater)location.reload()}});
+document.addEventListener("keydown",(e)=>{const d=openMenu();if(e.key==="Escape"&&d){toggle(d,false);d.querySelector("[aria-haspopup]").focus();if(reloadLater)location.reload()}});
 document.addEventListener("change",(e)=>{const i=e.target;if(!(i.name in prefs))return;
   if(i.type==="radio"){prefs[i.name]=i.value;toggle(i.closest(".dd"),false)}else prefs[i.name]=[...document.querySelectorAll("input[name="+i.name+"]:checked")].map((x)=>x.value);
   save();render()});
@@ -647,6 +690,32 @@ if(b.dataset.act==="delete"&&!confirm("Delete this review's files ("+b.dataset.s
 const act=b.dataset.act==="delete"?"delete":"archive";
 const res=await fetch("/api/r/"+encodeURIComponent(b.dataset.id)+"/"+act,{method:"POST",headers:{"x-review-token":"${pageToken}","content-type":"application/json"},body:JSON.stringify({archived:b.dataset.act!=="restore"})});
 if(!res.ok)alert((await res.json().catch(()=>({}))).error||"Could not do that");location.reload()});
+// The reader's menu in the top bar, the one a report has: who is reading, the setup, a bug report, the theme and the
+// daemon. A report asks the daemon the same questions through viewer/src/components/UserMenu.tsx.
+const ME=${JSON.stringify(me).replace(/</g, "\\u003c")},DAEMON=${JSON.stringify({ version: VERSION, node: process.version, startedAt })};
+const SOURCES={gh:"via the GitHub CLI",glab:"via the GitLab CLI",git:"from git config",none:"no identity found"};
+const paint=(el,a)=>{if(!a)return;if(String(a.image||"").startsWith("data:image/")){const i=new Image();i.src=a.image;i.alt="";i.className=el.className;el.replaceWith(i);return}el.style.background=/^#[0-9a-f]{6}$/i.test(a.color||"")?a.color:"#71717a";el.textContent=String(a.initials||"").slice(0,2)};
+fetch("/api/me?"+new URLSearchParams(ME),{headers:{"x-review-token":"${pageToken}"}}).then((r)=>r.ok?r.json():null).catch(()=>null).then((who)=>{
+  const name=document.getElementById("me-name");
+  if(!who){name.textContent="Unknown";return}
+  name.textContent=who.name||who.login||who.email||"Unknown";
+  document.getElementById("me-sub").textContent=(who.login?"@"+who.login:who.email||"")+(who.login||who.email?" · ":"")+SOURCES[who.source];
+  for(const id of ["me-face","me-face-big"])paint(document.getElementById(id),who.avatar);
+  if(who.url){const p=document.getElementById("me-profile");p.href=who.url;p.hidden=false}
+});
+document.getElementById("me-bug").href+="?"+new URLSearchParams({body:["<"+"!-- What happened, and what you expected --"+">","","","---","Reflektor daemon "+DAEMON.version+", Node "+DAEMON.node,"Browser: "+navigator.userAgent].join("\\n")});
+// The theme is the one saved for every page (pr-report:theme). The script in the head applies it when it hears a
+// storage event, so a pick here is announced the same way a pick in another tab is.
+const themeNow=()=>{try{const v=JSON.parse(localStorage.getItem("pr-report:theme")||'"system"');return v==="dark"||v==="light"?v:"system"}catch{return "system"}};
+const markTheme=()=>{const v=themeNow();for(const b of document.querySelectorAll("[data-theme-pick]"))b.setAttribute("aria-pressed",String(b.dataset.themePick===v))};
+markTheme();addEventListener("storage",(e)=>{if(e.key==="pr-report:theme")markTheme()});
+document.addEventListener("click",(e)=>{const b=e.target.closest("[data-theme-pick]");if(!b)return;const v=JSON.stringify(b.dataset.themePick);try{localStorage.setItem("pr-report:theme",v)}catch{}dispatchEvent(new StorageEvent("storage",{key:"pr-report:theme",newValue:v}));markTheme()});
+// How long the daemon has run, worded as in the report's menu: its two largest units, never rounded up.
+const upFor=(since)=>{const s=(Date.now()-Date.parse(since))/1000;if(s<90)return "just started";const m=Math.floor(s/60),d=Math.floor(m/1440),h=Math.floor(m%1440/60),min=m%60;return "up "+(d?[d+"d",h>0&&h+"h"]:h?[h+"h",min>0&&min+"min"]:[min+"min"]).filter(Boolean).join(" ")};
+const status=document.getElementById("me-status");let daemonUp=true;
+const showStatus=()=>{status.classList.toggle("down",!daemonUp);status.lastElementChild.textContent=daemonUp?"Daemon up · "+DAEMON.version.slice(0,7)+" · "+upFor(DAEMON.startedAt):"Daemon unavailable"};
+showStatus();es.addEventListener("open",()=>{daemonUp=true;showStatus()});es.addEventListener("error",()=>{daemonUp=false;showStatus()});
+document.querySelector(".who").addEventListener("click",showStatus);
 </script></body></html>`;
 }
 
