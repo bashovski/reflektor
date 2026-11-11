@@ -1,7 +1,7 @@
 import type { FileContents } from "@pierre/diffs";
 import { type DiffLineAnnotation, type FileDiffOptions, MultiFileDiff, type SelectedLineRange } from "@pierre/diffs/react";
 import { ChevronRight, FlaskConical, Maximize2, MessageSquarePlus, MessageSquareText, ShieldAlert } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useMemo, useRef, useState } from "react";
 import type { CommentTarget, DiffFile, Finding, SectionFile } from "../../../skill/schema/types";
 import { FILE_STATUS, SEVERITY } from "../lib/meta";
 import { useReview } from "../lib/review";
@@ -209,7 +209,11 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
   return (
     <div
       id={fileDomId(path)}
-      onClickCapture={() => setCurrent(path)}
+      // A click anywhere in the card makes it the current file. This runs before the click reaches what was clicked,
+      // so the update is marked as one that can wait. Drawn at once, it would land in the middle of the click and
+      // put the Viewed checkbox back to what it was. React would then see no change, and the first click on the
+      // box would only select the card.
+      onClickCapture={() => startTransition(() => setCurrent(path))}
       className={cx("surface overflow-clip border", current === path && "ring-2 ring-accent/40")}
     >
       <div className={cx("sticky top-14 z-10 flex items-center gap-2 bg-[var(--surface-2)] px-2 py-1.5 sm:px-3", open && "border-b border-[var(--border)]")}>

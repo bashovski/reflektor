@@ -108,6 +108,20 @@ try {
   review("open", "--report", realOut);
   await expectVisible(page.getByRole("heading", { name: /Save and list books in the library/ }), "the report after the draft");
   await expectVisible(page.getByRole("button", { name: "LGTM" }), "Send once the report is ready");
+  // One click on a file's Viewed box marks the file, also when that file was not the current one. The click goes on
+  // the box itself: a click on the word next to it always worked.
+  const viewedBox = page.getByRole("checkbox", { name: "Viewed" }).first();
+  // A section shows its files once it is open. It is closed again afterwards, so the rest of the run starts as before.
+  const sectionToggle = page.locator("#changes section button").first();
+  const opened = !(await viewedBox.isVisible());
+  if (opened) await sectionToggle.click();
+  if (await expectVisible(viewedBox, "the Viewed box of a file")) {
+    await viewedBox.click();
+    if (!(await viewedBox.isChecked())) fail("one click on a file's Viewed box did not mark the file as viewed");
+    await viewedBox.click();
+    if (await viewedBox.isChecked()) fail("a second click on a file's Viewed box did not take the mark away");
+  }
+  if (opened) await sectionToggle.click();
   // A link to a file shows the file type icon before its path.
   await expectVisible(page.locator("button.font-mono[title] > img").first(), "the file icon in a file link");
 
