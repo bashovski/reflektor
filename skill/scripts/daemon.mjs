@@ -532,7 +532,7 @@ function inboxPage(welcome = false) {
 ${FONT_CSS}
 :root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--faint:#83838c;--lead:#52525b;--accent:#18181b;--hover:color-mix(in srgb,var(--text) 5%,transparent);--hover-2:color-mix(in oklab,oklch(55.2% .016 285.938) 10%,transparent);color-scheme:light}
 :root[data-theme=dark]{--bg:#09090b;--surface:#141417;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;--faint:#71717a;--lead:#a1a1aa;--accent:#fff;color-scheme:dark}
-body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Geist Variable",ui-sans-serif,system-ui,sans-serif}
+html{overflow-y:scroll}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Geist Variable",ui-sans-serif,system-ui,sans-serif}
 .wrap{box-sizing:border-box;max-width:1440px;margin:0 auto;padding-left:16px;padding-right:16px}@media (min-width:640px){.wrap{padding-left:24px;padding-right:24px}}
 main{padding-top:32px;padding-bottom:48px}h1{margin:0 0 8px;font-size:26px;font-weight:600;line-height:1.25;letter-spacing:-.025em}p{color:var(--muted);margin:0 0 20px}.lead{max-width:48rem;margin-bottom:24px;color:var(--lead);font-size:15px;line-height:1.625}
 .nav{position:sticky;top:0;z-index:30;border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--bg) 85%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}.nav .wrap{display:flex;align-items:center;gap:12px;height:56px}
@@ -585,9 +585,9 @@ details{margin-top:28px}summary{cursor:pointer;color:var(--muted);margin-bottom:
 code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--hover);border:1px solid var(--border);border-radius:2px;padding:1px 6px;color:var(--text);white-space:nowrap}
 .cmds{list-style:none;margin:20px auto 0;padding:0;display:grid;gap:8px;max-width:480px;text-align:left}.cmds li{display:flex;align-items:center;gap:12px}.cmds code{flex:none;min-width:156px;text-align:center}
 .hint{border-bottom:1px solid color-mix(in oklab,oklch(60.6% .25 292.717) 30%,transparent);background:oklch(96.9% .016 293.756)}:root[data-theme=dark] .hint{background:color-mix(in oklab,oklch(28.3% .141 291.089) 50%,transparent)}.hint[hidden]{display:none}
-.hint .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding-top:8px;padding-bottom:8px}.hint .wrap>svg{width:16px;height:16px;color:oklch(54.1% .281 293.009)}:root[data-theme=dark] .hint .wrap>svg{color:oklch(70.2% .183 293.541)}
+.hint .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding-top:8px;padding-bottom:8px;line-height:20px}.hint .wrap>svg{width:16px;height:16px;color:oklch(54.1% .281 293.009)}:root[data-theme=dark] .hint .wrap>svg{color:oklch(70.2% .183 293.541)}
 .hint a{color:oklch(49.1% .27 292.581);font-weight:500;text-decoration:none;text-underline-offset:2px}.hint a:hover{text-decoration:underline}:root[data-theme=dark] .hint a{color:oklch(81.1% .111 293.571)}
-.hint button{display:inline-flex;margin-left:auto;padding:4px;border:0;border-radius:2px;background:none;color:var(--muted);cursor:pointer}.hint button:hover{background:var(--hover-2)}</style></head><body>
+.hint button{display:inline-flex;margin-left:auto;padding:4px;border:0;border-radius:2px;background:none;color:var(--muted);cursor:pointer}.hint button:hover{background:var(--hover-2)}.hint button svg{width:16px;height:16px}</style></head><body>
 <header class="nav"><div class="wrap">${LOGO && `<a class="brand" href="/" title="All reviews" aria-label="All reviews"><span class="logo" aria-hidden="true">${LOGO}</span></a>`}<span class="grow"></span><a class="star" href="https://github.com/bashovski/pr-report" target="_blank" rel="noreferrer">${icon("star")}<span>Star us on GitHub</span></a>
 <div class="dd me"><button type="button" class="who" aria-haspopup="true" aria-expanded="false" title="Your account and the daemon" aria-label="Your account and the daemon"><span class="face" id="me-face"></span></button><div class="menu" hidden>
 <div class="id"><span class="face big" id="me-face-big"></span><div><b id="me-name">Looking you up…</b><span id="me-sub"></span></div></div><hr>
@@ -703,14 +703,23 @@ if(!res.ok)alert((await res.json().catch(()=>({}))).error||"Could not do that");
 // same change to the other.
 const ME=${JSON.stringify(me).replace(/</g, "\\u003c")},DAEMON=${JSON.stringify({ version: VERSION, node: process.version, startedAt })};
 const SOURCES={gh:"via the GitHub CLI",glab:"via the GitLab CLI",git:"from git config",none:"no identity found"};
-const paint=(el,a)=>{if(!a)return;if(String(a.image||"").startsWith("data:image/")){const i=new Image();i.src=a.image;i.alt="";i.className=el.className;el.replaceWith(i);return}el.style.background=/^#[0-9a-f]{6}$/i.test(a.color||"")?a.color:"#71717a";el.textContent=String(a.initials||"").slice(0,2)};
-fetch("/api/me?"+new URLSearchParams(ME),{headers:{"x-review-token":"${pageToken}"}}).then((r)=>r.ok?r.json():null).catch(()=>null).then((who)=>{
-  const name=document.getElementById("me-name");
-  if(!who){name.textContent="Unknown";return}
-  name.textContent=who.name||who.login||who.email||"Unknown";
+// Draws an avatar into the element with this id, as a picture or as initials on a color, whichever it was before.
+const paint=(id,a)=>{let el=document.getElementById(id);if(!el||!a)return;const swap=(tag)=>{if(el.tagName===tag)return;const n=document.createElement(tag);n.id=id;n.className=el.className;el.replaceWith(n);el=n};
+  if(String(a.image||"").startsWith("data:image/")){swap("IMG");el.alt="";el.src=a.image;return}
+  swap("SPAN");el.style.background=/^#[0-9a-f]{6}$/i.test(a.color||"")?a.color:"#71717a";el.textContent=String(a.initials||"").slice(0,2)};
+const showMe=(who)=>{
+  document.getElementById("me-name").textContent=who.name||who.login||who.email||"Unknown";
   document.getElementById("me-sub").textContent=(who.login?"@"+who.login:who.email||"")+(who.login||who.email?" · ":"")+SOURCES[who.source];
-  for(const id of ["me-face","me-face-big"])paint(document.getElementById(id),who.avatar);
+  for(const id of ["me-face","me-face-big"])paint(id,who.avatar);
   if(who.url){const p=document.getElementById("me-profile"),forge={github:"GitHub ",gitlab:"GitLab "}[ME.forge]||"";p.href=who.url;p.querySelector("span").textContent="Open "+forge+"profile";p.hidden=false}
+};
+// The last answer is kept in the browser and drawn at once, so the avatar is there at the first paint and does not
+// pop in a moment later on every page. A report keeps and reads the same entry (viewer/src/lib/identity.ts).
+const ME_KEY=ME.host+"|"+ME.forge+"|"+ME.root;
+try{const kept=JSON.parse(localStorage.getItem("pr-report:me")||"null");if(kept&&kept.key===ME_KEY&&kept.who)showMe(kept.who)}catch{}
+fetch("/api/me?"+new URLSearchParams(ME),{headers:{"x-review-token":"${pageToken}"}}).then((r)=>r.ok?r.json():null).catch(()=>null).then((who)=>{
+  if(!who){if(document.getElementById("me-name").textContent==="Looking you up…")document.getElementById("me-name").textContent="Unknown";return}
+  showMe(who);try{localStorage.setItem("pr-report:me",JSON.stringify({key:ME_KEY,who}))}catch{}
 });
 document.getElementById("me-bug").href+="?"+new URLSearchParams({body:["<"+"!-- What happened, and what you expected --"+">","","","---","Reflektor daemon "+DAEMON.version+", Node "+DAEMON.node,"Browser: "+navigator.userAgent].join("\\n")});
 // Settings, Help and the cache purge are the report's own dialogs. They are not written a second time here: the page

@@ -55,6 +55,8 @@ A file's name or path that you can click shows the file's type icon before it, d
 
 ## The inbox
 
+The top of the two pages must not jump when you go from one to the other. The mark, the reader's avatar and the setup banner sit at the same place and have the same size on both, both pages always show their scrollbar so neither is wider than the other, and the avatar is drawn at once from the last answer kept in the browser. The browser suite measures this.
+
 The inbox's top bar has one thing a report's does not: a "Star us on GitHub" link left of the avatar. A report keeps its bar for the review.
 
 Settings, Help and the cache purge are not written twice. The inbox shows the report's own dialogs, from the page at `/panel`, in a see-through frame over itself (`viewer/src/lib/panel.ts`). The menu that opens them is written by hand in both places, so a change to one menu needs the same change to the other.

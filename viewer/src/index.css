@@ -119,6 +119,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* A page with the top bar always has its scrollbar, as the inbox does (skill/scripts/daemon.mjs). Where scrollbars
+   take up room, a short page without one is a little wider than a long page with one, and the mark and the avatar
+   would shift sideways between the inbox and a report. */
+html:has(header[data-top-bar]) {
+  overflow-y: scroll;
+}
+
 /* The dialogs shown in a frame over another page (see lib/panel.ts): the page behind has to show through. */
 html.panel,
 html.panel body {

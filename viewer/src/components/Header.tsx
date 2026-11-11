@@ -15,7 +15,7 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
   const { repo, branch } = bundle.diff;
   const total = bundle.diff.stats.files;
   return (
-    <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg)]/85 backdrop-blur">
+    <header data-top-bar className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--bg)]/85 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-3 px-4 sm:px-6">
         {/* The mark, top left on every page. With a daemon behind the page it is the way back to the inbox. */}
         {window.__PR_REVIEW__ ? (
