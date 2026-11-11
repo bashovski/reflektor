@@ -140,12 +140,14 @@ export const DiffBar = ({ additions, deletions }: { additions: number; deletions
 };
 
 // File type icon from the report's embedded icon set. Loaded as an <img>, so the SVG cannot run anything.
-export const FileIcon = ({ path, className }: { path: string; className?: string }) => {
+// The size is a prop of its own and not part of `className`: two size classes on one element do not override each
+// other by their order in the class list, so a second one passed there was ignored.
+export const FileIcon = ({ path, size = "size-4", className }: { path: string; size?: string; className?: string }) => {
   const { bundle } = useReport();
   const svg = bundle.fileIcons ? bundle.fileIcons.icons[bundle.fileIcons.byPath[path]] : undefined;
   const src = useMemo(() => (svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` : null), [svg]);
-  if (!src) return <FileText className={cx("size-4 shrink-0 text-faint", className)} aria-hidden />;
-  return <img src={src} alt="" aria-hidden className={cx("size-4 shrink-0", className)} />;
+  if (!src) return <FileText className={cx(size, "shrink-0 text-faint", className)} aria-hidden />;
+  return <img src={src} alt="" aria-hidden className={cx(size, "shrink-0", className)} />;
 };
 
 // The repo owner's picture, or its initials on a color. Square with slightly rounded corners.
@@ -168,9 +170,11 @@ export const shortPath = (path: string, keep = 2) => {
   return parts.length <= keep ? path : `…/${parts.slice(-keep).join("/")}`;
 };
 
-// A file reference chip. It never shrinks next to text, so the rows that hold one wrap it to a line of its own on a
-// narrow screen (flex-wrap on the row, a minimum width on the text). There it is at most as wide as the row: the path
-// truncates, the line number never does. Without this, a long file name pushed the page wider than a phone screen.
+// A file reference chip: the file's icon, its path and the line. Every file link on the page is one of these, so a
+// path you can click always shows what kind of file it is. It never shrinks next to text, so the rows that hold one
+// wrap it to a line of its own on a narrow screen (flex-wrap on the row, a minimum width on the text). There it is at
+// most as wide as the row: the path truncates, the icon and the line number never do. Without this, a long file name
+// pushed the page wider than a phone screen.
 export const RefLink = ({ refTo, keep = 1, className }: { refTo: Ref; keep?: number; className?: string }) => {
   const { jumpTo } = useReport();
   return (
@@ -183,6 +187,7 @@ export const RefLink = ({ refTo, keep = 1, className }: { refTo: Ref; keep?: num
         className,
       )}
     >
+      <FileIcon path={refTo.path} size="size-3.5" className="mr-1" />
       <span className="truncate">{shortPath(refTo.path, keep)}</span>
       {refTo.line ? <span className="shrink-0">:{refTo.line}</span> : null}
     </button>

@@ -9,7 +9,7 @@ import { useReport } from "../lib/state";
 import { Composer } from "./Comments";
 import { PlanPanel } from "./PlanPanel";
 import { RichText } from "./RichText";
-import { cx, Kbd, KEY_LABELS, MOD_KEY, Meter, Pill } from "./ui";
+import { cx, FileIcon, Kbd, KEY_LABELS, MOD_KEY, Meter, Pill } from "./ui";
 
 const REPORT_TARGET: CommentTarget = { type: "report" };
 
@@ -194,7 +194,8 @@ export const ReviewBar = () => {
                   <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", c.kind ? COMMENT_KINDS[c.kind].className : "bg-zinc-500/10 text-muted ring-zinc-500/25")}>
                     {c.kind ? COMMENT_KINDS[c.kind].label : `${agent.Name} decides`}
                   </Pill>
-                  <button type="button" onClick={() => goTo(c)} className="shrink-0 font-mono text-xs text-muted hover:underline">
+                  <button type="button" onClick={() => goTo(c)} className="inline-flex shrink-0 items-center gap-1 font-mono text-xs text-muted hover:underline">
+                    {(c.target.type === "line" || c.target.type === "file") && <FileIcon path={c.target.path} size="size-3.5" />}
                     {describeTarget(c.target)}
                   </button>
                   <span className="min-w-0 flex-1 text-zinc-700 dark:text-zinc-300">

@@ -107,6 +107,8 @@ try {
   review("open", "--report", realOut);
   await expectVisible(page.getByRole("heading", { name: /Save and list books in the library/ }), "the report after the draft");
   await expectVisible(page.getByRole("button", { name: "LGTM" }), "Send once the report is ready");
+  // A link to a file shows the file type icon before its path.
+  await expectVisible(page.locator("button.font-mono[title] > img").first(), "the file icon in a file link");
 
   // The page names the agent on the other side, and follows when another one picks the review up. One the table
   // does not know is shown under the name made from its id.
