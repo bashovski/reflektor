@@ -111,6 +111,10 @@ To redo an old report with a new viewer, without asking the agent again:
 node skill/scripts/build.mjs --diff .git/pr-report/<branch>/diff.json --report .git/pr-report/<branch>/report.json --open
 ```
 
+## Subagentic Mode
+
+Off by default. Turned on in the setup wizard or in Settings, it tells the agent to split a bigger change between subagents, one for each section of the report, which read and write at the same time. That is faster and costs more tokens. It needs an agent that can start subagents, like Claude Code, and small changes are written the usual way. The setting is kept in `~/.pr-report/settings.json`, where the skill's scripts read it.
+
 ## Per-repo settings
 
 An optional `.pr-report.json` in a repo's root sets the base branch, which paths belong to which target, extra generated files, and where coverage files are. See the end of `skill/SKILL.md` for an example.

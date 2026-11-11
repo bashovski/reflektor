@@ -3,10 +3,11 @@ import { ArrowLeft, Check, Monitor, Moon, Sun } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo } from "react";
 import type { BundledTheme } from "shiki/themes";
 import { type ThemeChoice, usePrefs } from "../lib/prefs";
+import { useAgentSettings } from "../lib/settings";
 import { afterSetup, markSetupDone } from "../lib/setup";
 import { codeThemesFor, HIGHLIGHTER, type ThemeMode } from "../lib/themes";
 import Dither, { type DitherProps } from "../vendor/react-bits/Dither";
-import { Choice } from "./Settings";
+import { Choice, SubagentSwitch } from "./Settings";
 import { cx, Kbd, Logo } from "./ui";
 
 // First-run setup, one screen per step. Enter moves on, Escape skips the rest, and every choice
@@ -144,6 +145,20 @@ export const IntroStep = () => (
     <p>This takes a minute: the tools on this machine, then how the page looks.</p>
   </div>
 );
+
+// The one choice about how a report is written and not how it looks. The same switch is in Settings.
+export const SpeedStep = () => {
+  const { settings, change } = useAgentSettings();
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted">
+        With this on, your agent hands each part of a change to a subagent, and they read and write at the same time. It needs an agent that can start
+        subagents, like Claude Code. Small changes are written the usual way. Change it any time in Settings.
+      </p>
+      {settings && <SubagentSwitch settings={settings} change={change} />}
+    </div>
+  );
+};
 
 export const ThemeStep = () => {
   const { theme, setTheme } = usePrefs();

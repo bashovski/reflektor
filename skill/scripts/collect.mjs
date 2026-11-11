@@ -16,6 +16,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { ownerAvatar } from "./avatar.mjs";
 import { globToRegExp, parseRemote, reportDir, shellPath } from "./repo.mjs";
+import { readSettings } from "./settings.mjs";
 
 const MAX_BYTES = 512 * 1024;
 const MAX_LINES = 8000;
@@ -859,6 +860,9 @@ if (coverage) {
   console.log("Patch coverage: none (no coverage file given or listed in .pr-report.json)");
 }
 console.log(config ? "Config: .pr-report.json found" : "Config: no .pr-report.json");
+// The reader can ask for speed over tokens in the page's Settings. It is said only when it is on, so the usual run
+// reads as before. SKILL.md step 4b is what the agent does with it.
+if (readSettings().subagents) console.log("Subagent mode: on (turned on in Settings). If you can start subagents, split the work as step 4b says.");
 console.log("");
 console.log(`Read the changes with: git diff ${from} ${to} -- <path>   (includes uncommitted and untracked files)`);
 console.log("Files (status, lines, target from config, flags):");

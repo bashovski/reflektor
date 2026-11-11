@@ -1,7 +1,9 @@
+import { Switch } from "@headlessui/react";
 import { Monitor, Moon, Sun, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 import type { BundledTheme } from "shiki/themes";
 import { type DiffStyle, type ThemeChoice, usePrefs } from "../lib/prefs";
+import { type AgentSettings, useAgentSettings } from "../lib/settings";
 import { codeThemesFor, type ThemeMode } from "../lib/themes";
 import { cx, Kbd, MOD_KEY } from "./ui";
 
@@ -46,6 +48,36 @@ export const Choice = <T extends string>({
     ))}
   </div>
 );
+
+// The one setting the agent reads: whether to split the writing of a report between subagents. The whole row is
+// the switch. It is shown in Settings and in the setup wizard.
+export const SubagentSwitch = ({ settings, change }: { settings: AgentSettings; change: (patch: Partial<AgentSettings>) => void }) => (
+  <Switch
+    checked={settings.subagents}
+    onChange={(on) => change({ subagents: on })}
+    className="group flex w-full items-center justify-between gap-4 rounded-control border border-[var(--border)] px-3 py-2.5 text-left hover:bg-zinc-500/[0.06] data-[checked]:border-accent data-[checked]:bg-accent/[0.06] data-[checked]:ring-1 data-[checked]:ring-accent"
+  >
+    <span>
+      <span className="block text-sm font-medium">Subagentic Mode</span>
+      <span className="block text-xs text-muted">Consumes more tokens, but it&rsquo;s hella faster.</span>
+    </span>
+    <span aria-hidden className="flex h-5 w-9 shrink-0 items-center rounded-control bg-zinc-500/30 p-0.5 transition-colors group-data-[checked]:bg-accent">
+      <span className="size-4 rounded-control bg-white transition-transform group-data-[checked]:translate-x-4 group-data-[checked]:bg-on-accent" />
+    </span>
+  </Switch>
+);
+
+// Shown where a daemon keeps the setting. A report saved as a file has none, and leaves the section out.
+const WritingSection = () => {
+  const { settings, change } = useAgentSettings();
+  if (!settings) return null;
+  return (
+    <section>
+      <h3 className="mb-2 label-caps text-xs text-muted">Writing reports</h3>
+      <SubagentSwitch settings={settings} change={change} />
+    </section>
+  );
+};
 
 export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   const { theme, setTheme, resolvedTheme, diffStyle, setDiffStyle, codeTheme, setCodeTheme } = usePrefs();
@@ -121,6 +153,8 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
             ))}
           </div>
         </section>
+
+        <WritingSection />
 
         <section>
           <h3 className="mb-2 label-caps text-xs text-muted">Keyboard shortcuts</h3>

@@ -95,6 +95,14 @@ try {
   if (!collected.includes("Patch coverage: 51%")) fail("collect.mjs did not read coverage from .pr-report.json");
   if (!collected.includes("(config)")) fail("collect.mjs did not take the base branch from .pr-report.json");
   if (!collected.includes("Safety checks: 1 high, 0 medium, 1 low")) fail("collect.mjs safety checks did not find the slug migration problems");
+  // The reader's settings: collect says nothing of subagent mode until the setting is on, and reads only the keys it knows.
+  if (collected.includes("Subagent mode")) fail("collect.mjs speaks of subagent mode although the setting is off");
+  mkdirSync(home.PR_REPORT_HOME, { recursive: true });
+  writeFileSync(join(home.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: true, unknown: 1 }));
+  if (!run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"], home).includes("Subagent mode: on")) fail("collect.mjs does not tell the agent that subagent mode is on");
+  writeFileSync(join(home.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: "yes" }));
+  if (run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"], home).includes("Subagent mode")) fail("collect.mjs takes a setting of the wrong type for on");
+  rmSync(join(home.PR_REPORT_HOME, "settings.json"));
   const books = JSON.parse(readFileSync(join(repo, ".git/pr-report/feat-books/diff.json"), "utf8"));
   if (books.repo.avatar?.initials !== "AL" || books.repo.avatar.image !== null) fail(`acme-labs without a cached avatar should get initials AL: ${JSON.stringify(books.repo.avatar)}`);
   if (books.repo.web?.ownerUrl !== "https://github.com/acme-labs" || books.repo.web.forge !== "github") fail(`collect.mjs did not find the repo's web links: ${JSON.stringify(books.repo.web)}`);
@@ -361,6 +369,17 @@ async function daemonFlow() {
     writeFileSync(join(env.PR_REPORT_HOME, "cache", "avatars", "stale"), "x");
     const purged = await (await fetch(`${base}/api/cache/purge`, { method: "POST", headers: { "x-review-token": config.token } })).json();
     if (!(purged.removed >= 1) || existsSync(join(env.PR_REPORT_HOME, "cache")) || !existsSync(join(env.PR_REPORT_HOME, "daemon.json"))) fail("purging the cache did not remove exactly the cache folder");
+    // The settings the agent reads: behind the page token, off until changed, and saved to the file the scripts read.
+    const settingsUrl = `${base}/api/settings`;
+    const asPage = { "x-review-token": config.token, "content-type": "application/json" };
+    if ((await fetch(settingsUrl)).status !== 401) fail("the settings endpoint answers without the page token");
+    const settingsBefore = await (await fetch(settingsUrl, { headers: asPage })).json();
+    const settingsAfter = await (await fetch(settingsUrl, { method: "POST", headers: asPage, body: JSON.stringify({ subagents: true, other: "x" }) })).json();
+    const settingsOnDisk = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "settings.json"), "utf8"));
+    if (settingsBefore.subagents !== false || settingsAfter.subagents !== true || settingsOnDisk.subagents !== true || "other" in settingsOnDisk)
+      fail(`the settings were not saved as sent: ${JSON.stringify({ settingsBefore, settingsAfter, settingsOnDisk })}`);
+    if ((await fetch(settingsUrl, { method: "POST", headers: asPage, body: "{" })).status !== 400) fail("the settings endpoint takes a body that is not JSON");
+    await fetch(settingsUrl, { method: "POST", headers: asPage, body: JSON.stringify({ subagents: false }) });
 
     // The page is told which agent it talks to: in its config, and live from whoever called last.
     if (config.agent?.name !== "Claude" || (await state()).agent?.product !== "Claude Code") fail(`the page does not know the agent that opened the review: ${JSON.stringify(config.agent)}`);

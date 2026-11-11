@@ -142,6 +142,29 @@ Before writing, find out:
 
 For large changes (more than about 60 files or 3000 changed lines), read must-review files fully and skim the rest. Say in the summary that the report focuses on the most important parts.
 
+## 4b. Subagent mode
+
+Only when collect printed `Subagent mode: on`. The reader has then asked for speed over tokens. Use it when both of these hold, and skip this step otherwise:
+
+- You can start subagents that run at the same time (in Claude Code, the Agent tool).
+- The change is big enough to split: 3 or more sections with files to read, or about 400 changed lines.
+
+Then split the reading of step 4 and the writing of step 5 by section:
+
+1. From collect's file table, put every file in a section and give each section its review level, as step 5 describes. Do not read the diffs yourself.
+2. Start one subagent for each section, all in one message so they run together. Put small sections that belong together into one subagent. Leave out sections that hold only generated or lock files, and write those yourself. At most 8 subagents.
+3. A subagent knows nothing of this conversation, so tell it:
+   - the repo path, its files, and the `git diff` command collect printed, to run for those files only
+   - why the change was made, in two or three sentences, and the plan's items if there was a plan
+   - the coverage lines and the safety findings collect printed for its files
+   - to read `${CLAUDE_SKILL_DIR}/schema/types.ts` and `${CLAUDE_SKILL_DIR}/style-guide.md` first, and to search the repo for callers of what its files change
+   - what to send back, as JSON and nothing else: `section` (a `Section` with its highlights, questions and files, as step 5 describes), `contracts`, `schema` tables, `beforeMerge` items, `gaps` in testing, and `steps`: the entry points and calls in its files that a flow would show, each with `symbol`, `ref` and one line on what it does
+   - what not to do: change code, run tests or write files
+4. While they work, write the header and the plan check yourself.
+5. When all have answered, put report.json together: the sections in the order step 5 gives, the contracts and schema tables with doubles removed, the 6 most important `beforeMerge` items and the 5 most important testing gaps. Write the flows yourself from the `steps` the subagents sent, since a flow crosses sections. Then go on with step 6.
+
+If a subagent fails or sends something you cannot use, do its section yourself.
+
 ## 5. Write report.json
 
 Write report.json to the **Report file** path that collect printed. Its shape is `Report` in `${CLAUDE_SKILL_DIR}/schema/types.ts`; read that file first. The allowed values for every field are the string unions in it. Write all text by `${CLAUDE_SKILL_DIR}/style-guide.md`; read it too.

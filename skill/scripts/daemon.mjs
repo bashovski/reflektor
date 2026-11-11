@@ -21,6 +21,7 @@ import { promisify } from "node:util";
 import { readChecksRun } from "./checks-run.mjs";
 import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mjs";
 import { purgeCache, whoAmI } from "./identity.mjs";
+import { readSettings, writeSettings } from "./settings.mjs";
 import { replaceFile } from "./repo.mjs";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
@@ -1187,8 +1188,19 @@ async function handle(req, res, port) {
   }
 
   // ---------- page API without a review: who is reading, and the daemon's cache
-  if (parts[1] === "me" || parts[1] === "cache") {
+  if (parts[1] === "me" || parts[1] === "cache" || parts[1] === "settings") {
     if (!same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
+    // The settings the agent reads (settings.mjs). The page shows and changes them here; the scripts read the file.
+    if (parts[1] === "settings" && req.method === "GET") return send(res, 200, readSettings());
+    if (parts[1] === "settings" && req.method === "POST") {
+      let patch;
+      try {
+        patch = JSON.parse(await readBody(req));
+      } catch {
+        return send(res, 400, { error: "bad JSON" });
+      }
+      return send(res, 200, writeSettings(patch));
+    }
     if (req.method === "GET" && parts[1] === "me") {
       const who = await whoAmI({ host: url.searchParams.get("host") || null, forge: url.searchParams.get("forge") || null, root: url.searchParams.get("root") || null });
       return send(res, 200, who);

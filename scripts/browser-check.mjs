@@ -85,6 +85,10 @@ try {
   await expectVisible(page.getByRole("heading", { name: "Your tools" }), "the tools step");
   await expectVisible(page.getByText(/Logged in|not logged in|Not installed/).first(), "what the daemon found out about gh and glab", 15_000);
   await page.keyboard.press("Enter");
+  await expectVisible(page.getByRole("heading", { name: "Faster reports?" }), "the step about subagent mode");
+  await page.getByRole("switch", { name: /Subagentic Mode/ }).click();
+  await expectVisible(page.getByRole("switch", { name: /Subagentic Mode/, checked: true }), "subagent mode turned on in the wizard");
+  await page.keyboard.press("Enter");
   await expectVisible(page.getByRole("heading", { name: "Light or dark?" }), "the theme step");
   await page.getByRole("button", { name: "Dark Always dark" }).click();
   await page.keyboard.press("Enter");
@@ -95,6 +99,9 @@ try {
   await expectVisible(page.getByRole("heading", { name: "You're all set" }), "the inbox greeting after setup");
   const saved = await page.evaluate(() => ["pr-report:setup", "pr-report:theme", "pr-report:code-theme-dark"].map((k) => localStorage.getItem(k)));
   if (!saved[0] || saved[1] !== '"dark"' || saved[2] !== '"github-dark"') fail(`setup did not save its choices: ${saved.join(" ")}`);
+  // Subagent mode is for the agent, so it is saved on disk by the daemon and not in the browser.
+  const settingsFile = join(env.PR_REPORT_HOME, "settings.json");
+  if (JSON.parse(readFileSync(settingsFile, "utf8")).subagents !== true) fail("the wizard did not save subagent mode where the scripts read it");
 
   // 1. The draft opens first: the facts, with sending held back.
   const draftOut = script("build.mjs", "--diff", join(data, "diff.json"), "--draft").match(/Wrote (\S+)/)[1];
@@ -292,6 +299,7 @@ try {
   await page.getByRole("button", { name: /^Settings/ }).click();
   const panel = page.frameLocator("iframe.panel");
   await expectVisible(panel.getByRole("heading", { name: "Settings" }), "Settings, opened from the inbox's menu");
+  await expectVisible(panel.getByRole("switch", { name: /Subagentic Mode/, checked: true }), "subagent mode in Settings, as it was set in the wizard");
   await panel.getByRole("button", { name: /^Close/ }).click();
   await page
     .locator("iframe.panel")
