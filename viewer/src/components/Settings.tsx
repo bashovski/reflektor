@@ -1,7 +1,7 @@
 import { Monitor, Moon, Sun, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 import type { BundledTheme } from "shiki/themes";
-import { type DiffStyle, type ThemeChoice, useReport } from "../lib/state";
+import { type DiffStyle, type ThemeChoice, usePrefs } from "../lib/prefs";
 import { codeThemesFor, type ThemeMode } from "../lib/themes";
 import { cx, Kbd, MOD_KEY } from "./ui";
 
@@ -48,7 +48,7 @@ export const Choice = <T extends string>({
 );
 
 export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
-  const { theme, setTheme, resolvedTheme, diffStyle, setDiffStyle, codeTheme, setCodeTheme } = useReport();
+  const { theme, setTheme, resolvedTheme, diffStyle, setDiffStyle, codeTheme, setCodeTheme } = usePrefs();
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {

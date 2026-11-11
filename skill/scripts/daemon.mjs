@@ -316,14 +316,16 @@ function pushEvent(r, type, data) {
 
 // ------------------------------------------------------------------ HTTP helpers
 
-const send = (res, status, body, type = "application/json") => {
-  // Pages must not be framed by other sites (clickjacking on Send or Fix this).
+const send = (res, status, body, type = "application/json", { framedByOwnPages = false } = {}) => {
+  // Pages must not be framed by other sites (clickjacking on Send or Fix this). Nothing may frame them at all, with
+  // one exception: /panel is made to be shown in a frame by the inbox, so this daemon's own pages may frame it, and
+  // still no other site can.
   res.writeHead(status, {
     "content-type": type,
     "cache-control": "no-store",
     "x-content-type-options": "nosniff",
-    "x-frame-options": "DENY",
-    "content-security-policy": "frame-ancestors 'none'",
+    "x-frame-options": framedByOwnPages ? "SAMEORIGIN" : "DENY",
+    "content-security-policy": `frame-ancestors ${framedByOwnPages ? "'self'" : "'none'"}`,
   });
   res.end(type === "application/json" ? JSON.stringify(body) : body);
 };
@@ -407,6 +409,8 @@ const ICONS = {
     '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
   external: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  trash: '<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   star: '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
   filter: '<path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
@@ -537,10 +541,11 @@ main{padding-top:32px;padding-bottom:48px}h1{margin:0 0 8px;font-size:26px;font-
 .me{margin-left:4px}.who{display:flex;align-items:center;padding:0;border:0;border-radius:50%;background:none;cursor:pointer}.who[aria-expanded=true]{box-shadow:0 0 0 2px color-mix(in oklab,oklch(70.5% .015 286.067) 40%,transparent)}
 .face{display:inline-grid;place-items:center;flex:none;width:28px;height:28px;border-radius:50%;object-fit:cover;background:color-mix(in oklab,oklch(55.2% .016 285.938) 20%,transparent);color:#fff;font:600 11px/1 "Geist Variable",ui-sans-serif,system-ui,sans-serif}.face.big{width:36px;height:36px;font-size:14px}
 .me .menu{box-sizing:border-box;width:288px;font-size:14px}.id{display:flex;align-items:center;gap:12px;padding:8px 10px}.id div{min-width:0}.id b,.id span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.id b{font-weight:500}.id span{color:var(--muted);font-size:12px}
-.me hr{height:1px;margin:4px 0;border:0;background:var(--border)}.cap{padding:6px 10px 6px;color:var(--muted);font:500 11px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;text-transform:uppercase}
-.mi{display:flex;align-items:center;gap:12px;box-sizing:border-box;width:100%;padding:8px 10px;border-radius:2px;color:inherit;text-decoration:none}.mi[hidden]{display:none}.mi:hover,.mi:focus-visible{background:var(--hover-2)}.mi>svg{width:16px;height:16px;color:var(--muted)}.mi>span:not(.ext){flex:1}.ext{display:inline-flex;color:var(--faint);opacity:0}.mi:hover .ext,.mi:focus-visible .ext{opacity:1}
-.themes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0 10px 8px}.themes button{padding:5px 0;border:1px solid var(--border);border-radius:2px;background:none;color:inherit;font:500 12px "Geist Variable",ui-sans-serif,system-ui,sans-serif;cursor:pointer}.themes button:hover{background:var(--hover-2)}.themes button[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.me hr{height:1px;margin:4px 0;border:0;background:var(--border)}
+.mi{display:flex;align-items:center;gap:12px;box-sizing:border-box;width:100%;padding:8px 10px;border:0;border-radius:2px;background:none;color:inherit;font:inherit;text-align:left;text-decoration:none;cursor:pointer}.mi[hidden]{display:none}.mi:hover,.mi:focus-visible{background:var(--hover-2)}.mi>svg{width:16px;height:16px;color:var(--muted)}.mi>span:not(.ext){flex:1}.ext{display:inline-flex;color:var(--faint);opacity:0}.mi:hover .ext,.mi:focus-visible .ext{opacity:1}
+.mi kbd{padding:0 6px;border:1px solid var(--border);border-radius:2px;background:var(--hover-2);color:var(--muted);font:12px/1.5 "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace}
 .star{display:none;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--border);border-radius:2px;color:inherit;font-size:12px;font-weight:500;line-height:16px;text-decoration:none;white-space:nowrap}.star:hover{background:var(--hover-2)}.star svg{color:var(--muted)}@media (min-width:768px){.star{display:inline-flex}}
+iframe.panel{position:fixed;inset:0;z-index:100;width:100%;height:100%;border:0;background:transparent}iframe.panel[hidden]{display:none}
 .status{display:flex;align-items:center;gap:8px;padding:8px 10px;color:var(--muted);font-size:12px}.status i{flex:none;width:8px;height:8px;border-radius:50%;background:oklch(69.6% .17 162.48)}.status.down i{background:oklch(63.7% .237 25.331)}
 svg{width:14px;height:14px;flex:none}
 .bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}#summary{color:var(--muted);font-size:13px}
@@ -587,9 +592,10 @@ code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospa
 <div class="dd me"><button type="button" class="who" aria-haspopup="true" aria-expanded="false" title="Your account and the daemon" aria-label="Your account and the daemon"><span class="face" id="me-face"></span></button><div class="menu" hidden>
 <div class="id"><span class="face big" id="me-face-big"></span><div><b id="me-name">Looking you up…</b><span id="me-sub"></span></div></div><hr>
 <a class="mi" id="me-profile" target="_blank" rel="noreferrer" hidden>${icon("user")}<span>Open profile</span>${external}</a>
-<a class="mi" href="/setup">${icon("settings")}<span>Run the first-time setup again</span></a>
+<button type="button" class="mi" data-panel="settings">${icon("settings")}<span>Settings</span><kbd>?</kbd></button>
+<button type="button" class="mi" data-panel="help">${icon("help")}<span>Help</span></button>
 <a class="mi" id="me-bug" target="_blank" rel="noreferrer" href="https://github.com/bashovski/pr-report/issues/new">${icon("bug")}<span>Report a bug</span>${external}</a><hr>
-<div class="cap">Theme</div><div class="themes"><button type="button" data-theme-pick="system">System</button><button type="button" data-theme-pick="light">Light</button><button type="button" data-theme-pick="dark">Dark</button></div><hr>
+<button type="button" class="mi" data-panel="purge">${icon("trash")}<span>Purge daemon cache</span></button><hr>
 <div class="status" id="me-status" role="status"><i aria-hidden="true"></i><span></span></div>
 </div></div></div></header>
 <div class="hint" id="setup-hint" hidden><div class="wrap">${icon("sparkles")}<span>New here? A one-minute setup checks your tools and picks how reports look.</span><a href="/setup">Set up Reflektor</a><button type="button" id="setup-dismiss" title="Not now" aria-label="Not now">${icon("x")}</button></div></div>
@@ -692,8 +698,9 @@ if(b.dataset.act==="delete"&&!confirm("Delete this review's files ("+b.dataset.s
 const act=b.dataset.act==="delete"?"delete":"archive";
 const res=await fetch("/api/r/"+encodeURIComponent(b.dataset.id)+"/"+act,{method:"POST",headers:{"x-review-token":"${pageToken}","content-type":"application/json"},body:JSON.stringify({archived:b.dataset.act!=="restore"})});
 if(!res.ok)alert((await res.json().catch(()=>({}))).error||"Could not do that");location.reload()});
-// The reader's menu in the top bar, the one a report has: who is reading, the setup, a bug report, the theme and the
-// daemon. A report asks the daemon the same questions through viewer/src/components/UserMenu.tsx.
+// The reader's menu in the top bar, with the options a report's menu has (viewer/src/components/UserMenu.tsx): who is
+// reading, the profile, Settings, Help, a bug report, the cache purge and the daemon. A change to one menu needs the
+// same change to the other.
 const ME=${JSON.stringify(me).replace(/</g, "\\u003c")},DAEMON=${JSON.stringify({ version: VERSION, node: process.version, startedAt })};
 const SOURCES={gh:"via the GitHub CLI",glab:"via the GitLab CLI",git:"from git config",none:"no identity found"};
 const paint=(el,a)=>{if(!a)return;if(String(a.image||"").startsWith("data:image/")){const i=new Image();i.src=a.image;i.alt="";i.className=el.className;el.replaceWith(i);return}el.style.background=/^#[0-9a-f]{6}$/i.test(a.color||"")?a.color:"#71717a";el.textContent=String(a.initials||"").slice(0,2)};
@@ -703,15 +710,24 @@ fetch("/api/me?"+new URLSearchParams(ME),{headers:{"x-review-token":"${pageToken
   name.textContent=who.name||who.login||who.email||"Unknown";
   document.getElementById("me-sub").textContent=(who.login?"@"+who.login:who.email||"")+(who.login||who.email?" · ":"")+SOURCES[who.source];
   for(const id of ["me-face","me-face-big"])paint(document.getElementById(id),who.avatar);
-  if(who.url){const p=document.getElementById("me-profile");p.href=who.url;p.hidden=false}
+  if(who.url){const p=document.getElementById("me-profile"),forge={github:"GitHub ",gitlab:"GitLab "}[ME.forge]||"";p.href=who.url;p.querySelector("span").textContent="Open "+forge+"profile";p.hidden=false}
 });
 document.getElementById("me-bug").href+="?"+new URLSearchParams({body:["<"+"!-- What happened, and what you expected --"+">","","","---","Reflektor daemon "+DAEMON.version+", Node "+DAEMON.node,"Browser: "+navigator.userAgent].join("\\n")});
-// The theme is the one saved for every page (pr-report:theme). The script in the head applies it when it hears a
-// storage event, so a pick here is announced the same way a pick in another tab is.
-const themeNow=()=>{try{const v=JSON.parse(localStorage.getItem("pr-report:theme")||'"system"');return v==="dark"||v==="light"?v:"system"}catch{return "system"}};
-const markTheme=()=>{const v=themeNow();for(const b of document.querySelectorAll("[data-theme-pick]"))b.setAttribute("aria-pressed",String(b.dataset.themePick===v))};
-markTheme();addEventListener("storage",(e)=>{if(e.key==="pr-report:theme")markTheme()});
-document.addEventListener("click",(e)=>{const b=e.target.closest("[data-theme-pick]");if(!b)return;const v=JSON.stringify(b.dataset.themePick);try{localStorage.setItem("pr-report:theme",v)}catch{}dispatchEvent(new StorageEvent("storage",{key:"pr-report:theme",newValue:v}));markTheme()});
+// Settings, Help and the cache purge are the report's own dialogs. They are not written a second time here: the page
+// at /panel holds them, and it is loaded in a see-through frame over the window (viewer/src/lib/panel.ts). The frame
+// is fetched when the menu first opens, so a dialog is there at once when it is asked for. A theme picked in Settings
+// reaches this page through the storage event the script in the head listens to.
+let panel=null,panelReady=false,wanted=null;
+const loadPanel=()=>{if(panel)return;panel=document.createElement("iframe");panel.className="panel";panel.title="Settings, help and the cache";panel.hidden=true;panel.src="/panel";document.body.append(panel)};
+const showPanel=()=>{if(!panelReady||!wanted)return;panel.hidden=false;panel.contentWindow.postMessage({open:wanted},location.origin);panel.focus()};
+const openPanel=(name)=>{wanted=name;loadPanel();showPanel()};
+addEventListener("message",(e)=>{if(!panel||e.origin!==location.origin||e.source!==panel.contentWindow||!e.data)return;
+  if(e.data.panel==="ready"){panelReady=true;showPanel()}
+  if(e.data.panel==="closed"&&!panel.hidden){panel.hidden=true;wanted=null;document.querySelector(".who").focus()}});
+document.querySelector(".who").addEventListener("click",loadPanel);
+document.addEventListener("click",(e)=>{const b=e.target.closest("[data-panel]");if(!b)return;toggle(b.closest(".dd"),false);openPanel(b.dataset.panel)});
+// "?" opens Settings, as in a report.
+document.addEventListener("keydown",(e)=>{if(e.key!=="?"||e.metaKey||e.ctrlKey||e.altKey||e.target.closest("input,textarea"))return;e.preventDefault();openPanel("settings")});
 // How long the daemon has run, worded as in the report's menu: its two largest units, never rounded up.
 const upFor=(since)=>{const s=(Date.now()-Date.parse(since))/1000;if(s<90)return "just started";const m=Math.floor(s/60),d=Math.floor(m/1440),h=Math.floor(m%1440/60),min=m%60;return "up "+(d?[d+"d",h>0&&h+"h"]:h?[h+"h",min>0&&min+"min"]:[min+"min"]).filter(Boolean).join(" ")};
 const status=document.getElementById("me-status");let daemonUp=true;
@@ -768,6 +784,14 @@ function setupPage() {
   return readFileSync(join(APP_DIR, "index.html"), "utf8")
     .replace("<title>PR report</title>", () => "<title>Set up Reflektor</title>")
     .replace("</head>", () => `<script>window.__PR_SETUP__=${JSON.stringify({ token: pageToken })}</script></head>`);
+}
+
+// The report's own dialogs (Settings, Help, the cache purge) for the inbox, which is not built with the viewer and
+// shows this page in a frame over itself. See viewer/src/lib/panel.ts.
+function panelPage() {
+  return readFileSync(join(APP_DIR, "index.html"), "utf8")
+    .replace("<title>PR report</title>", () => "<title>Reflektor</title>")
+    .replace("</head>", () => `<script>window.__PR_PANEL__=${JSON.stringify({ token: pageToken })}</script></head>`);
 }
 
 function reviewPage(r, round) {
@@ -1109,9 +1133,10 @@ async function handle(req, res, port) {
     res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=3600", "x-content-type-options": "nosniff" });
     return res.end(readFileSync(FUSE_FILE));
   }
-  if (["r", "app", "setup"].includes(parts[0]) && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
+  if (["r", "app", "setup", "panel"].includes(parts[0]) && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
   if (req.method === "GET" && parts[0] === "app" && parts[1] === "assets") return sendAsset(res, parts.slice(1));
   if (req.method === "GET" && url.pathname === "/setup") return send(res, 200, setupPage(), "text/html; charset=utf-8");
+  if (req.method === "GET" && url.pathname === "/panel") return send(res, 200, panelPage(), "text/html; charset=utf-8", { framedByOwnPages: true });
   if (req.method === "GET" && parts[0] === "r" && parts[1]) {
     const r = reviews.get(parts[1]);
     const html = r && reviewPage(r, Number(url.searchParams.get("round")) || r.round);

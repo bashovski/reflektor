@@ -119,6 +119,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* The dialogs shown in a frame over another page (see lib/panel.ts): the page behind has to show through. */
+html.panel,
+html.panel body {
+  background: transparent;
+}
+
 /* A block on the page: a section, a file, the plan check and the like. Blocks have square corners, so a card
    takes `surface border` and no rounding. Things that float over the page (menus, dialogs, the review bar) and
    controls take `rounded-control`.

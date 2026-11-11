@@ -2,8 +2,10 @@ import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Bundle } from "../../skill/schema/types";
 import { App } from "./components/App";
+import { Panel } from "./components/Panel";
 import { Setup } from "./components/Setup";
 import { fetchRound, LiveProvider, useLive } from "./lib/live";
+import { isPanelPage } from "./lib/panel";
 import { PreferencesProvider } from "./lib/prefs";
 import { RoundCtx } from "./lib/rounds";
 import { isSetupPage } from "./lib/setup";
@@ -58,6 +60,6 @@ const Load = () => {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <PreferencesProvider>{isSetupPage() ? <Setup /> : <Load />}</PreferencesProvider>
+    <PreferencesProvider>{isPanelPage() ? <Panel /> : isSetupPage() ? <Setup /> : <Load />}</PreferencesProvider>
   </StrictMode>,
 );
