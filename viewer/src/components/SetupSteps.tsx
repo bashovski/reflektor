@@ -104,7 +104,7 @@ export const SetupFrame = ({
       <div className="surface flex items-center justify-between border border-b-0 px-6 py-3 text-xs text-muted sm:px-8">
         <span className="inline-flex items-center gap-2 font-semibold tracking-tight text-[var(--text)]">
           <Logo className="h-4" />
-          pr-report
+          Reflektor
         </span>
         <span className="inline-flex items-center gap-1.5" aria-label={`Step ${index + 1} of ${steps.length}`}>
           {steps.map((s, i) => (
@@ -140,7 +140,7 @@ export const SetupFrame = ({
 export const IntroStep = () => (
   <div className="space-y-3 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400">
     <p>
-      pr-report turns a branch into a review page: a plain-English summary, the files in the order to read them, risks with a suggested fix, and
+      Reflektor turns a branch into a review page: a plain-English summary, the files in the order to read them, risks with a suggested fix, and
       diffs with notes. You comment on the page, your agent fixes, and the next round comes back to the same tab.
     </p>
     <p>This takes a minute: the tools on this machine, then how the page looks.</p>

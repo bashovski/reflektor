@@ -128,7 +128,7 @@ export const ToolsStep = () => {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">
-        pr-report works without these. With one of them, a report knows the pull request it belongs to, and your agent can open one for you. Click a
+        Reflektor works without these. With one of them, a report knows the pull request it belongs to, and your agent can open one for you. Click a
         tool to see how to connect it.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">

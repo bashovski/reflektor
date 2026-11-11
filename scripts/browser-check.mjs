@@ -79,7 +79,7 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   await page.goto(`http://127.0.0.1:${port}/setup`);
-  await expectVisible(page.getByRole("heading", { name: "Welcome to pr-report" }), "the setup page");
+  await expectVisible(page.getByRole("heading", { name: "Welcome to Reflektor" }), "the setup page");
   await expectVisible(page.locator("canvas").first(), "the background of the setup wizard");
   await page.keyboard.press("Enter");
   await expectVisible(page.getByRole("heading", { name: "Your tools" }), "the tools step");
@@ -243,10 +243,10 @@ try {
   // 9. A browser that skipped the setup is offered it once, above a report and on the inbox.
   await page.evaluate(() => localStorage.removeItem("pr-report:setup"));
   await page.goto(`http://127.0.0.1:${port}/r/${id}`);
-  await expectVisible(page.getByRole("link", { name: "Set up pr-report" }), "the setup offer above a report");
+  await expectVisible(page.getByRole("link", { name: "Set up Reflektor" }), "the setup offer above a report");
   await page.getByRole("button", { name: "Not now" }).click();
   await page.goto(`http://127.0.0.1:${port}/`);
-  await expectVisible(page.getByRole("heading", { name: "PR reports" }), "the inbox again");
+  await expectVisible(page.getByRole("heading", { name: "Reflektor" }), "the inbox again");
   if (await page.locator("#setup-hint").isVisible()) fail("the inbox offers the setup again after Not now");
 
   const unexpected = errors.filter((e) => !/favicon/.test(e));
