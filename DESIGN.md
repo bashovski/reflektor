@@ -27,9 +27,10 @@ A color that carries a meaning is written by its role, never by its hue. The rol
 | `danger` | Something is wrong, or must be read | red |
 | `warn` | Needs a look: changed, unsure, not decided | amber |
 | `ok` | Done, passed, new | emerald |
-| `accent` | What you can act on: main buttons, links, focus, your own comments | blue |
+| `accent` | What you can act on: main buttons, the selected choice, focus, your own comments | none: white in the dark theme, near-black in the light one |
 | `agent` | The agent's side: its work in progress, its questions and answers | violet |
 
+- **The accent has no hue.** It is the color of the text itself, set as `--accent` in `index.css`, with `--on-accent` for what sits on it. A main button is `bg-accent text-on-accent`. It is one color and not a scale, so a tint is written with an opacity, as in `bg-accent/10`. A link is underlined, because its color no longer sets it apart.
 - **Greys are zinc.** The page itself is colored by the tokens `--bg`, `--surface`, `--surface-2` and `--border`, which change with the theme.
 - **Text has three tones.** What you read is `--text`. What explains it (descriptions, labels, notes) takes `text-muted`, which keeps at least 4.5 to 1 against a block in both themes. What can be missed (separators, icons, small counts) takes `text-faint`, at about 3.8 to 1. Do not write a single zinc shade for text: it is the same grey in both themes, so it is too dim in one of them.
 - **Category colors are not roles.** A color that only tells categories apart keeps its hue, so retuning a role never moves it: the targets, the PR type tags, the highlight kinds that are not a warning, and the pull request states, which are GitHub's own colors. They live in `viewer/src/lib/meta.ts`.

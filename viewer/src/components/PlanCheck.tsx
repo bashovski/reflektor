@@ -30,7 +30,7 @@ export const PlanCheck = () => {
     <section id="plan" className="surface border p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <ListChecks className="size-4 text-accent-500" />
+          <ListChecks className="size-4 text-accent" />
           Plan check
         </h2>
         <span className="text-sm text-zinc-600 dark:text-zinc-400">

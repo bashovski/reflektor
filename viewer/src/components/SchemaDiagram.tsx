@@ -33,7 +33,7 @@ const TableCard = ({ table, register }: { table: SchemaTable; register: (key: st
           className={cx("flex items-center gap-2 px-3 py-1 font-mono text-xs", STATUS[c.status].row)}
         >
           <span className="w-3.5 shrink-0">
-            {c.key === "pk" ? <KeyRound className="size-3 text-warn-500" /> : c.references ? <Link2 className="size-3 text-accent-500" /> : null}
+            {c.key === "pk" ? <KeyRound className="size-3 text-warn-500" /> : c.references ? <Link2 className="size-3 text-accent" /> : null}
           </span>
           <span className="font-medium">{c.name}</span>
           <span className="text-muted">{c.type}</span>

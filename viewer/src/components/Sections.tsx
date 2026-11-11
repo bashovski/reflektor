@@ -176,7 +176,7 @@ export const Sections = () => {
             <>
               {" "}
               {hidden} {hidden === 1 ? "section has" : "sections have"} no changes since then;{" "}
-              <button type="button" onClick={() => setView("branch")} className="text-accent-600 hover:underline dark:text-accent-400">
+              <button type="button" onClick={() => setView("branch")} className="text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent">
                 show the whole branch
               </button>
               .

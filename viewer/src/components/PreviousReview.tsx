@@ -20,7 +20,7 @@ export const PreviousReview = () => {
   return (
     <section className="surface border p-4 sm:p-5">
       <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold">
-        <MessagesSquare className="size-4 text-accent-500" />
+        <MessagesSquare className="size-4 text-accent" />
         Your review, round {previous.round}
       </h2>
       <p className="mb-3 text-xs text-muted">

@@ -57,8 +57,8 @@ export const toDiffInput = (file: DiffFile): DiffInput | null => {
 };
 
 export const LineNoteBubble = ({ text }: { text: string }) => (
-  <div className="my-1.5 mr-3 ml-12 flex max-w-2xl items-start gap-2 rounded-control border border-accent-500/20 border-l-[3px] border-l-accent-500 bg-accent-500/[0.06] px-3 py-2 font-sans text-[13px] leading-snug text-zinc-800 dark:text-zinc-200">
-    <MessageSquareText className="mt-0.5 size-3.5 shrink-0 text-accent-500" />
+  <div className="my-1.5 mr-3 ml-12 flex max-w-2xl items-start gap-2 rounded-control border border-accent/20 border-l-[3px] border-l-accent bg-accent/[0.06] px-3 py-2 font-sans text-[13px] leading-snug text-zinc-800 dark:text-zinc-200">
+    <MessageSquareText className="mt-0.5 size-3.5 shrink-0 text-accent" />
     <RichText text={text} />
   </div>
 );
@@ -210,7 +210,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
     <div
       id={fileDomId(path)}
       onClickCapture={() => setCurrent(path)}
-      className={cx("surface overflow-clip border", current === path && "ring-2 ring-accent-500/40")}
+      className={cx("surface overflow-clip border", current === path && "ring-2 ring-accent/40")}
     >
       <div className={cx("sticky top-14 z-10 flex items-center gap-2 bg-[var(--surface-2)] px-2 py-1.5 sm:px-3", open && "border-b border-[var(--border)]")}>
         <button type="button" onClick={() => setFileOpen(path, !open)} className="rounded-control p-0.5 text-faint hover:bg-zinc-500/10" title={open ? "Collapse" : "Expand"}>
@@ -224,7 +224,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
           {file.oldPath && <span className="truncate text-faint">&nbsp;(from {file.oldPath})</span>}
         </button>
         {view === "branch" && sinceRound?.paths.has(path) && (
-          <Pill className="shrink-0 bg-accent-500/10 px-2 text-[10px] text-accent-700 ring-accent-500/30 dark:text-accent-300">Changed since round {sinceRound.round}</Pill>
+          <Pill className="shrink-0 bg-accent/10 px-2 text-[10px] text-accent ring-accent/30">Changed since round {sinceRound.round}</Pill>
         )}
         {file.uncommitted && <Pill className="shrink-0 bg-warn-500/10 px-2 text-[10px] text-warn-700 ring-warn-500/30 dark:text-warn-300">Not committed</Pill>}
         {file.generated && <Pill className="shrink-0 bg-zinc-500/10 px-2 text-[10px] text-muted ring-zinc-500/25">Generated</Pill>}
@@ -236,7 +236,7 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
             <DiffBar additions={file.additions} deletions={file.deletions} />
           </span>
           <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-control border border-[var(--border)] px-2 py-0.5 text-xs text-zinc-600 select-none hover:bg-zinc-500/5 dark:text-zinc-400">
-            <input type="checkbox" checked={viewed} onChange={() => toggleViewed(path)} className="size-3.5 accent-accent-600" />
+            <input type="checkbox" checked={viewed} onChange={() => toggleViewed(path)} className="size-3.5 accent-accent" />
             Viewed
           </label>
           {editable && (
@@ -259,8 +259,8 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
       {open && (
         <>
           {sectionFile.note && (
-            <div className="flex gap-3 border-b border-[var(--border)] bg-accent-500/[0.04] px-4 py-3">
-              <MessageSquareText className="mt-0.5 size-4 shrink-0 text-accent-500" />
+            <div className="flex gap-3 border-b border-[var(--border)] bg-accent/[0.04] px-4 py-3">
+              <MessageSquareText className="mt-0.5 size-4 shrink-0 text-accent" />
               <RichText text={sectionFile.note} className="block max-w-3xl text-[13.5px] leading-relaxed text-zinc-700 dark:text-zinc-300" />
             </div>
           )}

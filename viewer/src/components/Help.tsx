@@ -70,7 +70,7 @@ export const HelpDialog = ({ open, onClose }: { open: boolean; onClose: () => vo
           </ul>
         </section>
 
-        <a href={PROJECT.readme} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-accent-600 hover:underline dark:text-accent-400">
+        <a href={PROJECT.readme} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent">
           Read the README on GitHub <ExternalLink className="size-3.5" />
         </a>
       </div>

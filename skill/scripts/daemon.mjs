@@ -532,7 +532,7 @@ legend{float:left;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--m
 .row{display:flex;align-items:center;border-top:1px solid var(--border);padding-right:12px}.row:first-child{border-top:0}
 .row>a{flex:1;min-width:0;display:flex;gap:12px;align-items:center;padding:12px 16px;color:inherit;text-decoration:none}
 .row:hover{background:var(--hover)}
-:focus-visible{outline:2px solid oklch(62.3% .214 259.815);outline-offset:2px}.row>a:focus-visible{outline-offset:-2px}
+:focus-visible{outline:2px solid var(--text);outline-offset:2px}.row>a:focus-visible{outline-offset:-2px}
 .tc{flex:none;width:98px}.tag{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px 0 7px;border-radius:2px;color:#fff;font:600 11px/1 "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.03em;white-space:nowrap}.tag svg{width:12px;height:12px;stroke-width:2.4}
 .main{flex:1;min-width:0;display:flex;flex-direction:column}.title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta,time{color:var(--muted);font-size:12px}.meta{display:flex;align-items:center;gap:6px;min-width:0}
