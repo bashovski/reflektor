@@ -80,6 +80,7 @@ try {
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   await page.goto(`http://127.0.0.1:${port}/setup`);
   await expectVisible(page.getByRole("heading", { name: "Welcome to pr-report" }), "the setup page");
+  await expectVisible(page.locator("canvas").first(), "the background of the setup wizard");
   await page.keyboard.press("Enter");
   await expectVisible(page.getByRole("heading", { name: "Your tools" }), "the tools step");
   await expectVisible(page.getByText(/Logged in|not logged in|Not installed/).first(), "what the daemon found out about gh and glab", 15_000);
