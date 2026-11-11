@@ -63,12 +63,16 @@ const BACKDROP = {
 } satisfies DitherProps;
 
 // Its shades, from the one that fills most of the page to the crest of a wave. The palette replaces the component's
-// wave and background colors, so those two are not set. There is one palette per theme because the wizard itself
-// asks "Light or dark?" and the page must follow the answer: the dark one is the playground's, the light one is the
-// same blues turned around to start from a light page.
+// wave and background colors, so those two are not set.
+//
+// The first three are the page's own greys, so most of the page stays as quiet as the rest of pr-report, and the
+// four colors (indigo, purple, periwinkle, a pale mint) only show on the waves. The component splits its range evenly
+// over the shades, so three greys out of seven is what keeps the greys in the majority: with fewer, the page turns
+// purple. There is one palette per theme because the wizard itself asks "Light or dark?" and the page must follow
+// the answer: black and dark grey in the dark theme, white and light grey in the light one.
 const BACKDROP_PALETTE: Record<ThemeMode, string[]> = {
-  dark: ["#06121f", "#173d5c", "#5f9ec7", "#e4f3ff"],
-  light: ["#f3f8fc", "#d3e6f5", "#9cc4e4", "#5f9ec7"],
+  dark: ["#09090b", "#141417", "#232329", "#7D7AE2", "#9F81E4", "#8D92E4", "#C2E1CC"],
+  light: ["#fafafa", "#f0f0f2", "#e2e2e6", "#C2E1CC", "#8D92E4", "#9F81E4", "#7D7AE2"],
 };
 
 export const SetupFrame = ({

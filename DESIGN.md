@@ -42,7 +42,7 @@ A color that carries a meaning is written by its role, never by its hue. The rol
 
 ## The setup wizard
 
-The setup wizard is the one page with a decorative background: slow dithered waves behind the card, drawn by `Dither` (`viewer/src/vendor/react-bits/Dither.tsx`, copied from React Bits). Its settings and its shades for each theme are in `viewer/src/components/SetupSteps.tsx`. It stops by itself when the system asks for less motion. The review page and the inbox have no background of this kind.
+The setup wizard is the one page with a decorative background: slow dithered waves behind the card, drawn by `Dither` (`viewer/src/vendor/react-bits/Dither.tsx`, copied from React Bits). Its settings and its shades for each theme are in `viewer/src/components/SetupSteps.tsx`: mostly the page's own greys, with color only on the waves. It stops by itself when the system asks for less motion. The review page and the inbox have no background of this kind.
 
 ## Meters
 
