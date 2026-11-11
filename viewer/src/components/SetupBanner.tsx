@@ -18,7 +18,7 @@ export const SetupBanner = () => {
         <Sparkles className="size-4 shrink-0 text-agent-600 dark:text-agent-400" />
         <span>New here? A one-minute setup checks your tools and picks how reports look.</span>
         <a href="/setup" className="font-medium text-agent-700 underline-offset-2 hover:underline dark:text-agent-300">
-          Set up pr-report
+          Set up Reflektor
         </a>
         <button type="button" onClick={dismiss} title="Not now" className="ml-auto rounded-control p-1 text-muted hover:bg-zinc-500/10">
           <X className="size-4" />

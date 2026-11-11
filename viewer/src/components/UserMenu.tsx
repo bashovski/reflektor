@@ -52,7 +52,7 @@ const bugReportUrl = (daemon: DaemonInfo | null, bundle: Bundle) => {
     "",
     "",
     "---",
-    `pr-report daemon ${daemon ? `${daemon.version}, Node ${daemon.node}` : "not reachable"}`,
+    `Reflektor daemon ${daemon ? `${daemon.version}, Node ${daemon.node}` : "not reachable"}`,
     `Report built ${bundle.builtAt}, round ${bundle.round}`,
     `Browser: ${navigator.userAgent}`,
   ];

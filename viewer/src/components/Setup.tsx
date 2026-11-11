@@ -5,7 +5,7 @@ import { ToolsStep } from "./ToolsStep";
 // First-run setup: what pr-report is, the tools it can use, then how the page should look. The last
 // step hands over to the inbox, which greets a first-timer and says how to start a report.
 const STEPS: SetupStep[] = [
-  { id: "intro", title: "Welcome to pr-report", next: "Get started" },
+  { id: "intro", title: "Welcome to Reflektor", next: "Get started" },
   { id: "tools", title: "Your tools", next: "Continue" },
   { id: "theme", title: "Light or dark?", next: "Continue" },
   { id: "code", title: "Pick a code theme", next: "Finish" },
@@ -20,7 +20,7 @@ export const Setup = () => {
   const codeKeys = useCodeThemeKeys(step.id === "code");
 
   useEffect(() => {
-    document.title = "Set up pr-report";
+    document.title = "Set up Reflektor";
   }, []);
 
   // Enter moves on, even from a focused option button, so it never re-picks what is already picked.
