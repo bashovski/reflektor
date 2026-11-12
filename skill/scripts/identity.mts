@@ -8,13 +8,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { RepoAvatar } from "../schema/types.js";
+import type { Identity } from "../schema/types.js";
 import { ownerAvatar } from "./avatar.mjs";
 
 // The reader's account on the forge, as the CLI reports it and as it is cached.
 type Account = { source: "gh" | "glab"; login: string; name: string | null; url: string; checkedAt?: string };
-// Who is reading, for /api/me. viewer/src/lib/identity.ts has the same shape.
-export type Identity = { source: Account["source"] | "git" | "none"; login: string | null; name: string | null; email: string | null; url: string | null; host: string | null; avatar: RepoAvatar };
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const CLI_TIMEOUT_MS = 10_000;

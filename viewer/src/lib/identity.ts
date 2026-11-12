@@ -1,17 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RepoAvatar } from "../../../skill/schema/types";
-
-// Who is reading the page, as the daemon worked it out: the forge account when its CLI is logged in,
-// else the git identity of the repo. See skill/scripts/identity.mts.
-export type Identity = {
-  source: "gh" | "glab" | "git" | "none";
-  login: string | null;
-  name: string | null;
-  email: string | null;
-  url: string | null;
-  host: string | null;
-  avatar: RepoAvatar;
-};
+import type { Identity } from "../../../skill/schema/types";
 
 type Params = { host: string | null; forge: string | null; root: string };
 

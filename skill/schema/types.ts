@@ -346,6 +346,18 @@ export type FlowStepChecked = FlowStep & { verified: boolean };
 // they type there to pick a review up. Worked out by scripts/agent.mjs from skill/agents.json.
 export type AgentInfo = { id: string | null; name: string; product: string; resume: string | null; version: string | null };
 
+// Who is reading a page, as the daemon's /api/me works it out (scripts/identity.mts): the forge account when its CLI
+// is logged in, else the repo's git identity. The reader's menu draws it, on a report and in the inbox.
+export type Identity = {
+  source: "gh" | "glab" | "git" | "none";
+  login: string | null;
+  name: string | null;
+  email: string | null;
+  url: string | null;
+  host: string | null;
+  avatar: RepoAvatar;
+};
+
 // What the daemon hands the inbox page's script (viewer/src/inbox/inbox.ts), in a JSON block before it: the status
 // labels and colors, the order of the types, when each listed review last changed, the page token, what /api/me is
 // asked about, and the daemon for the status line in the reader's menu.
