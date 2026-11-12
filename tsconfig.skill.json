@@ -1,0 +1,25 @@
+{
+  // Compiles the skill's scripts (skill/scripts/*.mts) for the package: one .mjs per file, with its comments, into
+  // dist/.tsc/, which scripts/build-skill.mts copies into dist/skill/scripts/. ES2022 and its library only, so the
+  // result runs on Node 18 and code that needs a newer JavaScript fails here. rootDir is skill/ because the scripts
+  // import their types from skill/schema/types.ts; those imports leave nothing behind in the output.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "rootDir": "skill",
+    "outDir": "dist/.tsc",
+    "newLine": "lf",
+    "noEmitOnError": true,
+    "typeRoots": ["./viewer/node_modules/@types"],
+    "types": ["node"]
+  },
+  "include": ["skill/scripts"]
+}

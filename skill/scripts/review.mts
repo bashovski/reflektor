@@ -12,7 +12,7 @@
 //   setup   [--no-open]                   open the first-run setup page (tools, light or dark, code theme)
 //   stop                                  stop the daemon
 //
-// Every command tells the daemon which agent is calling, worked out from the shell it runs in (agent.mts).
+// Every command tells the daemon which agent is calling, worked out from the shell it runs in (agent.mjs).
 // --agent <id> says it outright; --agent-name "<product>" is the agent's own answer when nothing else is known.
 
 import { execFileSync, spawn } from "node:child_process";
@@ -21,10 +21,10 @@ import { existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { CommentTarget, LiveQuestion, PrState, ReviewComment } from "../schema/types.ts";
-import { AGENT_HEADER, detectAgent, encodeAgent } from "./agent.mts";
-import { runReportHooks } from "./hooks.mts";
-import { shellPath } from "./repo.mts";
+import type { CommentTarget, LiveQuestion, PrState, ReviewComment } from "../schema/types.js";
+import { AGENT_HEADER, detectAgent, encodeAgent } from "./agent.mjs";
+import { runReportHooks } from "./hooks.mjs";
+import { shellPath } from "./repo.mjs";
 
 // daemon.json, which the daemon writes when it starts: where it listens and its admin token.
 type DaemonInfo = { port: number; pid: number; version: string; adminToken: string; startedAt: string };
@@ -32,11 +32,11 @@ type DaemonInfo = { port: number; pid: number; version: string; adminToken: stri
 type Health = { ok: boolean; version: string; pid: number };
 // A review's phase in the daemon.
 type Phase = "reviewing" | "sent" | "planning" | "working" | "done";
-// A pull request as the daemon follows it (prFrom in daemon.mts).
+// A pull request as the daemon follows it (prFrom in daemon.mjs).
 type FollowedPr = { number: number; url: string; title: string | null; state: PrState; base: string | null; mergedAt: string | null; checkedAt: string };
 // The reviewer's decision on the agent's plan. `kinds` maps a step's index to the kind the reviewer chose for it.
 type PlanDecision = { decision: "approve" | "changes"; note: string | null; kinds: Record<string, string>; at: string };
-// What the reviewer did, as the daemon queues it (pushEvent in daemon.mts). A question's target is read for `fix`, which only some targets have.
+// What the reviewer did, as the daemon queues it (pushEvent in daemon.mjs). A question's target is read for `fix`, which only some targets have.
 type ReviewEvent =
   | { type: "question"; questionId: string; question: LiveQuestion & { target: { fix?: string } } }
   | { type: "review-submitted"; round: number; file: string; count: number }
@@ -49,7 +49,7 @@ type EventReview = { id: string; round: number; dir: string };
 type NextEvent = { event: ReviewEvent; review: EventReview };
 // What GET /api/r/<id>/resume answers: the event a lost session never handled, if any, and where the round stands.
 type Resumed = { event: ReviewEvent | null; review: EventReview & { phase: Phase; file: string; comments: number; open: ReviewComment[] } };
-// What GET /api/reviews answers: liveState in daemon.mts with each review's folder and page URL, only the fields read here.
+// What GET /api/reviews answers: liveState in daemon.mjs with each review's folder and page URL, only the fields read here.
 type ReviewList = { reviews: { id: string; branch: string; dir: string; round: number; phase: Phase; updatedAt: string; url: string; pr: FollowedPr | null }[] };
 // What POST /api/reviews answers: the round just published.
 type Published = { id: string; round: number; republished: boolean; firstReal: boolean; url: string; tabs: number; dir: string };
@@ -62,7 +62,7 @@ type PlanFile = { steps: unknown[] };
 
 const here = dirname(fileURLToPath(import.meta.url));
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
-const daemonScript = join(here, "daemon.mts");
+const daemonScript = join(here, "daemon.mjs");
 const daemonFile = join(HOME, "daemon.json");
 // Read from disk each time: a waiter that started before the skill was updated must take the new
 // daemon as current, not shut it down as out of date.
@@ -165,7 +165,7 @@ const describe = (t: CommentTarget) => {
   }
 };
 
-const self = `node "${shellPath(join(here, "review.mts"))}"`;
+const self = `node "${shellPath(join(here, "review.mjs"))}"`;
 
 // What the reviewer did, and what the agent runs next. Printed by wait and resume.
 function explain(event: ReviewEvent, review: EventReview) {
@@ -212,7 +212,7 @@ function explain(event: ReviewEvent, review: EventReview) {
 const reviewDone = (event: ReviewEvent): event is Extract<ReviewEvent, { type: "review-submitted" | "round-finished" }> => (event.type === "review-submitted" && event.count === 0) || event.type === "round-finished";
 
 // Tells the agent what the reviewer did. A finished review runs the project's onApproved hook first
-// (hooks.mts), and the agent offers to open the pull request unless the hook took care of it.
+// (hooks.mjs), and the agent offers to open the pull request unless the hook took care of it.
 async function handOver(event: ReviewEvent, review: EventReview, info: DaemonInfo) {
   explain(event, review);
   if (!reviewDone(event)) return;
@@ -247,13 +247,13 @@ async function main() {
           : `Already open in ${data.tabs} tab(s); they show a banner for the new round.`,
       );
     }
-    // The project's postRun hook, once a round: at its first build that is not a draft (hooks.mts).
+    // The project's postRun hook, once a round: at its first build that is not a draft (hooks.mjs).
     if (data.firstReal) {
       const hooks = await runReportHooks("postRun", { dir: data.dir, round: data.round, url: data.url });
       if (hooks.failed) console.log("warning: the postRun hook in .pr-report.json failed. The report is published; tell the user what the hook printed.");
     }
     // Nothing in this shell says which agent this is, so the page speaks of "your agent" until it is told.
-    if (!agent) console.log(`note: the page does not know which agent you are. Add --agent-name "<the product you run in>" to review.mts commands so it can say.`);
+    if (!agent) console.log(`note: the page does not know which agent you are. Add --agent-name "<the product you run in>" to review.mjs commands so it can say.`);
     console.log(`Next: run in the background: ${self} wait --id ${data.id}`);
   } else if (command === "setup") {
     // The first-run page: the tools on this machine, light or dark, and a code theme. The installer
@@ -368,7 +368,7 @@ async function main() {
       console.log("Stopped the daemon.");
     }
   } else {
-    console.log("Usage: review.mts open|wait|resume|answer|plan|status|pr|list|setup|stop (see the top of this file)");
+    console.log("Usage: review.mjs open|wait|resume|answer|plan|status|pr|list|setup|stop (see the top of this file)");
     process.exit(2);
   }
 }

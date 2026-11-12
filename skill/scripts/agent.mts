@@ -1,5 +1,5 @@
 // Which coding agent is running pr-report, so the page can say "Send to Codex" and not name one agent
-// for everybody. review.mts and build.mts are started from the agent's own shell, so they can tell from
+// for everybody. review.mjs and build.mjs are started from the agent's own shell, so they can tell from
 // what that shell carries. The daemon never detects: it outlives the session that started it and serves
 // every agent on the machine, so each call tells it who is calling.
 //
@@ -21,7 +21,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentInfo } from "../schema/types.ts";
+import type { AgentInfo } from "../schema/types.js";
 
 // One entry of ../agents.json.
 type AgentEntry = { name: string; product: string; resume?: string; aliases?: string[]; env?: string[]; paths?: string[] };

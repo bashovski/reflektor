@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import type { RepoAvatar } from "../schema/types.ts";
+import type { RepoAvatar } from "../schema/types.js";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const MAX_BYTES = 256 * 1024;

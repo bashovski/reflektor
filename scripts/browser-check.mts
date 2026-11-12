@@ -9,7 +9,7 @@
 // Usage: node scripts/browser-check.mts [--headed]
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -24,6 +24,11 @@ import { githubPr, startGithubStub } from "./github-stub.mts";
 type ExecError = Error & { stderr?: string };
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// The suites test the package pnpm build makes (dist/skill/), the files a user gets.
+if (!existsSync(join(root, "dist/skill/build.json"))) {
+  console.error("error: dist/skill/ is not built. Run pnpm build first.");
+  process.exit(1);
+}
 const { chromium } = createRequire(join(root, "viewer/package.json"))("playwright-core") as { chromium: BrowserType };
 const tmp = mkdtempSync(join(tmpdir(), "pr-report-browser-"));
 const repo = join(tmp, "books");
@@ -45,8 +50,8 @@ const env = {
 };
 
 const run = (cmd: string, args: string[]) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
-const script = (name: string, ...args: string[]) => run("node", [join(root, "skill/scripts", name), ...args]);
-const review = (...args: string[]) => script("review.mts", ...args);
+const script = (name: string, ...args: string[]) => run("node", [join(root, "dist/skill/scripts", name), ...args]);
+const review = (...args: string[]) => script("review.mjs", ...args);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let failed = false;
@@ -73,7 +78,7 @@ const errors: string[] = [];
 
 try {
   run(gitBash() ?? "bash", [join(root, "fixtures/make-books-repo.sh"), repo]);
-  script("collect.mts", "--repo", repo, "--no-fetch");
+  script("collect.mjs", "--repo", repo, "--no-fetch");
   writeFileSync(join(data, "report.json"), readFileSync(join(root, "samples/report.json")));
 
   // 0. First-run setup, the way the installer opens it: before any review exists. Enter moves on,
@@ -107,14 +112,14 @@ try {
   if (!saved[0] || saved[1] !== '"dark"' || saved[2] !== '"github-dark"') fail(`setup did not save its choices: ${saved.join(" ")}`);
 
   // 1. The draft opens first: the facts, with sending held back.
-  const draftOut = script("build.mts", "--diff", join(data, "diff.json"), "--draft").match(/Wrote (\S+)/)![1];
+  const draftOut = script("build.mjs", "--diff", join(data, "diff.json"), "--draft").match(/Wrote (\S+)/)![1];
   const id = review("open", "--report", draftOut).match(/Review id: (\S+)/)![1];
   await page.goto(`http://127.0.0.1:${port}/r/${id}`);
   await expectVisible(page.getByText("Claude is reading the change and writing the notes"), "the draft notice");
   if (!(await page.getByRole("button", { name: "Claude is writing the notes" }).isDisabled())) fail("Send is not held back on a draft");
 
   // 2. The real report replaces the draft in the same tab.
-  const realOut = script("build.mts", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)![1];
+  const realOut = script("build.mjs", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)![1];
   review("open", "--report", realOut);
   await expectVisible(page.getByRole("heading", { name: /Save and list books in the library/ }), "the report after the draft");
   await expectVisible(page.getByRole("button", { name: "LGTM" }), "Send once the report is ready");
@@ -202,8 +207,8 @@ try {
   // 6. The fix, then round 2 with the whole branch and the change since round 1.
   const service = join(repo, "apps/api/src/books/book.service.ts");
   writeFileSync(service, `// handle, not slug\n${readFileSync(service, "utf8")}`);
-  script("collect.mts", "--repo", repo, "--no-fetch", "--update");
-  const round2 = script("build.mts", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)![1];
+  script("collect.mjs", "--repo", repo, "--no-fetch", "--update");
+  const round2 = script("build.mjs", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)![1];
   review("open", "--report", round2);
   await expectVisible(page.getByText("Round 2 is ready."), "the round 2 banner");
   await page.getByRole("button", { name: "Show round 2" }).click();

@@ -8,8 +8,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { RepoAvatar } from "../schema/types.ts";
-import { ownerAvatar } from "./avatar.mts";
+import type { RepoAvatar } from "../schema/types.js";
+import { ownerAvatar } from "./avatar.mjs";
 
 // The reader's account on the forge, as the CLI reports it and as it is cached.
 type Account = { source: "gh" | "glab"; login: string; name: string | null; url: string; checkedAt?: string };
@@ -119,7 +119,7 @@ async function gitIdentity(root: string | null): Promise<{ name: string | null; 
   return { name: name || null, email: email || null };
 }
 
-// host and forge come from the repo's remote (collect.mts works them out), root is the repo on disk.
+// host and forge come from the repo's remote (collect.mjs works them out), root is the repo on disk.
 export async function whoAmI({ host, forge, root }: { host: string | null; forge: string | null; root: string | null }): Promise<Identity> {
   const cwd = root && existsSync(root) ? root : undefined;
   const [found, git] = await Promise.all([account(forge, host, cwd), gitIdentity(root)]);

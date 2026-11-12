@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Writes skill/THIRD-PARTY-NOTICES.md: the license of every package that ships inside pr-report, with its
-// text. The viewer bundles its runtime dependencies into skill/assets, the file icons come from
+// text. The viewer bundles its runtime dependencies into assets/, the file icons come from
 // atom-material-icons, and Tailwind generates the stylesheet, so all of those are covered. Apache-2.0,
 // MIT, ISC and OFL all ask for their license text to travel with the code.
 //
@@ -40,7 +40,7 @@ const WHY: Record<string, string> = {
   "react-dom": "the page",
   shiki: "the code highlighting themes",
   tailwindcss: "generated the page's stylesheet at build time",
-  "atom-material-icons": "the file type icons in skill/assets/file-icons.json",
+  "atom-material-icons": "the file type icons in assets/file-icons.json",
 };
 
 const packages = [...Object.keys(viewer.dependencies), "tailwindcss", "atom-material-icons"];
@@ -102,7 +102,7 @@ if (missing.length) {
 
 const header =
   `# Third-party notices\n\n` +
-  `pr-report ships the open source packages below inside the skill: the viewer bundles its dependencies into \`skill/assets\`, ` +
+  `pr-report ships the open source packages below inside the skill: the viewer bundles its dependencies into \`assets/\`, ` +
   `the inbox serves Fuse.js, the file type icons come from atom-material-icons, Tailwind CSS generated the stylesheet, ` +
   `and the setup wizard's background is source copied from React Bits. ` +
   `Each one's license follows. This file is written by \`scripts/build-notices.mts\` from the installed packages and from \`viewer/src/vendor\`.\n\n`;

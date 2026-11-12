@@ -1,11 +1,11 @@
-// Reads a checks.json written by checks.mts, for build.mts and the daemon.
+// Reads a checks.json written by checks.mjs, for build.mjs and the daemon.
 // "running" while its process lives, "stopped" when the process is gone before the last check
 // ended (killed or crashed), "done" after. Files from older versions have no status: done.
 
 import { readFileSync } from "node:fs";
-import type { ChecksRun, ProjectCheck } from "../schema/types.ts";
+import type { ChecksRun, ProjectCheck } from "../schema/types.js";
 
-// checks.json as checks.mts writes it: pid and checks only while it runs, ranAt only once it is done.
+// checks.json as checks.mjs writes it: pid and checks only while it runs, ranAt only once it is done.
 type ChecksFile = { status?: "running" | "done"; pid?: number; startedAt?: string; ranAt?: string; headSha?: string; checks?: string[]; results?: ProjectCheck[] };
 
 const alive = (pid: number | undefined): boolean => {

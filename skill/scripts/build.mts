@@ -4,9 +4,9 @@
 // Problems that the agent should fix are printed as "warning:" lines; hard errors exit with code 1.
 //
 // Usage:
-//   node build.mts --diff diff.json --report report.json [--out report-r1.json]
+//   node build.mjs --diff diff.json --report report.json [--out report-r1.json]
 //                  [--html report.html] [--viewer viewer.html] [--open]
-//   node build.mts --diff diff.json --draft [--report report.json]
+//   node build.mjs --diff diff.json --draft [--report report.json]
 //
 // --draft builds the page before the agent's report is ready: the diffs, checks and coverage, with the
 // files in one list (or the given report, such as one carried forward by collect --update). The
@@ -16,10 +16,10 @@ import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Bundle, DiffData, DiffFile, PlanItem, PlanStatus, Ref, Review, ReviewLevel, Section, SectionKind, Target } from "../schema/types.ts";
-import { detectAgent } from "./agent.mts";
-import { readChecksRun } from "./checks-run.mts";
-import { shellPath } from "./repo.mts";
+import type { Bundle, DiffData, DiffFile, PlanItem, PlanStatus, Ref, Review, ReviewLevel, Section, SectionKind, Target } from "../schema/types.js";
+import { detectAgent } from "./agent.mjs";
+import { readChecksRun } from "./checks-run.mjs";
+import { shellPath } from "./repo.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -106,7 +106,7 @@ const report: CheckedReport = args.report ? JSON.parse(readFileSync(args.report,
 
 const errors: string[] = [];
 const warnings: string[] = [];
-// Warnings from collect.mts (for example a stale coverage file) need no report change; they print as notes.
+// Warnings from collect.mjs (for example a stale coverage file) need no report change; they print as notes.
 const notes = [...(diff.warnings ?? [])];
 
 const filesByPath = new Map(diff.files.map((f) => [f.path, f]));
@@ -250,7 +250,7 @@ if (report.schema) {
 }
 
 // ------------------------------------------------------------------ safety findings
-// Every high or medium finding from collect.mts must show up in a highlight or a before-merge item.
+// Every high or medium finding from collect.mjs must show up in a highlight or a before-merge item.
 
 const mentioned = [...report.sections.flatMap((s) => s.highlights.map((h) => h.ref)), ...report.beforeMerge.map((b) => b.ref)].filter((r): r is Ref => Boolean(r));
 for (const f of args.draft ? [] : (diff.findings ?? [])) {
@@ -361,7 +361,7 @@ const fileIcons = pickFileIcons([...diff.files.map((f) => f.path), ...Object.key
 // ------------------------------------------------------------------ review rounds
 // The daemon writes review-<round>.json next to the report. report.review answers one of them.
 
-// Report files live next to diff.json (see reportDir in repo.mts), unless --out puts them elsewhere.
+// Report files live next to diff.json (see reportDir in repo.mjs), unless --out puts them elsewhere.
 const dataDir = dirname(resolve(args.diff!));
 const reviewDir = args.out ? dirname(resolve(args.out)) : dataDir;
 const rounds = existsSync(reviewDir)
@@ -395,7 +395,7 @@ if (errors.length) {
 }
 
 // ------------------------------------------------------------------ project checks
-// checks.json from checks.mts, next to diff.json unless --checks says otherwise.
+// checks.json from checks.mjs, next to diff.json unless --checks says otherwise.
 
 // The checks may still be running: the report is built anyway, and the daemon streams their
 // progress from `file` to the page.
@@ -415,7 +415,7 @@ function loadProjectChecks(): Bundle["projectChecks"] {
     }),
   );
   const stale = run.headSha !== diff.branch.headSha || newestCommit > since || newestFile > since;
-  if (stale) notes.push("Project checks ran before the latest code change; run checks.mts again for current results.");
+  if (stale) notes.push("Project checks ran before the latest code change; run checks.mjs again for current results.");
   return { ...run, stale, file };
 }
 
@@ -535,7 +535,7 @@ const bundle: Bundle = {
   projectChecks,
   prDescription: prText,
   ...(args.draft ? { draft: true } : {}),
-  // The agent that built this, so the standalone file and a page nobody has called since can name it (agent.mts).
+  // The agent that built this, so the standalone file and a page nobody has called since can name it (agent.mjs).
   agent: detectAgent({ id: args.agent, name: args.agentName }),
   warnings: [...notes, ...warnings],
   builtAt: new Date().toISOString(),
@@ -546,8 +546,8 @@ writeFileSync(out, JSON.stringify(bundle));
 // The standalone page: the viewer with this report's data inside, for keeping or sending.
 const htmlOut = args.html ? resolve(args.html) : args.open ? out.replace(/\.json$/, ".html") : null;
 if (htmlOut) {
-  // Installed skill ships assets/viewer.html; the source checkout uses the Vite build output.
-  const viewerPath = args.viewer ?? [join(here, "../assets/viewer.html"), join(here, "../../viewer/dist/standalone/index.html")].find(existsSync);
+  // The package ships the standalone page as assets/viewer.html (scripts/build-skill.mts in the pr-report repo).
+  const viewerPath = args.viewer ?? [join(here, "../assets/viewer.html")].find(existsSync);
   if (!viewerPath) throw new Error("Viewer not found. Build it with `pnpm build` or pass --viewer.");
   const html = readFileSync(viewerPath, "utf8");
   if (!html.includes("__PR_REPORT_DATA__")) throw new Error(`${viewerPath} has no data placeholder`);

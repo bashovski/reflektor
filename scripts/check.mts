@@ -38,6 +38,11 @@ type LiveState = {
 };
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// The suites test the package pnpm build makes (dist/skill/), the files a user gets.
+if (!existsSync(join(root, "dist/skill/build.json"))) {
+  console.error("error: dist/skill/ is not built. Run pnpm build first.");
+  process.exit(1);
+}
 const tmp = mkdtempSync(join(tmpdir(), "pr-report-check-"));
 const repo = join(tmp, "books");
 const html = join(root, "samples", "books-report.html");
@@ -63,7 +68,7 @@ try {
   const frontMatter = portable.slice(0, portable.indexOf("\n---", 4));
   if (portable.includes("CLAUDE_SKILL_DIR") || /^(allowed-tools|argument-hint):/m.test(frontMatter) || !/^name: pr-report$/m.test(frontMatter) || !/^description: /m.test(frontMatter))
     fail("the skill text for other agents still has Claude Code's placeholder or front matter, or lost its name or description");
-  if (!portable.includes('node "C:/Users/x/.agents/skills/pr-report/scripts/collect.mts" --repo .')) fail("the skill text for other agents does not spell out the skill's folder in its commands");
+  if (!portable.includes('node "C:/Users/x/.agents/skills/pr-report/scripts/collect.mjs" --repo .')) fail("the skill text for other agents does not spell out the skill's folder in its commands");
   // The steps for subagent mode are a file of their own. The placeholder is replaced in SKILL.md only, so it must not be in there.
   if (readFileSync(join(root, "skill/subagents.md"), "utf8").includes("CLAUDE_SKILL_DIR")) fail("skill/subagents.md has Claude Code's placeholder, which nothing replaces in that file");
 
@@ -71,7 +76,7 @@ try {
   // started from, or from the agent's own answer, in that order. Every case names its own variables, so the result does
   // not depend on the shell this check runs in.
   const { detectAgent, decodeAgent, encodeAgent } = await import("../skill/scripts/agent.mts");
-  const elsewhere = join(root, "skill/scripts/review.mts");
+  const elsewhere = join(root, "dist/skill/scripts/review.mjs");
   type AgentOptions = Parameters<typeof detectAgent>[0];
   const who = (options: AgentOptions) => {
     const a = detectAgent({ env: {}, launchPath: elsewhere, ...options });
@@ -118,7 +123,7 @@ try {
 
   // A private home, so avatars come only from what this check puts in its cache.
   const home = { PR_REPORT_HOME: join(tmp, "collect-home") };
-  const collected = run("node", [join(root, "skill/scripts/collect.mts"), "--repo", repo, "--no-fetch"], home);
+  const collected = run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"], home);
   if (!collected.includes("Patch coverage: 51%")) fail("collect.mts did not read coverage from .pr-report.json");
   if (!collected.includes("(config)")) fail("collect.mts did not take the base branch from .pr-report.json");
   if (!collected.includes("Safety checks: 1 high, 0 medium, 1 low")) fail("collect.mts safety checks did not find the slug migration problems");
@@ -147,7 +152,7 @@ try {
   writeFileSync(join(edgeRepo, "naïve name.ts"), "export const ok = true;\n");
   // Subagent mode turned on in Settings, for this one run: collect has to say so and name the file with the steps.
   writeFileSync(join(home.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: true }));
-  const edgeOut = run("node", [join(root, "skill/scripts/collect.mts"), "--repo", edgeRepo, "--no-fetch", "--base", "main", "--out", join(tmp, "edge.json")], home);
+  const edgeOut = run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", edgeRepo, "--no-fetch", "--base", "main", "--out", join(tmp, "edge.json")], home);
   rmSync(join(home.PR_REPORT_HOME, "settings.json"));
   const told = edgeOut.match(/^Subagent mode: on .* Read (.+subagents\.md) before/m);
   if (!told || !existsSync(told[1])) fail("collect.mts does not tell the agent that subagent mode is on, or the file it names with the steps is not there");
@@ -173,7 +178,7 @@ try {
       ],
     }),
   );
-  const edgeBuilt = run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(tmp, "edge.json"), "--report", join(tmp, "edge-report.json"), "--out", join(tmp, "edge-out", "edge-r1.json")]);
+  const edgeBuilt = run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(tmp, "edge.json"), "--report", join(tmp, "edge-report.json"), "--out", join(tmp, "edge-out", "edge-r1.json")]);
   const edgeContracts = (JSON.parse(readFileSync(join(tmp, "edge-out", "edge-r1.json"), "utf8")) as Bundle).report.contracts!;
   if (!edgeBuilt.includes('could not find "Nope"')) fail("build.mts did not drop a made-up contract name");
   if (edgeBuilt.includes('member "')) fail(`build.mts rejected a real contract member:\n${edgeBuilt}`);
@@ -194,14 +199,14 @@ try {
     `git checkout -qb feat-copy && echo four > b.txt && git add b.txt && ${at("2024-01-04T10:00:00", "commit -q -m four")}`,
     `git checkout -q feat`,
   ].join(" && ")]);
-  const collectBases = () => run("node", [join(root, "skill/scripts/collect.mts"), "--repo", basesRepo, "--no-fetch", "--out", join(tmp, "bases.json")], home);
+  const collectBases = () => run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", basesRepo, "--no-fetch", "--out", join(tmp, "bases.json")], home);
   if (!collectBases().includes("feat → release (guess)")) fail("collect.mts did not pick the branch feat forked from as the base");
   run(bash, ["-c", `cd "${basesRepo}" && git branch main release`]);
   if (!collectBases().includes("feat → main (guess)")) fail("collect.mts did not prefer a common branch name over the fork point");
 
   // Saved checks: worked out once per repo and reused, skipped when nothing they cover changed, out
   // of date when the file they came from changes or a command is missing.
-  const checks = (...a: string[]) => run("node", [join(root, "skill/scripts/checks.mts"), "--repo", edgeRepo, ...a], home);
+  const checks = (...a: string[]) => run("node", [join(root, "dist/skill/scripts/checks.mjs"), "--repo", edgeRepo, ...a], home);
   const savedRun = join(tmp, "saved-checks.json");
   if (!checks("--plan").includes("No checks for this repo yet")) fail("checks.mts --plan did not ask for checks in a repo without any");
   writeFileSync(join(edgeRepo, "package.json"), '{"scripts":{"lint":"echo ok"}}\n');
@@ -237,7 +242,7 @@ try {
   if (!checks("--plan").includes("Ask the user")) fail("--forget did not remove the trusted authors");
 
   const checked = run("node", [
-    join(root, "skill/scripts/checks.mts"), "--repo", repo,
+    join(root, "dist/skill/scripts/checks.mjs"), "--repo", repo,
     "--run", "whitespace=git diff --check HEAD",
     "--run", `typecheck=node -e "console.error('apps/api/src/books/book.service.ts(1,18): error TS7016: Could not find a declaration file for module isbn3.'); process.exit(2)"`,
     "--run", `tests=node -e "console.log('3 passed')"`,
@@ -245,7 +250,7 @@ try {
   if (!checked.includes("Project checks: 2 passed, 1 failed")) fail("checks.mts did not report 2 passed and 1 failed");
 
   const built = run("node", [
-    join(root, "skill/scripts/build.mts"),
+    join(root, "dist/skill/scripts/build.mjs"),
     "--diff", join(repo, ".git/pr-report/feat-books/diff.json"),
     "--report", join(root, "samples/report.json"),
     "--out", join(root, "samples/bundle.json"),
@@ -254,7 +259,7 @@ try {
   for (const line of built.split("\n").filter((l) => l.startsWith("warning:"))) fail(line);
 
   // A draft: the facts before the agent's report, every file listed, nothing that needs the report.
-  run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--draft", "--out", join(tmp, "draft.json")]);
+  run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--draft", "--out", join(tmp, "draft.json")]);
   const draft = JSON.parse(readFileSync(join(tmp, "draft.json"), "utf8")) as Bundle;
   const listed = draft.report.sections.flatMap((s) => s.files).length;
   if (!draft.draft || draft.prDescription !== null || listed !== draft.diff.files.length) fail(`a draft build is not a draft of every file: ${JSON.stringify({ draft: draft.draft, listed })}`);
@@ -271,7 +276,7 @@ try {
 
   // Checks started in the background: build does not wait and records them as running; --wait returns their results.
   const bgChecks = join(tmp, "bg-checks.json");
-  spawn("node", [join(root, "skill/scripts/checks.mts"), "--repo", repo, "--out", bgChecks, "--run", "slow=sleep 2"], { stdio: "ignore" });
+  spawn("node", [join(root, "dist/skill/scripts/checks.mjs"), "--repo", repo, "--out", bgChecks, "--run", "slow=sleep 2"], { stdio: "ignore" });
   const started = () => {
     try {
       return readFileSync(bgChecks, "utf8").includes('"running"');
@@ -280,10 +285,10 @@ try {
     }
   };
   for (let i = 0; i < 50 && !started(); i++) await sleep(50);
-  run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--checks", bgChecks, "--out", join(tmp, "bg.json")]);
+  run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--checks", bgChecks, "--out", join(tmp, "bg.json")]);
   const bgRun = (JSON.parse(readFileSync(join(tmp, "bg.json"), "utf8")) as Bundle).projectChecks;
   if (bgRun?.status !== "running" || bgRun.pending.join() !== "slow" || bgRun.file !== bgChecks) fail(`build.mts did not record the running checks: ${JSON.stringify(bgRun)}`);
-  const waited = run("node", [join(root, "skill/scripts/checks.mts"), "--repo", repo, "--out", bgChecks, "--wait"]);
+  const waited = run("node", [join(root, "dist/skill/scripts/checks.mjs"), "--repo", repo, "--out", bgChecks, "--wait"]);
   if (!waited.includes("Project checks: 1 passed")) fail(`checks.mts --wait did not print the finished results:\n${waited}`);
 
   await daemonFlow();
@@ -335,15 +340,15 @@ async function daemonFlow() {
     PR_REPORT_AGENT: "claude-code",
   };
   const reviewDir = join(tmp, "review");
-  const review = (...args: string[]) => run("node", [join(root, "skill/scripts/review.mts"), ...args], env);
+  const review = (...args: string[]) => run("node", [join(root, "dist/skill/scripts/review.mjs"), ...args], env);
   // For a command the daemon answers only after asking the GitHub stub, which lives in this process:
   // a blocking call would keep the stub from answering.
   const reviewAsync = (...args: string[]) =>
     new Promise<string>((resolveOut, reject) =>
-      execFile("node", [join(root, "skill/scripts/review.mts"), ...args], { cwd: root, encoding: "utf8", env: { ...process.env, ...env } }, (e, stdout) => (e ? reject(e) : resolveOut(stdout))),
+      execFile("node", [join(root, "dist/skill/scripts/review.mjs"), ...args], { cwd: root, encoding: "utf8", env: { ...process.env, ...env } }, (e, stdout) => (e ? reject(e) : resolveOut(stdout))),
     );
   const build = (out: string) =>
-    run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
+    run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
   try {
     build(join(reviewDir, "round1.json"));
     const opened = review("open", "--report", join(reviewDir, "round1.json"));
@@ -419,7 +424,7 @@ async function daemonFlow() {
     review("resume", "--id", id, "--agent", "codex");
     if ((await state()).agent?.name !== "Codex") fail("a call from another agent did not change the agent the page shows");
     // A call that names nobody, such as one typed in a plain terminal, leaves the agent as it was.
-    run("node", [join(root, "skill/scripts/review.mts"), "resume", "--id", id], { ...env, PR_REPORT_AGENT: "", AI_AGENT: "", CLAUDECODE: "" });
+    run("node", [join(root, "dist/skill/scripts/review.mjs"), "resume", "--id", id], { ...env, PR_REPORT_AGENT: "", AI_AGENT: "", CLAUDECODE: "" });
     if ((await state()).agent?.name !== "Codex") fail("a call that names no agent cleared the one the page shows");
     review("resume", "--id", id);
     if ((await state()).agent?.name !== "Claude") fail("the agent did not change back with the next call");
@@ -526,7 +531,7 @@ async function daemonFlow() {
       }
       return null;
     };
-    const checksScript = join(root, "skill/scripts/checks.mts");
+    const checksScript = join(root, "dist/skill/scripts/checks.mjs");
     if ((await state()).checks?.results.length !== 3) fail("the page state does not carry the project checks");
     spawn("node", [checksScript, "--repo", repo, "--run", "quick=sleep 1"], { stdio: "ignore" });
     if (!(await until((c) => c?.status === "running" && c.pending.join() === "quick"))) fail("a running check did not reach the page state");
@@ -580,7 +585,7 @@ async function daemonFlow() {
     if (republished.phase !== "done" || republished.statuses.c_2?.status !== "noted") fail("publishing a finished round again reset it");
 
     // A waiter keeps waiting while the daemon restarts, as it does when the skill is updated.
-    const waiter = spawn("node", [join(root, "skill/scripts/review.mts"), "wait", "--id", id], { env: { ...process.env, ...env } });
+    const waiter = spawn("node", [join(root, "dist/skill/scripts/review.mjs"), "wait", "--id", id], { env: { ...process.env, ...env } });
     let waited = "";
     waiter.stdout.on("data", (d) => (waited += d));
     const waiterExit = new Promise((resolveExit) => waiter.on("exit", resolveExit));
@@ -652,8 +657,8 @@ async function daemonFlow() {
 function updateFlow() {
   const dir = join(tmp, "rounds");
   mkdirSync(dir, { recursive: true });
-  const collect = (...a: string[]) => run("node", [join(root, "skill/scripts/collect.mts"), "--repo", repo, "--no-fetch", "--out", join(dir, "diff.json"), ...a]);
-  const build = (out: string) => run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(dir, "diff.json"), "--report", join(dir, "report.json"), "--out", join(dir, out)]);
+  const collect = (...a: string[]) => run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch", "--out", join(dir, "diff.json"), ...a]);
+  const build = (out: string) => run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(dir, "diff.json"), "--report", join(dir, "report.json"), "--out", join(dir, out)]);
   const readReport = () => JSON.parse(readFileSync(join(dir, "report.json"), "utf8")) as Report;
   const service = (r: Report) => r.sections.find((s) => s.kind === "backend")!;
 
@@ -696,7 +701,7 @@ function updateFlow() {
   if (readFileSync(join(dir, "pr-description.md"), "utf8") !== whole || !partial.includes("PR description not updated")) fail("a --since report overwrote the PR description");
   // Another branch in the same checkout gets its own report folder, so their rounds stay apart.
   run("git", ["-C", repo, "checkout", "-q", "-b", "feat/other"]);
-  const other = run("node", [join(root, "skill/scripts/collect.mts"), "--repo", repo, "--no-fetch"]);
+  const other = run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"]);
   // collect prints the path with forward slashes on every OS (shellPath), so compare with those.
   if (!other.includes(".git/pr-report/feat-other/diff.json")) fail(`a second branch in the same checkout did not get its own report folder:\n${other.split("\n")[0]}`);
   console.log("next round: whole branch with the change since round 1, references moved once, PR description only from whole-branch builds");
@@ -714,7 +719,7 @@ async function concurrentStart() {
   const env = { ...process.env, PR_REPORT_HOME: home, PR_REPORT_PORT: String(5000 + Math.floor(Math.random() * 300)) };
   const daemons = Array.from({ length: 6 }, () => {
     // `output` collects what the daemon prints, on the child itself.
-    const child = spawn("node", [join(root, "skill/scripts/daemon.mts")], { env, stdio: ["ignore", "pipe", "pipe"] }) as ChildProcessByStdio<null, Readable, Readable> & { output: string };
+    const child = spawn("node", [join(root, "dist/skill/scripts/daemon.mjs")], { env, stdio: ["ignore", "pipe", "pipe"] }) as ChildProcessByStdio<null, Readable, Readable> & { output: string };
     child.output = "";
     child.stdout.on("data", (d) => (child.output += d));
     child.stderr.on("data", (d) => (child.output += d));
@@ -769,9 +774,9 @@ async function hooksFlow() {
     PR_REPORT_AGENT: "claude-code",
     HOOK_LOG: log,
   };
-  const collect = (extra: NodeJS.ProcessEnv, ...a: string[]) => run("node", [join(root, "skill/scripts/collect.mts"), "--repo", hooksRepo, "--no-fetch", ...a], { ...env, ...extra });
-  const review = (extra: NodeJS.ProcessEnv, ...a: string[]) => run("node", [join(root, "skill/scripts/review.mts"), ...a], { ...env, ...extra });
-  const build = (...a: string[]) => run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(data, "diff.json"), ...a]).match(/Wrote (\S+)/)![1];
+  const collect = (extra: NodeJS.ProcessEnv, ...a: string[]) => run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", hooksRepo, "--no-fetch", ...a], { ...env, ...extra });
+  const review = (extra: NodeJS.ProcessEnv, ...a: string[]) => run("node", [join(root, "dist/skill/scripts/review.mjs"), ...a], { ...env, ...extra });
+  const build = (...a: string[]) => run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(data, "diff.json"), ...a]).match(/Wrote (\S+)/)![1];
 
   try {
     // preRun: its output goes to the agent, it knows the branch and the base, and collect goes on.
@@ -841,7 +846,7 @@ async function hooksFlow() {
     const untrusted = collect({});
     if (!untrusted.includes("Hooks skipped (preRun): this branch has commits by Pat <pat@other.test>") || ran("preRun").length !== before || !untrusted.includes("Diff file"))
       fail(`preRun ran another author's code, or collect stopped:\n${untrusted}`);
-    run("node", [join(root, "skill/scripts/checks.mts"), "--repo", hooksRepo, "--trust", "--run", "x=echo ok", "--out", join(tmp, "hooks-checks.json")], env);
+    run("node", [join(root, "dist/skill/scripts/checks.mjs"), "--repo", hooksRepo, "--trust", "--run", "x=echo ok", "--out", join(tmp, "hooks-checks.json")], env);
     collect({});
     if (ran("preRun").length !== before + 1) fail("preRun did not run once the other author was trusted");
     try {

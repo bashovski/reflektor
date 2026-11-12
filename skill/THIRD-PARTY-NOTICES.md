@@ -1,6 +1,6 @@
 # Third-party notices
 
-pr-report ships the open source packages below inside the skill: the viewer bundles its dependencies into `skill/assets`, the inbox serves Fuse.js, the file type icons come from atom-material-icons, Tailwind CSS generated the stylesheet, and the setup wizard's background is source copied from React Bits. Each one's license follows. This file is written by `scripts/build-notices.mts` from the installed packages and from `viewer/src/vendor`.
+pr-report ships the open source packages below inside the skill: the viewer bundles its dependencies into `assets/`, the inbox serves Fuse.js, the file type icons come from atom-material-icons, Tailwind CSS generated the stylesheet, and the setup wizard's background is source copied from React Bits. Each one's license follows. This file is written by `scripts/build-notices.mts` from the installed packages and from `viewer/src/vendor`.
 
 ## @fontsource-variable/geist 5.3.0
 
@@ -799,7 +799,7 @@ SOFTWARE.
 
 ## atom-material-icons 3.0.0
 
-License: MIT. Used for the file type icons in skill/assets/file-icons.json.
+License: MIT. Used for the file type icons in assets/file-icons.json.
 
 ```
 The MIT License (MIT)

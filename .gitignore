@@ -1,8 +1,10 @@
 node_modules/
 .DS_Store
 
-# Build output
+# Build output: pnpm build makes the skill's package in dist/skill/
+dist/
 viewer/dist/
+# Where builds before dist/ put the viewer
 skill/assets/
 # npm writes this when the installer falls back to it; pnpm-lock.yaml is the viewer's lockfile
 viewer/package-lock.json

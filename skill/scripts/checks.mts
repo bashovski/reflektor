@@ -10,12 +10,12 @@
 // The skill starts a run in the background and reads the diff meanwhile. checks.json says "running"
 // until the last check ends, and --wait blocks until then and prints the results.
 //
-// Usage: node checks.mts --repo . [--run "name=command"]... [--base <ref>] [--timeout <seconds>] [--out checks.json]
-//        node checks.mts --repo . --plan          which checks would run, and from where
-//        node checks.mts --repo . --save --run "name=command"... [--when "name=glob,glob"]... --source "<where from>" --from <file>...
-//        node checks.mts --repo . --share         copy the saved checks into .pr-report.json
-//        node checks.mts --repo . --forget        delete the saved checks and trusted authors
-//        node checks.mts --repo . --wait [--out checks.json]
+// Usage: node checks.mjs --repo . [--run "name=command"]... [--base <ref>] [--timeout <seconds>] [--out checks.json]
+//        node checks.mjs --repo . --plan          which checks would run, and from where
+//        node checks.mjs --repo . --save --run "name=command"... [--when "name=glob,glob"]... --source "<where from>" --from <file>...
+//        node checks.mjs --repo . --share         copy the saved checks into .pr-report.json
+//        node checks.mjs --repo . --forget        delete the saved checks and trusted authors
+//        node checks.mjs --repo . --wait [--out checks.json]
 //
 // The checks run the branch's own code. When the branch has commits by someone else, --plan says to
 // ask the user first and a run refuses to start; --trust records the user's yes for those authors.
@@ -24,8 +24,8 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { CheckStatus, ProjectCheck, RepoConfig } from "../schema/types.ts";
-import { globToRegExp, replaceFile, repoHome, reportDir, runShell, shellPath, untrustedAuthors } from "./repo.mts";
+import type { CheckStatus, ProjectCheck, RepoConfig } from "../schema/types.js";
+import { globToRegExp, replaceFile, repoHome, reportDir, runShell, shellPath, untrustedAuthors } from "./repo.mjs";
 
 const TAIL_LINES = 80;
 
@@ -230,7 +230,7 @@ if (args.mode === "share") {
 }
 
 const picked = pickChecks();
-// Without a base, every author counts as trusted here and the checks run. Hooks do not run then (hooks.mts).
+// Without a base, every author counts as trusted here and the checks run. Hooks do not run then (hooks.mjs).
 const strangers = untrustedAuthors(root, baseRefs) ?? [];
 const strangerText = () => `this branch has commits by ${strangers.map((a) => a.label).join(", ")}, and the checks run their code (tests, scripts, config)`;
 
@@ -299,7 +299,7 @@ async function runCheck({ name, command, timeout }: Check): Promise<ProjectCheck
   };
 }
 
-// Written after every check, so --wait and build.mts see the run's progress.
+// Written after every check, so --wait and build.mjs see the run's progress.
 const headSha = git("rev-parse", "HEAD");
 const startedAt = new Date().toISOString();
 const results: ProjectCheck[] = [];

@@ -2,14 +2,14 @@
 name: pr-report
 description: Builds a visual HTML review report for the current branch or PR against its base branch, with a plain-English title and summary, review order, highlights, request flows, GitHub-style diffs with notes, and test coverage of new lines. The user can comment in the report and send the comments back for fixing. Use when the user asks for a PR report, a review report, a summary of branch changes for review, or wants to review changes before opening a PR. Works with any language or stack.
 argument-hint: "[base-branch] [--since last] [--session] [resume]"
-allowed-tools: Bash(node "${CLAUDE_SKILL_DIR}/scripts/collect.mts" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/checks.mts" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/build.mts" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/review.mts" *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mts *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/checks.mts *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mts *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/review.mts *)
+allowed-tools: Bash(node "${CLAUDE_SKILL_DIR}/scripts/collect.mjs" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/build.mjs" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/review.mjs *)
 ---
 
 # PR report
 
 You write the judgment in `report.json`: words, grouping, risks and flows. Scripts handle the facts: git data, diffs, coverage numbers and rendering. Never copy code into report.json. Point at files and lines instead.
 
-Scripts and reference files live in `${CLAUDE_SKILL_DIR}`. That is this skill's folder: the folder this file is in. Where a command below still shows a `${...}` name instead of a real path, put the folder's absolute path there, with forward slashes. Needs git and Node.js 22.18 or newer, which runs the `.mts` scripts directly; an `ERR_UNKNOWN_FILE_EXTENSION` from node means it is older, so tell the user to update it. `gh` is optional.
+Scripts and reference files live in `${CLAUDE_SKILL_DIR}`. That is this skill's folder: the folder this file is in. Where a command below still shows a `${...}` name instead of a real path, put the folder's absolute path there, with forward slashes. Needs git and Node.js 18 or newer. `gh` is optional.
 
 The request can carry arguments: a base branch, `--since last`, `--session` or `resume`. In Claude Code the user types them after `/pr-report`; with another agent they say them in words. For `resume`, or when the user asks to continue or pick up a review, go to "Pick up a review" at the end and skip the other steps.
 
@@ -18,7 +18,7 @@ The request can carry arguments: a base branch, `--since last`, `--session` or `
 Base branch, first match wins:
 
 1. A branch the user passed as an argument, or named in this conversation as the PR target.
-2. Otherwise leave `--base` out. collect.mts then tries the open PR for this branch (through `gh`), then `base` in `.pr-report.json`, then the remote's default branch, then a common name (main, master, develop, staging, demo, trunk), and last the branch this one most recently forked from. When it prints `(guess)`, name the base in your message to the user, so they can correct it with `/pr-report <branch>`.
+2. Otherwise leave `--base` out. collect.mjs then tries the open PR for this branch (through `gh`), then `base` in `.pr-report.json`, then the remote's default branch, then a common name (main, master, develop, staging, demo, trunk), and last the branch this one most recently forked from. When it prints `(guess)`, name the base in your message to the user, so they can correct it with `/pr-report <branch>`.
 
 Scope:
 
@@ -31,8 +31,8 @@ Scope:
 
 Coverage is optional, but try to get it.
 
-1. `coverage.files` in `.pr-report.json`. collect.mts reads these itself.
-2. A coverage file already in the repo: `lcov.info`, `coverage.xml`, `cobertura.xml`, `coverage.out`, `cover.out`, `jacoco.xml`, `clover.xml`, or a coverage.py `coverage.json`. Look in the repo root, `coverage/` folders and package folders. Skip `node_modules`, `vendor` and build output. collect.mts prints which file it used and marks it STALE when it is older than the latest change; then try step 3 for a fresh one.
+1. `coverage.files` in `.pr-report.json`. collect.mjs reads these itself.
+2. A coverage file already in the repo: `lcov.info`, `coverage.xml`, `cobertura.xml`, `coverage.out`, `cover.out`, `jacoco.xml`, `clover.xml`, or a coverage.py `coverage.json`. Look in the repo root, `coverage/` folders and package folders. Skip `node_modules`, `vendor` and build output. collect.mjs prints which file it used and marks it STALE when it is older than the latest change; then try step 3 for a fresh one.
 3. Get a fresh one from the test run in step 2b. Use `coverage.command` from `.pr-report.json` as the test command if it is set. Otherwise add a coverage flag to the project's own test command:
 
 | Stack | Command that writes a supported file |
@@ -62,7 +62,7 @@ Start the project's own lint, typecheck and test commands now, so the report sho
 First ask which checks this repo has:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/checks.mts" --repo . --plan
+node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" --repo . --plan
 ```
 
 It prints the commands and where they come from: `checks` in `.pr-report.json` (shared with the team), or the ones saved for this repo in `~/.pr-report/repos/` from an earlier report. It also lists checks it skips because nothing they cover changed.
@@ -70,7 +70,7 @@ It prints the commands and where they come from: `checks` in `.pr-report.json` (
 **When it lists commands and says to start them,** start them as a background process, so you can go on while they run (in Claude Code: the Bash tool with `run_in_background`):
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/checks.mts" --repo .
+node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" --repo .
 ```
 
 **When it says to ask the user first,** the branch has commits by someone else, such as a teammate's PR, and the checks would run their code. Ask in one line, naming the authors it lists. On a yes, add `--trust` to the background command; it remembers those authors for this repo. On a no, skip the checks and say so in the report's testing gaps.
@@ -85,18 +85,18 @@ node "${CLAUDE_SKILL_DIR}/scripts/checks.mts" --repo .
 6. Save them, naming the files they came from so a later change to those files marks them out of date:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/checks.mts" --repo . --save --source "<where they came from, in a few words>" --from <file>... \
+node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" --repo . --save --source "<where they came from, in a few words>" --from <file>... \
   --run "lint=<command>" --run "typecheck=<command>" --run "tests=<command>" [--when "tests=apps/api/**,packages/shared/**"]
 ```
 
-In your final message, list the checks you saved, and say that `checks.mts --forget` deletes them and `checks.mts --share` copies them into `.pr-report.json` for the team. Do not ask before saving; the report should not wait. (Asking about other authors' code, above, is the one time to wait.)
+In your final message, list the checks you saved, and say that `checks.mjs --forget` deletes them and `checks.mjs --share` copies them into `.pr-report.json` for the team. Do not ask before saving; the report should not wait. (Asking about other authors' code, above, is the one time to wait.)
 
 `--run` on the background command overrides everything, for a one-off run. The run writes `checks.json` next to diff.json as it goes, and the review page shows each result as it arrives; step 7b updates the report when the checks end. If you cannot run a background process, run it in the foreground and wait.
 
 ## 3. Collect
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/collect.mts" --repo . [--base <branch>] [--since last] [--files a,b] [--coverage <file>]...
+node "${CLAUDE_SKILL_DIR}/scripts/collect.mjs" --repo . [--base <branch>] [--since last] [--files a,b] [--coverage <file>]...
 ```
 
 It writes diff.json into the repo's git folder and prints:
@@ -116,7 +116,7 @@ Lines starting with `Hook preRun` come from the project's own hook (`hooks` in `
 
 While the tests from step 2b run, their coverage file may be missing or STALE. That is expected: step 7b collects again once they are done.
 
-collect.mts fetches the base branch first. If the fetch fails, it warns and uses the local copy; tell the user. Pass `--no-fetch` to skip fetching, for example when offline.
+collect.mjs fetches the base branch first. If the fetch fails, it warns and uses the local copy; tell the user. Pass `--no-fetch` to skip fetching, for example when offline.
 
 Do not read diff.json. It holds full file contents. Read the changes with the printed `git diff` command, file by file, and read untracked files directly.
 
@@ -125,11 +125,11 @@ Do not read diff.json. It holds full file contents. Read the changes with the pr
 Publish the facts now, so the user can read the diffs and watch the checks while you write the report:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/build.mts" --diff <diff file> --draft
-node "${CLAUDE_SKILL_DIR}/scripts/review.mts" open --report <json file from build> --open
+node "${CLAUDE_SKILL_DIR}/scripts/build.mjs" --diff <diff file> --draft
+node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" open --report <json file from build> --open
 ```
 
-The page names the agent it talks to. `review.mts` and `build.mts` work that out from the shell they run in, so there is normally nothing to do. If `review.mts open` prints a `note:` line saying the page does not know which agent you are, add `--agent-name "<the product you are running in>"` to every `review.mts` command from then on.
+The page names the agent it talks to. `review.mjs` and `build.mjs` work that out from the shell they run in, so there is normally nothing to do. If `review.mjs open` prints a `note:` line saying the page does not know which agent you are, add `--agent-name "<the product you are running in>"` to every `review.mjs` command from then on.
 
 After `collect --update` in a later round, add `--report <report file>` to the build, so the draft shows the carried report. The page says you are still writing the notes and holds back sending until the real report replaces it. Do not start the waiter yet, and say nothing to the user until step 7.
 
@@ -215,23 +215,23 @@ Line numbers refer to the new version of a file. Use `"side": "old"` only for de
 ## 6. Build
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/build.mts" --diff <diff file> --report <report file>
+node "${CLAUDE_SKILL_DIR}/scripts/build.mjs" --diff <diff file> --report <report file>
 ```
 
 It writes the report data, `<branch>-<sha>-r<round>.json`, next to the report file and records the run for `--since last`. Fix every `warning:` line by editing report.json and building again, at most two rounds. Mention anything left. `note:` lines need no report change (for example a stale coverage file, or project checks still running), but tell the user when they matter. Build without waiting for the checks.
 
 ## 7. Open it for review
 
-Publish the report to the pr-report daemon. It is one local server for every review on this machine (`http://127.0.0.1:7337`, with an inbox of all reviews at `/`), and `review.mts` starts it when it is not running. It replaces the draft from step 3b in the open tab:
+Publish the report to the pr-report daemon. It is one local server for every review on this machine (`http://127.0.0.1:7337`, with an inbox of all reviews at `/`), and `review.mjs` starts it when it is not running. It replaces the draft from step 3b in the open tab:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/review.mts" open --report <json file from build> --open
+node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" open --report <json file from build> --open
 ```
 
 It prints the review address and the review id, and opens the browser unless a tab already shows this review (open tabs get a banner for each new round instead). Then start the waiter as a background process (in Claude Code: the Bash tool with `run_in_background`):
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/review.mts" wait --id <review id>
+node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" wait --id <review id>
 ```
 
 Tell the user, in a few lines:
@@ -244,24 +244,24 @@ Do not paste the report into the chat. End your turn and do not poll: the waiter
 **A live question:** read the code it points at and answer in 1 to 4 short sentences or a short list, following the style guide. Answer only: do not change code. If the answer shows something should change, say so and suggest a comment or "Fix this".
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/review.mts" answer --id <review id> --question <question id> --text "<answer>" [--ref path:line]
+node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" answer --id <review id> --question <question id> --text "<answer>" [--ref path:line]
 ```
 
 **A sent review:** go to the fix loop. **A review sent with no comments:** the review is done. The waiter says whether the project's onApproved hook ran; if not, offer to open the PR (step 9).
 
-**A request for an updated report:** the page tells the reviewer when the code changed after the report was built, and offers to ask you for an update. Run collect.mts with `--update`, fix the report for the files the waiter names, build, and publish: it stays the same round, and the reviewer's comments stay.
+**A request for an updated report:** the page tells the reviewer when the code changed after the report was built, and offers to ask you for an update. Run collect.mjs with `--update`, fix the report for the files the waiter names, build, and publish: it stays the same round, and the reviewer's comments stay.
 
-If you cannot run a background process, run build.mts with `--open` instead. It writes one self-contained HTML page and opens it. The page then shows a "Copy for ..." button, and the user pastes the comments into the chat. When the user wants a file to keep, pass `--html <file>` to build.mts.
+If you cannot run a background process, run build.mjs with `--open` instead. It writes one self-contained HTML page and opens it. The page then shows a "Copy for ..." button, and the user pastes the comments into the chat. When the user wants a file to keep, pass `--html <file>` to build.mjs.
 
 ## 7b. When the checks end
 
 When the background checks from step 2b exit (you are notified), the page already shows their results. Update the report with what they found:
 
-1. If the tests wrote a coverage file, run collect.mts again with `--update` and the same `--base` and `--coverage` arguments, for the fresh coverage. `--update` keeps report.json and moves its line references if code changed.
+1. If the tests wrote a coverage file, run collect.mjs again with `--update` and the same `--base` and `--coverage` arguments, for the fresh coverage. `--update` keeps report.json and moves its line references if code changed.
 2. In report.json, add a `beforeMerge` item for each failed check (its name and first error), and update the test gaps and `gap` highlights from the new coverage.
-3. Build and publish again with `review.mts open --report <new json>`. It is the same round, so comments and progress stay, and open pages reload it in place.
+3. Build and publish again with `review.mjs open --report <new json>`. It is the same round, so comments and progress stay, and open pages reload it in place.
 
-Skip this when the reviewer already sent the round: the next round includes the results. If you cannot get notified, check with `checks.mts --repo . --wait` before you end your turn.
+Skip this when the reviewer already sent the round: the next round includes the results. If you cannot get notified, check with `checks.mjs --repo . --wait` before you end your turn.
 
 ## 8. Fix loop
 
@@ -276,7 +276,7 @@ The reviewer follows along in the page: your plan and your progress on each comm
 3. **Post the plan** and wait for the decision. Write a plan file, then:
 
    ```bash
-   node "${CLAUDE_SKILL_DIR}/scripts/review.mts" plan --id <review id> --file <plan.json>
+   node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" plan --id <review id> --file <plan.json>
    ```
 
    The file: `{ "steps": [{ "comments": ["<comment id>"], "where": "book.service.ts:19", "kind": "fix" | "question" | "nit", "action": "<what you will do>" }], "note": "<optional>" }`. Every comment belongs to at least one step. Start the waiter again. The reviewer approves in the page (and can change a step's kind or skip it) or asks for a new plan. If the user approves in the chat instead, go ahead.
@@ -285,7 +285,7 @@ The reviewer follows along in the page: your plan and your progress on each comm
 4. **Make the changes,** reporting each comment as you go:
 
    ```bash
-   node "${CLAUDE_SKILL_DIR}/scripts/review.mts" status --id <review id> --comment <comment id> --status working|fixed|answered|wontfix|noted --text "<one line>" [--ref path:line]
+   node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" status --id <review id> --comment <comment id> --status working|fixed|answered|wontfix|noted --text "<one line>" [--ref path:line]
    ```
 
    Mark a comment `working` when you start it and give the final status when done. If you think a requested fix is wrong, do not make it; use `wontfix` and say why.
@@ -294,7 +294,7 @@ The reviewer follows along in the page: your plan and your progress on each comm
 5. **Rebuild for the next round.** Every round shows the whole branch, so the reviewer approves what will be merged; the page can also show only what changed since the round they sent.
 
    ```bash
-   node "${CLAUDE_SKILL_DIR}/scripts/collect.mts" --repo . --update [--base <branch>] [--coverage <file>]...
+   node "${CLAUDE_SKILL_DIR}/scripts/collect.mjs" --repo . --update [--base <branch>] [--coverage <file>]...
    ```
 
    It collects the whole branch again, plus what changed since the round the reviewer sent, and carries report.json forward: its line references move to where those lines are now. Update that report.json; do not write a new one:
@@ -303,21 +303,21 @@ The reviewer follows along in the page: your plan and your progress on each comm
    - Rewrite the notes, highlights, flows and contracts the fixes made wrong, and the title or summary if the change itself changed. Leave the rest as it is.
    - Set `review: { round, replies }`: `round` is the round you answered, and every comment gets one reply with the same status and text as above (`fixed` with a `ref` to the new code, `answered`, `wontfix` with the reason, `noted` for `accepted` comments and nits you skipped).
    - Leave `refsAt` as it is; collect uses it to move the references again next time.
-6. **Build and publish** with `review.mts open` (steps 6 and 7) and start the waiter again. Open tabs show "Round N is ready". Repeat until the reviewer sends a round with no comments.
+6. **Build and publish** with `review.mjs open` (steps 6 and 7) and start the waiter again. Open tabs show "Round N is ready". Repeat until the reviewer sends a round with no comments.
 
 ## 9. Open the PR
 
-build.mts also writes `pr-description.md` next to the report: the first line is the title, the rest is the Markdown body. Only whole-branch builds write it, so it always describes the whole PR. When the user asks to open the PR, or the review ends with no comments and the user wants a PR:
+build.mjs also writes `pr-description.md` next to the report: the first line is the title, the rest is the Markdown body. Only whole-branch builds write it, so it always describes the whole PR. When the user asks to open the PR, or the review ends with no comments and the user wants a PR:
 
 1. Ask first: opening a PR is visible to others.
 2. Use the repo's own tool: `gh pr create --title "<title>" --body-file <body file>` for GitHub, `glab mr create --title "<title>" --description "$(cat <body file>)"` for GitLab. Write the body without the title line to a temporary file first.
 3. On GitHub, tell the review page right after `gh pr create`, with the URL it printed:
 
    ```bash
-   node "${CLAUDE_SKILL_DIR}/scripts/review.mts" pr --id <review id> --url <pull request url>
+   node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" pr --id <review id> --url <pull request url>
    ```
 
-   The page then shows the pull request and follows it: when it is merged or closed on GitHub, the open page and the inbox say so without a new report. Skip this when the review was not opened through `review.mts`.
+   The page then shows the pull request and follows it: when it is merged or closed on GitHub, the open page and the inbox say so without a new report. Skip this when the review was not opened through `review.mjs`.
 4. Without a CLI for the host, give the user the file path; the report page also has a "PR description" button with copy buttons.
 
 ## Pick up a review
@@ -325,16 +325,16 @@ build.mts also writes `pr-description.md` next to the report: the first line is 
 A review outlives the session that made it: when no session listens for it, the page tells the user how to pick it up: `/pr-report resume` in Claude Code, or asking the agent to resume the PR report review. In the repo of the review:
 
 ```bash
-node "${CLAUDE_SKILL_DIR}/scripts/review.mts" resume --repo .
+node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" resume --repo .
 ```
 
 It finds this branch's review (or pass `--id`) and prints what waits for you, the same way the waiter does: a sent review, a plan decision, a question, or a fix loop that was cut off, with the comments still open. Follow it from there; for a cut-off fix loop, comments that already have a final status are done. When nothing waits for you, it says to start the waiter.
 
 ## Follow-ups
 
-- **Wording or grouping changes:** edit report.json and run build.mts again. No need to collect again.
-- **After code changes:** run collect.mts with `--update`, update the carried report.json for what changed, build, and publish again. Use `--since last` only when the user wants a report about just the new changes.
-- **"Viewer not found" from build.mts:** tell the user to run `install.sh` in the pr-report repo.
+- **Wording or grouping changes:** edit report.json and run build.mjs again. No need to collect again.
+- **After code changes:** run collect.mjs with `--update`, update the carried report.json for what changed, build, and publish again. Use `--since last` only when the user wants a report about just the new changes.
+- **"Viewer not found" from build.mjs:** tell the user to run `pnpm build`, then `pnpm run deploy`, in the pr-report repo.
 
 ## Repo config (optional)
 
@@ -360,8 +360,8 @@ It finds this branch's review (or pass `--id`) and prints what waits for you, th
 }
 ```
 
-`checks` here come before the ones saved in `~/.pr-report/repos/`; `checks.mts --share` writes the saved ones here. `when` limits a check to changes in those paths.
+`checks` here come before the ones saved in `~/.pr-report/repos/`; `checks.mjs --share` writes the saved ones here. `when` limits a check to changes in those paths.
 
-`hooks` are the team's commands at fixed points, and the scripts run them: `preRun` before collect fetches (a failure stops it), `postRun` when a round's report is first published, `onApproved` when the reviewer finishes with nothing to fix. Like the checks, they do not run while the branch has commits by authors the user has not trusted (`checks.mts --trust`). When the user asks you to write one, the top of `${CLAUDE_SKILL_DIR}/scripts/hooks.mts` lists what each hook is handed.
+`hooks` are the team's commands at fixed points, and the scripts run them: `preRun` before collect fetches (a failure stops it), `postRun` when a round's report is first published, `onApproved` when the reviewer finishes with nothing to fix. Like the checks, they do not run while the branch has commits by authors the user has not trusted (`checks.mjs --trust`). When the user asks you to write one, the top of `${CLAUDE_SKILL_DIR}/scripts/hooks.mjs` lists what each hook is handed.
 
 Globs follow .gitignore rules: a pattern without `/` matches at any depth. When the user asks for one, write it from the repo's real folder layout.

@@ -1,0 +1,114 @@
+#!/usr/bin/env node
+// Installs the package `pnpm build` made (dist/skill/) for a coding agent. Runs the same on macOS, Linux and Windows
+// (PowerShell, cmd or Git Bash). It is `pnpm run deploy`: plain `pnpm deploy` is a pnpm command of its own.
+//
+//   pnpm run deploy                       Claude Code: link ~/.claude/skills/pr-report to dist/skill/ (each new build applies right away)
+//   pnpm run deploy --copy                Claude Code: copy dist/skill/ instead; use this if a Claude Code update removed the link
+//   pnpm run deploy --target agents       other agents: a copy in ~/.agents/skills/pr-report, the folder Codex and other agents
+//                                         that follow the Agent Skills format read
+//   pnpm run deploy --target <folder>     a copy in any other skills folder
+//   pnpm run deploy --no-open             do not open the setup page in the browser after a first install
+//
+// --target can be given more than once (--target claude --target agents); without it the target is claude.
+// A copy for another agent gets its own SKILL.md (see portable-skill.mts) and is not a link, so deploy again after
+// each build. On Windows the link is a directory junction, which needs no admin rights or Developer Mode.
+
+import { spawnSync } from "node:child_process";
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { portableSkillText } from "./portable-skill.mts";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const pkg = join(root, "dist", "skill");
+const mode = process.argv.includes("--copy") ? "copy" : "link";
+
+const fail = (message: string): never => {
+  console.error(`error: ${message}`);
+  process.exit(1);
+};
+// Every report starts with git. Finding out here beats a failed first /pr-report.
+if (spawnSync("git", ["--version"], { stdio: "ignore" }).status !== 0) fail("git is required. Install it from https://git-scm.com, then run this again.");
+
+// The package must exist and hold the source as it is now: a file changed after the build means it is not in there.
+const buildFile = join(pkg, "build.json");
+if (!existsSync(buildFile)) fail("dist/skill/ is not built yet. Run pnpm build first.");
+const builtAt = Date.parse((JSON.parse(readFileSync(buildFile, "utf8")) as { builtAt: string }).builtAt);
+const newest = (path: string): number => {
+  if (!existsSync(path)) return 0;
+  const stat = statSync(path);
+  if (!stat.isDirectory()) return stat.mtimeMs;
+  return Math.max(0, ...readdirSync(path).filter((name) => name !== "node_modules").map((name) => newest(join(path, name))));
+};
+// skill/assets/ is left from builds before dist/ and is not part of the package.
+const sources = [...readdirSync(join(root, "skill")).filter((name) => name !== "assets").map((name) => join(root, "skill", name)), join(root, "viewer", "src"), join(root, "viewer", "index.html"), join(root, "viewer", "vite.config.ts")];
+if (Math.max(...sources.map(newest)) > builtAt) fail("dist/skill/ is older than the source. Run pnpm build first.");
+
+// Where to install. `claude` is Claude Code's skills folder, `agents` the folder shared by agents that
+// follow the Agent Skills format, and anything else is taken as a path to a skills folder.
+const targets = process.argv.flatMap((arg, i, all) => (arg === "--target" && all[i + 1] ? [all[i + 1]] : []));
+if (process.argv.includes("--target") && !targets.length) fail("--target needs a value: claude, agents, or a skills folder");
+if (!targets.length) targets.push("claude");
+
+function install(name: string) {
+  const claude = name === "claude";
+  const skills = claude
+    ? (process.env.CLAUDE_SKILLS_DIR ?? join(homedir(), ".claude", "skills"))
+    : name === "agents"
+      ? (process.env.AGENTS_SKILLS_DIR ?? join(homedir(), ".agents", "skills"))
+      : resolve(name);
+  const target = join(skills, "pr-report");
+  // Only Claude Code can use the package as it is. Another agent needs its own SKILL.md, so it gets a copy.
+  const how = claude ? mode : "copy";
+  mkdirSync(skills, { recursive: true });
+
+  // A link from an earlier install (to dist/skill/, or to skill/ from before dist/ existed) is removed as a link.
+  // A copy is removed only when it is this skill, and never when it resolves to the package itself.
+  let existing = null;
+  try {
+    existing = lstatSync(target);
+  } catch {
+    // Not installed yet.
+  }
+  if (existing?.isSymbolicLink()) unlinkSync(target);
+  else if (existing) {
+    const skillFile = join(target, "SKILL.md");
+    if (!existsSync(skillFile) || !/^name: pr-report$/m.test(readFileSync(skillFile, "utf8"))) fail(`${target} exists and is not this skill. Move it away first.`);
+    if (realpathSync(target) === realpathSync(pkg)) fail(`${target} points at dist/skill/ itself. Remove that link by hand, then run this again.`);
+    rmSync(target, { recursive: true, force: true });
+  }
+
+  if (how === "link") symlinkSync(pkg, target, "junction");
+  else cpSync(pkg, target, { recursive: true });
+  if (!claude) writeFileSync(join(target, "SKILL.md"), portableSkillText(readFileSync(join(pkg, "SKILL.md"), "utf8"), target));
+
+  console.log(`Installed pr-report for ${claude ? "Claude Code" : name === "agents" ? "agents that read ~/.agents/skills" : name} (${how}): ${target}`);
+  return { claude, target, first: existing === null };
+}
+
+const installed = targets.map(install);
+
+// A first install ends in the browser: the setup page checks the tools on this machine and picks how
+// reports look. review.mjs starts the review daemon for it, from the installed skill, the same way a
+// report does. A later install (an update) keeps the daemon and the browser alone.
+const setupScript = join(installed[0].target, "scripts", "review.mjs");
+if (installed.some((t) => t.first) && !process.argv.includes("--no-open")) {
+  const r = spawnSync(process.execPath, [setupScript, "setup"], { encoding: "utf8" });
+  if (r.status === 0) console.log(r.stdout.trim());
+  else console.log(`Could not open the setup page (${(r.stderr || r.stdout).trim()}). Open it later with: node "${setupScript}" setup`);
+} else {
+  console.log(`Setup page (your tools, light or dark, code theme): node "${setupScript}" setup`);
+}
+
+console.log("");
+if (installed.some((t) => t.claude)) {
+  console.log("Next, in Claude Code: open it in a repo, on a branch with changes, and type /pr-report.");
+  console.log("If Claude Code does not know /pr-report, start a new session. If the skill goes missing after a Claude Code update, run pnpm run deploy again, or with --copy.");
+}
+if (installed.some((t) => !t.claude)) {
+  console.log("Next, in another agent: open it in a repo, on a branch with changes, and ask for a PR report. In Codex, type $pr-report.");
+  console.log("That install is a copy: run pnpm run deploy with the same --target after each pnpm build.");
+} else {
+  console.log("For Codex and other agents that read ~/.agents/skills: pnpm run deploy --target agents");
+}

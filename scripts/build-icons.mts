@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Turns the atom-material-icons package (MIT, Elior Boukhobza "Mallowigi") into skill/assets/file-icons.json:
-// the filename rules plus every icon SVG. build.mts then embeds only the icons a report's files use.
+// Turns the atom-material-icons package (MIT, Elior Boukhobza "Mallowigi") into dist/skill/assets/file-icons.json:
+// the filename rules plus every icon SVG. build.mjs then embeds only the icons a report's files use.
 //
-// Usage: node scripts/build-icons.mts   (needs `pnpm install` in viewer/ first)
+// Usage: node scripts/build-icons.mts   (pnpm build runs it, after `pnpm install` in viewer/)
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -41,7 +41,7 @@ for (const rule of rules) {
 }
 icons.default = minify(readFileSync(iconFile("/icons/files/default.svg"), "utf8"));
 
-const out = join(root, "skill/assets/file-icons.json");
+const out = join(root, "dist/skill/assets/file-icons.json");
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(
   out,

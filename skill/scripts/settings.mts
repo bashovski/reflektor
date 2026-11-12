@@ -2,12 +2,12 @@
 //
 // How the page looks (theme, code theme, diff view) is kept in the browser, where only the page needs it. These are
 // kept on disk, in ~/.pr-report/settings.json, because the scripts read them: the page writes them through the
-// daemon (/api/settings), and collect.mts tells the agent what they say.
+// daemon (/api/settings), and collect.mjs tells the agent what they say.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { replaceFile } from "./repo.mts";
+import { replaceFile } from "./repo.mjs";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const FILE = join(HOME, "settings.json");

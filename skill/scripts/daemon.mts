@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // One local server for every review: http://127.0.0.1:7337 (or the next free port).
 // Pages talk to it to save comments, ask questions and send reviews; agents talk to it through
-// review.mts to answer, post plans, report progress and publish new rounds. It streams each
+// review.mjs to answer, post plans, report progress and publish new rounds. It streams each
 // review's live state to open pages with Server-Sent Events.
 //
 // Each repo's review folder (<git folder>/pr-report) stays the source of truth: the daemon only keeps
 // a list of those folders in ~/.pr-report/reviews.json, so a restart loses nothing.
 //
-// Started by review.mts when needed. Stops itself after 4 hours without activity.
+// Started by review.mjs when needed. Stops itself after 4 hours without activity.
 
 import { execFile } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
@@ -18,25 +18,25 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { readChecksRun } from "./checks-run.mts";
-import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mts";
-import { purgeCache, whoAmI } from "./identity.mts";
-import { readSettings, writeSettings } from "./settings.mts";
-import { replaceFile } from "./repo.mts";
-import type { AgentInfo, Bundle, ChecksRun, CommentKind, CommentTarget, InboxData, LiveQuestion, PrState, Ref, RepoAvatar, Review, ReviewComment, Tag } from "../schema/types.ts";
+import { readChecksRun } from "./checks-run.mjs";
+import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mjs";
+import { purgeCache, whoAmI } from "./identity.mjs";
+import { readSettings, writeSettings } from "./settings.mjs";
+import { replaceFile } from "./repo.mjs";
+import type { AgentInfo, Bundle, ChecksRun, CommentKind, CommentTarget, InboxData, LiveQuestion, PrState, Ref, RepoAvatar, Review, ReviewComment, Tag } from "../schema/types.js";
 
 // ------------------------------------------------------------------ types
 // The daemon's own records. Report data and review files follow skill/schema/types.ts.
 
 // ~/.pr-report/secrets.json: the page token and the admin token, kept across restarts.
 type Secrets = { pageToken: string; adminToken: string };
-// ~/.pr-report/daemon.json: where review.mts finds this daemon, and the admin token it calls with.
+// ~/.pr-report/daemon.json: where review.mjs finds this daemon, and the admin token it calls with.
 type DaemonFile = { port: number; pid: number; version: string; adminToken: string; startedAt: string };
 // One entry of ~/.pr-report/reviews.json. Entries from older daemons may lack the avatar, checks file and archive date.
 type RegistryEntry = { id: string; dir: string; title: string; tag: Tag; repo: string; branch: string; avatar?: RepoAvatar | null; checksFile?: string; archived?: string | null };
 // Where a review's current round stands. The inbox adds "merged" on top (statusOf).
 type Phase = "reviewing" | "sent" | "planning" | "working" | "done";
-// One published round: the data file build.mts wrote. Rounds from older daemons name an exported page in `html` instead and may lack builtAt.
+// One published round: the data file build.mjs wrote. Rounds from older daemons name an exported page in `html` instead and may lack builtAt.
 type RoundEntry = { round: number; file?: string; html?: string; builtAt?: string; publishedAt: string; draft?: boolean };
 // The agent's progress on one comment, kept by comment id.
 type CommentStatus = { status: "working" | "fixed" | "answered" | "wontfix" | "noted"; text: string | null; ref?: Ref; at: string };
@@ -107,7 +107,7 @@ type ReviewRecord = {
 type Res = ServerResponse & { watchAll?: boolean; watching?: Set<string> };
 // An agent's long poll for a review's next event (next-event).
 type Waiter = { res: ServerResponse; timer: NodeJS.Timeout };
-// A request body from review.mts to a review's agent routes (answers, plan, status, pr). Each route reads its own fields.
+// A request body from review.mjs to a review's agent routes (answers, plan, status, pr). Each route reads its own fields.
 type AgentBody = { questionId?: string; text?: string; ref?: Ref; steps?: PlanStep[]; note?: string | null; commentId?: string; status?: CommentStatus["status"]; url?: string; title?: string };
 // A request body from a review page to its routes (presence, questions, archive, plan-decision, draft, submit).
 type PageBody = { tab?: string; id?: string; text?: string; target?: CommentTarget; archived?: boolean; decision?: string; note?: string | null; kinds?: PlanDecision["kinds"]; comments?: ReviewComment[]; headSha?: string; snapshot?: string };
@@ -266,7 +266,7 @@ function save(r: ReviewRecord) {
   wakeWaiters(r);
 }
 
-// A round's report data: the JSON file build.mts wrote, or the data inside an exported page.
+// A round's report data: the JSON file build.mjs wrote, or the data inside an exported page.
 const roundFile = (entry: RoundEntry) => entry.file ?? entry.html!;
 function roundText(file: string) {
   if (!file || !existsSync(file)) return null;
@@ -321,7 +321,7 @@ const liveState = (r: ReviewRecord) => ({
   updatedAt: r.updatedAt,
 });
 
-// Every call from review.mts says which agent makes it (agent.mts). The review keeps the last one, so the page
+// Every call from review.mjs says which agent makes it (agent.mjs). The review keeps the last one, so the page
 // names whoever is on the other side now, also after another agent picked the review up. A call that names
 // nobody, such as one typed by hand, changes nothing. True when the agent changed.
 function noteAgent(r: ReviewRecord, req: IncomingMessage) {
@@ -723,10 +723,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 // page as SVG. Without the file the inbox simply has no mark.
 const LOGO_FILE = join(here, "../brand/reflektor-logo.svg");
 const LOGO = existsSync(LOGO_FILE) ? readFileSync(LOGO_FILE, "utf8").trim() : "";
-const APP_DIR = [join(here, "../assets/app"), join(here, "../../viewer/dist/app")].find((d) => existsSync(join(d, "index.html")));
-// Fuse.js for the inbox search: copied next to the app by install.mts, or read from the viewer's
-// packages in a checkout that is not built. Without it the inbox falls back to a plain substring match.
-const FUSE_FILE = [join(here, "../assets/fuse.mjs"), join(here, "../../viewer/node_modules/fuse.js/dist/fuse.basic.min.mjs")].find((f) => existsSync(f));
+const APP_DIR = [join(here, "../assets/app")].find((d) => existsSync(join(d, "index.html")));
+// Fuse.js for the inbox search, copied into assets/ by the build (scripts/build-skill.mts in the pr-report repo).
+// Without it the inbox falls back to a plain substring match.
+const FUSE_FILE = [join(here, "../assets/fuse.mjs")].find((f) => existsSync(f));
 // A plain script the viewer build compiles into the app folder (viewer/vite.config.ts), read each time a page needs it,
 // so a new build shows without a daemon restart. Empty without a build: the inbox then lists the reviews without its
 // menus, search and live updates.
@@ -920,7 +920,7 @@ setInterval(() => {
 // ------------------------------------------------------------------ pull request
 // The branch's pull request on GitHub, followed while the review is on screen, so a pull request
 // opened, merged or closed after the report was built shows up without a new report. The agent tells
-// the daemon the moment it opens one (review.mts pr); for what happens on GitHub afterwards the
+// the daemon the moment it opens one (review.mjs pr); for what happens on GitHub afterwards the
 // daemon polls with conditional requests. GitHub allows 5,000 requests an hour per token, and a 304
 // Not Modified answer to a request with If-None-Match does not count, so following an idle pull
 // request costs nothing: one request per review when something changed, headers only otherwise.
@@ -1139,7 +1139,7 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     return send(res, 200, await toolsReport());
   }
 
-  // ---------- agent API (review.mts), admin token
+  // ---------- agent API (review.mjs), admin token
   const admin = same(req.headers["x-admin-token"], adminToken);
   if (parts[1] === "health") return admin ? send(res, 200, { ok: true, version: VERSION, pid: process.pid }) : send(res, 401, { error: "bad token" });
   if (parts[1] === "shutdown" && admin) {
@@ -1168,7 +1168,7 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
   // ---------- page API without a review: who is reading, the daemon's cache, and the settings the agent reads
   if (parts[1] === "me" || parts[1] === "cache" || parts[1] === "settings") {
     if (!same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
-    // The page shows and changes the settings here; the scripts read the file (settings.mts).
+    // The page shows and changes the settings here; the scripts read the file (settings.mjs).
     if (req.method === "GET" && parts[1] === "settings") return send(res, 200, readSettings());
     if (req.method === "POST" && parts[1] === "settings") return send(res, 200, writeSettings(JSON.parse(await readBody(req))));
     if (req.method === "GET" && parts[1] === "me") {
@@ -1190,7 +1190,7 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     const { report: file } = JSON.parse(await readBody(req)) as { report?: string };
     if (!file || !existsSync(file)) return send(res, 400, { error: "report file not found" });
     const raw = roundText(file);
-    if (!raw || !raw.startsWith("{")) return send(res, 400, { error: "the report has no data; build it with build.mts" });
+    if (!raw || !raw.startsWith("{")) return send(res, 400, { error: "the report has no data; build it with build.mjs" });
     const bundle = JSON.parse(raw) as Bundle;
     const dir = dirname(file);
     const repo = [bundle.diff.repo.owner, bundle.diff.repo.name].filter(Boolean).join("/");

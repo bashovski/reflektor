@@ -30,7 +30,7 @@ The repo is `git@github.com:bashovski/pr-report.git` (private). `README.md` expl
 You need:
 
 - **Git for Windows**, which includes Git Bash
-- **Node.js** 22.18 or newer (the Mac uses 24.12)
+- **Node.js** 22.18 or newer to build (the Mac uses 24.12); the built skill runs on Node 18
 - **pnpm** (the Mac uses 10.26)
 - **Google Chrome**, for `pnpm check:browser`
 
@@ -38,11 +38,11 @@ Run these in PowerShell:
 
 1. `git clone git@github.com:bashovski/pr-report.git`, then `cd pr-report`.
 2. `git ls-files --eol install.sh` should show `w/lf`. If it shows `w/crlf`, `.gitattributes` did not apply. Fix that first.
-3. `node scripts/install.mts` should end with "Installed pr-report (link)".
+3. `pnpm build`, then `pnpm run deploy`, should end with "Installed pr-report for Claude Code (link)".
 4. `Get-Item $HOME\.claude\skills\pr-report | Select-Object LinkType, Target` should show `Junction` pointing at this repo's `skill` folder.
 5. Run `pnpm check`, then `pnpm check:browser`. Each takes 1 to 2 minutes on the Mac.
 
-Run `node scripts/install.mts` a second time, then make sure `skill\SKILL.md` still exists. The installer has to remove the old junction itself, never the files the junction points to.
+Run `pnpm run deploy` a second time, then make sure `dist\skill\SKILL.md` still exists. The installer has to remove the old junction itself, never the files the junction points to.
 
 ## Confirm these assumptions first
 
@@ -56,7 +56,7 @@ Run `node scripts/install.mts` a second time, then make sure `skill\SKILL.md` st
 | Problem | Fix | Where |
 |---|---|---|
 | Git for Windows checks out CRLF, which breaks the bash scripts | `* text=auto eol=lf` | `.gitattributes` |
-| The installer was bash only, and `ln -s` in Git Bash copies instead of linking | A Node installer that makes a directory junction | `scripts/install.mts:74` |
+| The installer was bash only, and `ln -s` in Git Bash copies instead of linking | A Node installer that makes a directory junction | `scripts/deploy.mts` |
 | The detached daemon gets its own console window, and closing that window stops it | `windowsHide: true` | `skill/scripts/review.mts:73` |
 | The daemon has no console, so each git call (every 15 s) would flash a window | `windowsHide: true` | `skill/scripts/daemon.mts:451` |
 | Checks ran in `cmd /c`, which can't run bash syntax and breaks commands with quotes | Run them in Git Bash, falling back to Node's `shell: true` (cmd) | `skill/scripts/checks.mts:299`, `skill/scripts/repo.mts:14` |
@@ -97,7 +97,7 @@ Environment variables:
 - **`PR_REPORT_IDLE_MINUTES`:** how long the daemon waits before stopping on its own, 240 by default.
 - **`PR_REPORT_DRIFT_SECONDS`:** how often it checks for changed code, 15 by default.
 - **`PR_REPORT_CHROME`:** the path to Chrome, when `pnpm check:browser` can't find it.
-- **`CLAUDE_SKILLS_DIR`:** where `install.mts` installs the skill. Use a temp folder to test the installer.
+- **`CLAUDE_SKILLS_DIR`:** where `deploy.mts` installs the skill. Use a temp folder to test the installer.
 - **`CLAUDE_CODE_GIT_BASH_PATH`:** the bash that checks run in, when set.
 
 ## How to work in this repo
