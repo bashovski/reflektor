@@ -631,23 +631,114 @@ const SECRET_FILES: [re: RegExp, rule: string, message: string][] = [
 ];
 
 const MIGRATION_PATH = /(^|\/)(migrations?|migrate|alembic|flyway|liquibase)(\/|$)|\.sql$|(^|\/)schema\.(rb|sql|prisma)$/i;
-const MIGRATION_RULES: [rule: string, severity: Severity, test: RegExp | ((line: string) => boolean), message: string][] = [
+
+// What a migration rule hit, for the page to show next to the rule: a table, `table.column`, or `old → new` for a
+// rename, as the migration names it. Quotes, back-ticks, brackets and Ruby's leading colon are dropped.
+type Subject = (line: string, lines: string[], n: number) => string | null;
+const bare = (name: string) => name.replace(/["'`[\]]/g, "").replace(/^:/, "");
+// DROP TABLE and TRUNCATE take a list: "a, b CASCADE" -> "a, b".
+const nameList = (list: string) =>
+  list
+    .split(",")
+    .map((part) => bare(part.trim().split(/\s+/)[0] ?? ""))
+    .filter(Boolean)
+    .join(", ") || null;
+const dotted = (...parts: (string | null)[]) => parts.filter(Boolean).join(".") || null;
+const firstMatch = (line: string, ...patterns: RegExp[]) => {
+  for (const pattern of patterns) {
+    const m = line.match(pattern);
+    if (m) return m.slice(1).filter(Boolean).map(bare);
+  }
+  return null;
+};
+const SQL_NAME = String.raw`([\w."\x60[\]]+)`;
+// The table of the ALTER TABLE statement line n belongs to, on that line or on an earlier line of the same statement.
+function alterTable(lines: string[], n: number): string | null {
+  for (let i = n - 1; i >= 0 && i >= n - 30; i--) {
+    if (i < n - 1 && /;\s*(--.*)?$/.test(lines[i])) return null;
+    const m = lines[i].match(new RegExp(String.raw`\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?${SQL_NAME}`, "i"));
+    if (m) return bare(m[1]);
+  }
+  return null;
+}
+// A rename's names, old ones first: ["books", "isbn", "code"] -> "books.isbn → code".
+const renamed = (names: string[] | null) => (names && names.length > 1 ? `${names.slice(0, -1).join(".")} → ${names.at(-1)}` : null);
+
+const MIGRATION_RULES: [rule: string, severity: Severity, test: RegExp | ((line: string) => boolean), message: string, subject: Subject][] = [
   ["Drops a table", "high", /\bDROP\s+TABLE\b|\bdrop_table\b|\.dropTable\s*\(|\bDeleteModel\s*\(|Schema::drop/i,
-    "Drops a table. Its data is gone, and code that still reads it breaks during the deploy."],
+    "Drops a table. Its data is gone, and code that still reads it breaks during the deploy.",
+    (l) => {
+      const sql = l.match(/\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([\w."`[\], ]+)/i);
+      if (sql) return nameList(sql[1]);
+      return firstMatch(l, /\bdrop_table\s*\(?\s*:?["']?(\w+)/, /\.dropTable\s*\(\s*["'`]([\w.]+)/, /\bDeleteModel\s*\(\s*(?:name\s*=\s*)?["'](\w+)/, /Schema::drop(?:IfExists)?\s*\(\s*["']([\w.]+)/)?.[0] ?? null;
+    }],
   ["Drops a column", "high", /\bDROP\s+COLUMN\b|\bremove_column\b|\.dropColumn\s*\(|\bRemoveField\s*\(/i,
-    "Drops a column. Its data is gone, and the old code that runs during the deploy breaks."],
-  ["Empties a table", "high", /\bTRUNCATE\b/i, "Deletes every row in a table."],
+    "Drops a column. Its data is gone, and the old code that runs during the deploy breaks.",
+    (l, lines, n) => {
+      const sql = l.match(/\bDROP\s+COLUMN\s+(?:IF\s+EXISTS\s+)?([\w."`[\]]+)/i);
+      if (sql) return dotted(alterTable(lines, n), bare(sql[1]));
+      const names = firstMatch(l, /\bremove_column\s*\(?\s*:?["']?(\w+)["']?\s*,\s*:?["']?(\w+)/, /\bRemoveField\s*\(\s*(?:model_name\s*=\s*)?["'](\w+)["']\s*,\s*(?:name\s*=\s*)?["'](\w+)/, /\.dropColumn\s*\(\s*["'`](\w+)/);
+      return names ? names.join(".") : null;
+    }],
+  ["Empties a table", "high", /\bTRUNCATE\b/i, "Deletes every row in a table.",
+    (l) => {
+      const m = l.match(/\bTRUNCATE\s+(?:TABLE\s+)?(?:ONLY\s+)?([\w."`[\], ]+)/i);
+      return m ? nameList(m[1]) : null;
+    }],
   ["NOT NULL column without a default", "high",
     (l) => (/\bADD\s+(COLUMN\s+)?(IF\s+NOT\s+EXISTS\s+)?\S+\s+\S+.*\bNOT\s+NULL\b/i.test(l) && !/\bDEFAULT\b/i.test(l)) ||
       (/\badd_column\b.*\bnull:\s*false\b/.test(l) && !/\bdefault:/.test(l)),
-    "Adds a NOT NULL column without a default. This fails on a table that already has rows."],
+    "Adds a NOT NULL column without a default. This fails on a table that already has rows.",
+    (l, lines, n) => {
+      const sql = l.match(/\bADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?([\w."`[\]]+)/i);
+      if (sql) return dotted(alterTable(lines, n), bare(sql[1]));
+      return firstMatch(l, /\badd_column\s*\(?\s*:?["']?(\w+)["']?\s*,\s*:?["']?(\w+)/)?.join(".") ?? null;
+    }],
   ["Renames a table or column", "medium", /\bRENAME\s+(COLUMN\s+\S+\s+)?TO\b|\brename_(column|table)\b|\.renameColumn\s*\(|\bRename(Field|Model)\s*\(/i,
-    "Renames a table or column. Code from before the deploy still uses the old name until it is replaced."],
+    "Renames a table or column. Code from before the deploy still uses the old name until it is replaced.",
+    (l, lines, n) => {
+      const column = l.match(/\bRENAME\s+COLUMN\s+([\w."`[\]]+)\s+TO\s+([\w."`[\]]+)/i);
+      if (column) return `${dotted(alterTable(lines, n), bare(column[1]))} → ${bare(column[2])}`;
+      const table = l.match(/\bRENAME\s+TO\s+([\w."`[\]]+)/i);
+      if (table) return `${alterTable(lines, n) ?? "?"} → ${bare(table[1])}`;
+      return renamed(
+        firstMatch(
+          l,
+          /\brename_column\s*\(?\s*:?["']?(\w+)["']?\s*,\s*:?["']?(\w+)["']?\s*,\s*:?["']?(\w+)/,
+          /\brename_table\s*\(?\s*:?["']?(\w+)["']?\s*,\s*:?["']?(\w+)/,
+          /\.renameColumn\s*\(\s*["'`](\w+)["'`]\s*,\s*["'`](\w+)/,
+          /\bRenameField\s*\(\s*(?:model_name\s*=\s*)?["'](\w+)["']\s*,\s*(?:old_name\s*=\s*)?["'](\w+)["']\s*,\s*(?:new_name\s*=\s*)?["'](\w+)/,
+          /\bRenameModel\s*\(\s*(?:old_name\s*=\s*)?["'](\w+)["']\s*,\s*(?:new_name\s*=\s*)?["'](\w+)/,
+        ),
+      );
+    }],
   ["Changes a column type", "medium", /\bALTER\s+COLUMN\s+\S+\s+(SET\s+DATA\s+)?TYPE\b|\bchange_column\b|\bAlterField\s*\(/i,
-    "Changes a column type. The database may rewrite and lock the whole table."],
+    "Changes a column type. The database may rewrite and lock the whole table.",
+    (l, lines, n) => {
+      const sql = l.match(/\bALTER\s+COLUMN\s+([\w."`[\]]+)\s+(?:SET\s+DATA\s+)?TYPE\b/i);
+      if (sql) return dotted(alterTable(lines, n), bare(sql[1]));
+      return firstMatch(l, /\bchange_column\s*\(?\s*:?["']?(\w+)["']?\s*,\s*:?["']?(\w+)/, /\bAlterField\s*\(\s*(?:model_name\s*=\s*)?["'](\w+)["']\s*,\s*(?:name\s*=\s*)?["'](\w+)/)?.join(".") ?? null;
+    }],
   ["Writes rows without WHERE", "medium", (l) => /\b(DELETE\s+FROM|UPDATE\s+\S+\s+SET)\b/i.test(l) && !/\bWHERE\b/i.test(l),
-    "Changes or deletes rows without a WHERE clause, so it touches every row."],
+    "Changes or deletes rows without a WHERE clause, so it touches every row.",
+    (l) => firstMatch(l, /\bDELETE\s+FROM\s+(?:ONLY\s+)?([\w."`[\]]+)/i, /\bUPDATE\s+(?:ONLY\s+)?([\w."`[\]]+)\s+SET\b/i)?.[0] ?? null],
 ];
+// Rollback code runs only when someone rolls a migration back, so the rules skip it: a whole down file (golang-migrate's
+// .down.sql, Diesel's down.sql, Flyway's U<version>__ undo files), and the down section of a file that holds both
+// directions (dbmate's "-- migrate:down", goose's "-- +goose Down", sql-migrate's "-- +migrate Down").
+const ROLLBACK_FILE = /(^|\/)(down\.sql|[^/]+\.down\.sql|U\d[\w.]*__[^/]*\.sql)$/i;
+const SECTION_MARK = /^\s*--\s*(?:migrate:(up|down)|\+(?:goose|migrate)\s+(up|down))\b/i;
+function rollbackLines(lines: string[]): Set<number> {
+  const down = new Set<number>();
+  let inDown = false;
+  lines.forEach((line, i) => {
+    const mark = line.match(SECTION_MARK);
+    if (mark) inDown = (mark[1] ?? mark[2]).toLowerCase() === "down";
+    else if (inDown) down.add(i + 1);
+  });
+  return down;
+}
+
 const INDEX_RULE = /\bCREATE\s+(UNIQUE\s+)?INDEX\s+(?!CONCURRENTLY)(?:IF\s+NOT\s+EXISTS\s+)?\S+\s+ON\s+(?:ONLY\s+)?["`]?([\w.]+)/i;
 
 const mask = (value: string) => (value.length <= 8 ? "…" : `${value.slice(0, 4)}…(${value.length} characters)`);
@@ -663,7 +754,8 @@ for (const f of files) {
   const lines = f.newContent.split("\n");
   const added = new Set(f.changedLines.added);
   const scanSecrets = !NOT_REAL.test(f.path);
-  const isMigration = MIGRATION_PATH.test(f.path);
+  const isMigration = MIGRATION_PATH.test(f.path) && !ROLLBACK_FILE.test(f.path);
+  const rollback = isMigration ? rollbackLines(lines) : new Set<number>();
   const createdTables = new Set([...f.newContent.matchAll(/\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["`]?([\w.]+)/gi)].map((m) => m[1].toLowerCase()));
 
   for (const n of added) {
@@ -683,15 +775,17 @@ for (const f of files) {
         break;
       }
     }
-    if (!isMigration) continue;
-    for (const [rule, severity, test, message] of MIGRATION_RULES) {
+    if (!isMigration || rollback.has(n)) continue;
+    for (const [rule, severity, test, message, subjectOf] of MIGRATION_RULES) {
       const hit = typeof test === "function" ? test(text) : test.test(text);
-      if (hit) findings.push({ kind: "migration", rule, severity, path: f.path, line: n, message });
+      if (!hit) continue;
+      const subject = subjectOf(text, lines, n);
+      findings.push({ kind: "migration", rule, severity, path: f.path, line: n, message, ...(subject ? { subject } : {}) });
     }
     const idx = text.match(INDEX_RULE);
     if (idx && !createdTables.has(idx[2].toLowerCase())) {
       findings.push({
-        kind: "migration", rule: "Creates an index that locks the table", severity: "low", path: f.path, line: n,
+        kind: "migration", rule: "Creates an index that locks the table", severity: "low", path: f.path, line: n, subject: bare(idx[2]),
         message: "Creates an index on an existing table without CONCURRENTLY. In Postgres this blocks writes while the index builds.",
       });
     }
@@ -944,7 +1038,7 @@ if (findings.length) {
   const count = (sev: Severity) => findings.filter((f) => f.severity === sev).length;
   console.log(`Safety checks: ${count("high")} high, ${count("medium")} medium, ${count("low")} low`);
   for (const f of findings) {
-    console.log(`  ${f.severity.toUpperCase().padEnd(6)} ${f.kind.padEnd(9)} ${f.path}${f.line ? `:${f.line}` : ""}  ${f.rule}${f.preview ? ` [${f.preview}]` : ""}`);
+    console.log(`  ${f.severity.toUpperCase().padEnd(6)} ${f.kind.padEnd(9)} ${f.path}${f.line ? `:${f.line}` : ""}  ${f.rule}${f.subject ? `: ${f.subject}` : ""}${f.preview ? ` [${f.preview}]` : ""}`);
   }
 } else {
   console.log("Safety checks: no likely secrets or risky migrations found");

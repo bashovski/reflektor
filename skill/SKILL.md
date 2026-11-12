@@ -106,7 +106,7 @@ It writes diff.json into the repo's git folder and prints:
 - the `git diff` command to read the changes
 - a table of changed files with their target (from `.pr-report.json`) and flags (generated, uncommitted, untracked)
 
-It also prints **Safety checks**: fixed rules that flag likely secrets (key formats, passwords in code, committed `.env` or key files) and risky migrations (dropped tables or columns, NOT NULL without a default, renames, type changes, writes without WHERE, indexes that lock a table). Secret values are masked.
+It also prints **Safety checks**: fixed rules that flag likely secrets (key formats, passwords in code, committed `.env` or key files) and risky migrations (dropped tables or columns, NOT NULL without a default, renames, type changes, writes without WHERE, indexes that lock a table). Rollback code is not checked: a migration's down section or down file runs only on a rollback. Secret values are masked.
 
 When the reader has turned on Subagentic Mode in Settings, it also prints `Subagent mode: on` and the path of a file. Read that file before step 4 and follow it.
 

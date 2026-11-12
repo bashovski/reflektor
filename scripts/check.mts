@@ -136,6 +136,10 @@ try {
   if (books.repo.avatar?.initials !== "AL" || books.repo.avatar.image !== null) fail(`acme-labs without a cached avatar should get initials AL: ${JSON.stringify(books.repo.avatar)}`);
   if (books.repo.web?.ownerUrl !== "https://github.com/acme-labs" || books.repo.web.forge !== "github") fail(`collect.mts did not find the repo's web links: ${JSON.stringify(books.repo.web)}`);
   if (books.branch.upstream !== null) fail("feat/books is not on the remote, but collect.mts says it is");
+  // Each migration finding names what it hit, for the page to show next to the rule.
+  const subjects = (d: DiffData) => (d.findings ?? []).filter((f) => f.kind === "migration").map((f) => `${f.rule}: ${f.subject ?? "-"}`);
+  if (subjects(books).join(" | ") !== "NOT NULL column without a default: authors.slug | Creates an index that locks the table: authors")
+    fail(`the books migration findings do not name their table and column: ${subjects(books).join(" | ")}`);
 
   // Edge cases in a second repo. The key-shaped value is built at runtime, so no literal secret is stored here.
   const edgeRepo = join(tmp, "edge");
@@ -152,6 +156,24 @@ try {
   writeFileSync(join(edgeRepo, "gen", "api.js"), "export const api = 1;\n");
   writeFileSync(join(edgeRepo, "big.txt"), "x".repeat(600 * 1024));
   writeFileSync(join(edgeRepo, "naïve name.ts"), "export const ok = true;\n");
+  // A migration with a list, a statement over several lines, and a rename, so each finding has to name what it hit.
+  writeFileSync(
+    join(edgeRepo, "cleanup.sql"),
+    [
+      'DROP TABLE IF EXISTS "old_books", legacy_authors CASCADE;',
+      "ALTER TABLE books",
+      "  DROP COLUMN isbn10,",
+      "  ALTER COLUMN price TYPE numeric;",
+      "TRUNCATE sessions;",
+      "UPDATE books SET price = 0;",
+      "ALTER TABLE authors RENAME COLUMN name TO full_name;",
+      "",
+    ].join("\n"),
+  );
+  // Rollback code is not flagged: dbmate's and goose's down sections, and a down file of its own.
+  writeFileSync(join(edgeRepo, "dbmate.sql"), "-- migrate:up\nDROP TABLE old_widgets;\n\n-- migrate:down\nDROP TABLE widgets;\n");
+  writeFileSync(join(edgeRepo, "goose.sql"), "-- +goose Up\nTRUNCATE logs;\n-- +goose Down\nTRUNCATE audit;\n");
+  writeFileSync(join(edgeRepo, "0007_init.down.sql"), "DROP TABLE gizmos;\n");
   // Subagent mode turned on in Settings, for this one run: collect has to say so and name the file with the steps.
   writeFileSync(join(home.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: true }));
   const edgeOut = run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", edgeRepo, "--no-fetch", "--base", "main", "--out", join(tmp, "edge.json")], home);
@@ -160,6 +182,19 @@ try {
   if (!told || !existsSync(told[1])) fail("collect.mts does not tell the agent that subagent mode is on, or the file it names with the steps is not there");
   if (!edgeOut.includes("AWS access key [AKIA…(20 characters)]")) fail("collect.mts did not flag or mask a fake AWS key");
   const edgeData = JSON.parse(readFileSync(join(tmp, "edge.json"), "utf8")) as DiffData;
+  const expectedSubjects = [
+    "Drops a table: old_books, legacy_authors",
+    "Drops a column: books.isbn10",
+    "Empties a table: sessions",
+    "Renames a table or column: authors.name → full_name",
+    "Changes a column type: books.price",
+    "Writes rows without WHERE: books",
+  ];
+  const edgeSubjects = subjects(edgeData);
+  for (const expected of expectedSubjects) if (!edgeSubjects.includes(expected)) fail(`a migration finding does not name what it hit: wanted "${expected}", got ${edgeSubjects.join(" | ")}`);
+  if (!edgeOut.includes("Drops a table: old_books, legacy_authors")) fail("collect.mts does not print what a migration finding hit");
+  for (const expected of ["Drops a table: old_widgets", "Empties a table: logs"]) if (!edgeSubjects.includes(expected)) fail(`a migration's up section was not checked: wanted "${expected}"`);
+  for (const rollback of ["Drops a table: widgets", "Empties a table: audit", "Drops a table: gizmos"]) if (edgeSubjects.includes(rollback)) fail(`rollback code was flagged: "${rollback}"`);
   if (!edgeData.repo.avatar?.image?.startsWith("data:image/png;base64,") || edgeData.repo.avatar.initials !== "EG")
     fail(`a cached avatar was not used: ${JSON.stringify(edgeData.repo.avatar).slice(0, 120)}`);
   const edge = Object.fromEntries(edgeData.files.map((f): [string, DiffFile] => [f.path, f]));

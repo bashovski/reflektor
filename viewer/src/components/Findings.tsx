@@ -35,6 +35,8 @@ export const Findings = () => {
                 <p className="flex flex-wrap items-center gap-x-2 font-medium">
                   <Icon className="size-3.5 text-muted" />
                   {f.rule}
+                  {/* What the rule hit, styled like a project check's command (ProjectChecks.tsx). */}
+                  {f.subject && <code className="min-w-0 truncate font-mono text-xs font-normal text-muted">{f.subject}</code>}
                   {f.preview && <code className="rounded-control bg-zinc-500/10 px-1 font-mono text-[11px] font-normal text-muted">{f.preview}</code>}
                 </p>
                 <p className="text-[13px] leading-snug text-zinc-600 dark:text-zinc-400">{f.message}</p>
