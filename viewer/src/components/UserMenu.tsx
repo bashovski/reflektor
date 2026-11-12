@@ -1,8 +1,8 @@
 import { Menu, MenuButton, MenuItem, MenuItems, MenuSeparator } from "@headlessui/react";
 import { Bug, CircleHelp, ExternalLink, Settings, Trash2, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { Bundle, RepoAvatar } from "../../../skill/schema/types";
-import { type Identity, useIdentity } from "../lib/identity";
+import type { Bundle, Identity, RepoAvatar } from "../../../skill/schema/types";
+import { useIdentity } from "../lib/identity";
 import { type DaemonInfo, type Link, useLive } from "../lib/live";
 import { PROJECT } from "../lib/meta";
 import { pageToken } from "../lib/panel";

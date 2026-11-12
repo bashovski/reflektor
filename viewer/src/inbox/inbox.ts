@@ -2,8 +2,7 @@
 // archive and delete, and the reader's menu. A plain script, not part of the app: vite.config.ts compiles it, and the
 // daemon puts it at the end of the inbox page, after its data (InboxData) in a JSON block.
 import type Fuse from "fuse.js";
-import type { InboxData, RepoAvatar } from "../../../skill/schema/types";
-import type { Identity } from "../lib/identity";
+import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/types";
 
 (() => {
   const data = JSON.parse(document.getElementById("inbox-data")!.textContent!) as InboxData;
