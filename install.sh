@@ -4,11 +4,13 @@
 #   ./install.sh --copy             Claude Code: copy dist/skill/ instead; use this if a Claude Code update removed the link
 #   ./install.sh --target agents    other agents: a copy in ~/.agents/skills/pr-report, which Codex and others read
 #   ./install.sh --target <folder>  a copy in any other skills folder
-# The work happens in scripts/build-skill.mts and scripts/deploy.mts, which also run on their own in PowerShell or cmd
-# on Windows.
+# The tools are TypeScript in scripts/, compiled into dist/tools/ first and run from there. On Windows without bash,
+# run pnpm build and pnpm run deploy instead.
 set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"
 
-# The build runs TypeScript, which Node does without a flag from 22.18. The skill it builds runs on Node 18.
-[ "$(node -p 'Boolean(process.features.typescript)' 2>/dev/null)" = true ] || { echo "error: building pr-report needs Node.js 22.18 or newer (found: $(node --version 2>/dev/null || echo none)). The skill it builds runs on Node 18."; exit 1; }
-node "$(dirname "$0")/scripts/build-skill.mts"
-exec node "$(dirname "$0")/scripts/deploy.mts" "$@"
+command -v node >/dev/null || { echo "error: Node.js is required"; exit 1; }
+if command -v pnpm >/dev/null; then (cd "$here/viewer" && pnpm install --frozen-lockfile); else (cd "$here/viewer" && npm install); fi
+node "$here/viewer/node_modules/typescript/bin/tsc" -p "$here/tsconfig.tools.json"
+node "$here/dist/tools/scripts/build-skill.mjs"
+exec node "$here/dist/tools/scripts/deploy.mjs" "$@"

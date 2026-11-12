@@ -9,13 +9,12 @@
 //
 // Run it after changing viewer/package.json or viewer/src/vendor; scripts/check.mts fails when a runtime dependency
 // or a vendor folder is missing here.
-// Usage: node scripts/build-notices.mts
+// Usage: pnpm run notices
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { root } from "./paths.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const modules = join(root, "viewer", "node_modules");
 // The fields of a package.json read here.
 type PackageJson = {

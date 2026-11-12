@@ -6,29 +6,31 @@
 // changed code, and the offer of the setup to a browser that skipped it.
 //
 // Uses the installed Google Chrome (or PR_REPORT_CHROME=<path>), so no browser is downloaded.
-// Usage: node scripts/browser-check.mts [--headed]
+// Usage: pnpm check:browser [--headed], after pnpm build
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import type { Review } from "../skill/schema/types.ts";
-import { gitBash } from "../skill/scripts/repo.mts";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import type { Review } from "../skill/schema/types.js";
 // playwright-core is one of the viewer's packages, so its types come from there too.
 import type { BrowserType, Locator } from "playwright-core";
-import { githubPr, startGithubStub } from "./github-stub.mts";
+import { githubPr, startGithubStub } from "./github-stub.mjs";
+import { root } from "./paths.mjs";
 
 // An execFileSync error carries the command's stderr; other errors do not.
 type ExecError = Error & { stderr?: string };
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // The suites test the package pnpm build makes (dist/skill/), the files a user gets.
 if (!existsSync(join(root, "dist/skill/build.json"))) {
   console.error("error: dist/skill/ is not built. Run pnpm build first.");
   process.exit(1);
 }
+// The skill as users get it, from its package; only the types come from its source.
+const fromPackage = (name: string) => import(pathToFileURL(join(root, "dist/skill/scripts", name)).href);
+const { gitBash } = (await fromPackage("repo.mjs")) as typeof import("../skill/scripts/repo.mjs");
 const { chromium } = createRequire(join(root, "viewer/package.json"))("playwright-core") as { chromium: BrowserType };
 const tmp = mkdtempSync(join(tmpdir(), "pr-report-browser-"));
 const repo = join(tmp, "books");

@@ -4,10 +4,12 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm -C viewer dev",
-    "build": "node scripts/build-skill.mts",
-    "deploy": "node scripts/deploy.mts",
-    "check": "node scripts/build-skill.mts && pnpm -C viewer exec tsc -p ../tsconfig.scripts.json && node scripts/check.mts",
-    "check:browser": "node scripts/browser-check.mts",
-    "sample": "node scripts/check.mts --open"
+    "tools": "pnpm -C viewer install --frozen-lockfile && node viewer/node_modules/typescript/bin/tsc -p tsconfig.tools.json",
+    "build": "pnpm run tools && node dist/tools/scripts/build-skill.mjs",
+    "deploy": "pnpm run tools && node dist/tools/scripts/deploy.mjs",
+    "check": "pnpm run build && node dist/tools/scripts/check.mjs",
+    "check:browser": "pnpm run tools && node dist/tools/scripts/browser-check.mjs",
+    "sample": "pnpm run build && node dist/tools/scripts/check.mjs --open",
+    "notices": "pnpm run tools && node dist/tools/scripts/build-notices.mjs"
   }
 }

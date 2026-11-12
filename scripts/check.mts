@@ -3,17 +3,17 @@
 // samples/report.json, and fails on any warning. Then drives a whole review through a private daemon.
 // Also refreshes samples/bundle.json for `pnpm dev` and the standalone samples/books-report.html.
 //
-// Usage: node scripts/check.mts [--open]
+// Usage: pnpm check, or pnpm sample to open the sample report after
 
 import { type ChildProcessByStdio, execFile, execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import type { Readable } from "node:stream";
-import { fileURLToPath } from "node:url";
-import type { AgentInfo, Bundle, ChecksRun, DiffData, DiffFile, HookName, InboxData, LiveQuestion, PrState, Report, RepoConfig } from "../skill/schema/types.ts";
-import { gitBash } from "../skill/scripts/repo.mts";
-import { githubPr, startGithubStub } from "./github-stub.mts";
+import { pathToFileURL } from "node:url";
+import type { AgentInfo, Bundle, ChecksRun, DiffData, DiffFile, HookName, InboxData, LiveQuestion, PrState, Report, RepoConfig } from "../skill/schema/types.js";
+import { githubPr, startGithubStub } from "./github-stub.mjs";
+import { root } from "./paths.mjs";
 
 // What execFileSync throws when the command fails. Every call asks for utf8, so the output is text.
 type ExecError = Error & { status: number | null; stdout: string; stderr: string };
@@ -37,12 +37,14 @@ type LiveState = {
   updatedAt: string;
 };
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // The suites test the package pnpm build makes (dist/skill/), the files a user gets.
 if (!existsSync(join(root, "dist/skill/build.json"))) {
   console.error("error: dist/skill/ is not built. Run pnpm build first.");
   process.exit(1);
 }
+// The skill as users get it, from its package; only the types come from its source.
+const fromPackage = (name: string) => import(pathToFileURL(join(root, "dist/skill/scripts", name)).href);
+const { gitBash } = (await fromPackage("repo.mjs")) as typeof import("../skill/scripts/repo.mjs");
 const tmp = mkdtempSync(join(tmpdir(), "pr-report-check-"));
 const repo = join(tmp, "books");
 const html = join(root, "samples", "books-report.html");
@@ -63,7 +65,7 @@ try {
 
   // The copy of the skill for an agent other than Claude Code: the folder written out in every command, Claude Code's
   // own front matter left out, and the two fields every agent needs kept.
-  const { portableSkillText } = await import("./portable-skill.mts");
+  const { portableSkillText } = await import("./portable-skill.mjs");
   const portable = portableSkillText(readFileSync(join(root, "skill/SKILL.md"), "utf8"), "C:\\Users\\x\\.agents\\skills\\pr-report");
   const frontMatter = portable.slice(0, portable.indexOf("\n---", 4));
   if (portable.includes("CLAUDE_SKILL_DIR") || /^(allowed-tools|argument-hint):/m.test(frontMatter) || !/^name: pr-report$/m.test(frontMatter) || !/^description: /m.test(frontMatter))
@@ -75,7 +77,7 @@ try {
   // Which agent runs pr-report: said outright, read from the shell's variables, from the skills folder a script was
   // started from, or from the agent's own answer, in that order. Every case names its own variables, so the result does
   // not depend on the shell this check runs in.
-  const { detectAgent, decodeAgent, encodeAgent } = await import("../skill/scripts/agent.mts");
+  const { detectAgent, decodeAgent, encodeAgent } = (await fromPackage("agent.mjs")) as typeof import("../skill/scripts/agent.mjs");
   const elsewhere = join(root, "dist/skill/scripts/review.mjs");
   type AgentOptions = Parameters<typeof detectAgent>[0];
   const who = (options: AgentOptions) => {
@@ -88,9 +90,9 @@ try {
     ["AI_AGENT with a version", { env: { AI_AGENT: "claude-code_2-1-321_agent" } }, "claude-code|Claude|Claude Code|/pr-report resume|2.1.321|env"],
     ["AI_AGENT of an agent with no entry", { env: { AI_AGENT: "some-new-agent_0-9_agent" } }, "some-new-agent|Some New Agent|Some New Agent|null|0.9|env"],
     ["a marker only one agent sets", { env: { CLAUDECODE: "1" } }, "claude-code|Claude|Claude Code|/pr-report resume|null|env"],
-    ["the skills folder, Windows", { launchPath: "C:\\Users\\k\\.claude\\skills\\pr-report\\scripts\\review.mts" }, "claude-code|Claude|Claude Code|/pr-report resume|null|path"],
-    ["the skills folder, POSIX", { launchPath: "/home/k/.claude/skills/pr-report/scripts/review.mts" }, "claude-code|Claude|Claude Code|/pr-report resume|null|path"],
-    ["a worktree under .claude is not a skills folder", { launchPath: "/code/app/.claude/worktrees/x/skill/scripts/review.mts" }, "nobody"],
+    ["the skills folder, Windows", { launchPath: "C:\\Users\\k\\.claude\\skills\\pr-report\\scripts\\review.mjs" }, "claude-code|Claude|Claude Code|/pr-report resume|null|path"],
+    ["the skills folder, POSIX", { launchPath: "/home/k/.claude/skills/pr-report/scripts/review.mjs" }, "claude-code|Claude|Claude Code|/pr-report resume|null|path"],
+    ["a worktree under .claude is not a skills folder", { launchPath: "/code/app/.claude/worktrees/x/skill/scripts/review.mjs" }, "nobody"],
     ["the agent's own answer, known", { name: "Gemini CLI" }, "gemini-cli|Gemini|Gemini CLI|null|null|self"],
     ["the agent's own answer, unknown and untidy", { name: "  Zed\n Agent " }, "zed-agent|Zed Agent|Zed Agent|null|null|self"],
     ["nothing to go on", {}, "nobody"],
@@ -106,11 +108,11 @@ try {
   // The third-party notices file ships with the skill and must name every package the viewer bundles.
   const notices = readFileSync(join(root, "skill/THIRD-PARTY-NOTICES.md"), "utf8");
   for (const dep of Object.keys((JSON.parse(readFileSync(join(root, "viewer/package.json"), "utf8")) as { dependencies: Record<string, string> }).dependencies))
-    if (!notices.includes(`## ${dep} `)) fail(`THIRD-PARTY-NOTICES.md does not cover ${dep}; run node scripts/build-notices.mts`);
+    if (!notices.includes(`## ${dep} `)) fail(`THIRD-PARTY-NOTICES.md does not cover ${dep}; run pnpm run notices`);
   // So must source that was copied into the viewer by hand: each folder in viewer/src/vendor.
   const vendor = join(root, "viewer/src/vendor");
   for (const folder of existsSync(vendor) ? readdirSync(vendor) : [])
-    if (!notices.includes(`## ${folder} `)) fail(`THIRD-PARTY-NOTICES.md does not cover viewer/src/vendor/${folder}; add it to COPIED in scripts/build-notices.mts and run it`);
+    if (!notices.includes(`## ${folder} `)) fail(`THIRD-PARTY-NOTICES.md does not cover viewer/src/vendor/${folder}; add it to COPIED in scripts/build-notices.mts and run pnpm run notices`);
 
   const lucideName = (icon: string) => icon[0].toLowerCase() + icon.slice(1);
   const viewerTags = Object.fromEntries(
@@ -266,7 +268,7 @@ try {
 
   const bundle = JSON.parse(readFileSync(join(root, "samples/bundle.json"), "utf8")) as Bundle;
   const missingIcons = bundle.diff.files.filter((f) => !bundle.fileIcons?.byPath[f.path]);
-  if (missingIcons.length) fail(`no file icon for ${missingIcons.length} files (run node scripts/build-icons.mts)`);
+  if (missingIcons.length) fail(`no file icon for ${missingIcons.length} files (run pnpm build)`);
 
   const page = readFileSync(html, "utf8");
   if (page.includes("__PR_REPORT_DATA__")) fail("report data was not injected into the viewer");
@@ -748,7 +750,7 @@ async function hooksFlow() {
   run(bash, [join(root, "fixtures", "make-books-repo.sh"), hooksRepo]);
   const data = join(hooksRepo, ".git/pr-report/feat-books");
   const log = join(tmp, "hooks.log");
-  const logger = join(tmp, "log-hook.mts");
+  const logger = join(tmp, "log-hook.mjs");
   writeFileSync(
     logger,
     [
@@ -788,7 +790,7 @@ async function hooksFlow() {
     // A failing preRun stops the report and says why; so does one that runs past its time limit.
     try {
       collect({ HOOK_FAIL: "preRun" });
-      fail("a failing preRun hook did not stop collect.mts");
+      fail("a failing preRun hook did not stop collect.mjs");
     } catch (error) {
       const e = error as ExecError;
       if (e.status !== 1 || !e.stdout.includes("preRun ran") || !e.stderr.includes("the preRun hook in .pr-report.json failed")) fail(`a failing preRun did not stop collect clearly:\n${e.stdout}${e.stderr}`);
@@ -797,7 +799,7 @@ async function hooksFlow() {
     const started = Date.now();
     try {
       collect({ PR_REPORT_HOOK_SECONDS: "1" });
-      fail("a preRun hook past its time limit did not stop collect.mts");
+      fail("a preRun hook past its time limit did not stop collect.mjs");
     } catch (error) {
       const e = error as ExecError;
       if (!e.stdout.includes("Hook preRun timed out after 1s") || Date.now() - started > 10_000) fail(`a slow preRun was not stopped at its time limit:\n${e.stdout}`);

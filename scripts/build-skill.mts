@@ -7,14 +7,13 @@
 //   dist/skill/assets/                  the viewer (app/ for the daemon, viewer.html for --html), Fuse.js, file icons
 //   dist/skill/build.json               when it was built and from which commit, for deploy's freshness check
 //
-// Usage: pnpm build (node scripts/build-skill.mts). Runs the same on macOS, Linux and Windows.
+// Usage: pnpm build, which compiles this file into dist/tools/ first. Runs the same on macOS, Linux and Windows.
 
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, sep } from "node:path";
+import { root } from "./paths.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const viewer = join(root, "viewer");
 const source = join(root, "skill");
 const out = join(root, "dist", "skill");
@@ -23,10 +22,6 @@ const fail = (message: string): never => {
   console.error(`error: ${message}`);
   process.exit(1);
 };
-// These tools are TypeScript that Node runs directly, which it does without a flag from 22.18. The skill they build
-// is plain JavaScript and runs on Node 18.
-const [major, minor] = process.versions.node.split(".").map(Number);
-if (major < 22 || (major === 22 && minor < 18)) fail(`building pr-report needs Node.js 22.18 or newer (this is ${process.version}). The skill it builds runs on Node 18.`);
 
 // pnpm and npm are .cmd files on Windows, which only start through a shell. The commands are fixed
 // strings, so nothing from outside reaches the shell.
@@ -63,7 +58,7 @@ rmSync(compiled, { recursive: true, force: true });
 // 3. The viewer: the app the daemon serves, the standalone page build.mjs --html writes, the inbox's scripts (in app/),
 // Fuse.js for the inbox search, and the file type icons.
 console.log("Building the viewer...");
-node(join(root, "scripts", "build-icons.mts"));
+node(join(root, "dist", "tools", "scripts", "build-icons.mjs"));
 sh(pnpm ? "pnpm build" : "npm run build", viewer);
 const assets = join(out, "assets");
 cpSync(join(viewer, "dist", "app"), join(assets, "app"), { recursive: true });

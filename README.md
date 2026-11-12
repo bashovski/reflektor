@@ -23,7 +23,7 @@ It runs two steps, which also work on their own:
 - **`pnpm build`** makes the skill's package in `dist/skill/`: the scripts compiled from TypeScript to JavaScript for Node 18, the viewer, and the files the agent reads. `dist/` is never committed.
 - **`pnpm run deploy`** links `~/.claude/skills/pr-report` to `dist/skill/`, so each new `pnpm build` applies right away. With `--copy` it copies the folder instead. It refuses a package older than the source. It has to be `pnpm run deploy`: plain `pnpm deploy` is a pnpm command of its own.
 
-Building needs Node.js 22.18 or newer, because the build and test tools in `scripts/` are TypeScript that Node runs directly. The skill it builds runs on Node 18.
+Building needs the Node that Vite 8 needs for the viewer: 20.19, or 22.12 and newer. The tools in `scripts/` are TypeScript too, and `pnpm run tools` compiles them into `dist/tools/` before any of them runs, so they behave the same on every such Node. The skill it builds runs on Node 18.
 
 For Codex and other agents that read `~/.agents/skills`, run `./install.sh --target agents`. That installs a copy with its own `SKILL.md`, in which the skill's folder is written out and Claude Code's own front matter is left out, so deploy again after each build. `--target <folder>` installs into any other skills folder, and `--target` can be given more than once (`--target claude --target agents`).
 
@@ -87,6 +87,7 @@ The report data is written to `<git folder>/pr-report/<branch>/` (usually `.git/
 | `viewer/` | React source of the report page, and the inbox's scripts in `viewer/src/inbox/`, which the daemon puts into the inbox page |
 | `fixtures/make-books-repo.sh` | Builds a fake repo with a "books" feature branch |
 | `samples/report.json` | A hand-written report for that fake repo |
+| `scripts/` | The repo's tools, in TypeScript. `tsconfig.tools.json` compiles them into `dist/tools/`, and they only run from there. |
 | `scripts/check.mts` | End-to-end test on the fake repo |
 | `scripts/browser-check.mts` | The same review clicked through the real page in headless Chrome |
 | `scripts/build-skill.mts` | `pnpm build`: makes `dist/skill/` |
@@ -106,12 +107,13 @@ The report data is written to `<git folder>/pr-report/<branch>/` (usually `.git/
 Commands:
 
 ```bash
-pnpm check    # build, typecheck the scripts and tools, then run the whole pipeline on the fake repo; fails on any warning
+pnpm check    # build (which typechecks the skill and the tools), then run the whole pipeline on the fake repo; fails on any warning
 pnpm check:browser  # drive a whole review through the page in headless Chrome (needs Google Chrome)
 pnpm dev      # viewer with live reload, using the sample data (run pnpm check once first)
 pnpm build    # make the package in dist/skill/: scripts compiled for Node 18, the viewer, the agent's files
 pnpm run deploy  # install dist/skill/ for Claude Code (--copy, --target agents, --target <folder>)
 pnpm sample   # check, then open the sample report
+pnpm run notices  # rewrite skill/THIRD-PARTY-NOTICES.md after the viewer's packages change
 ```
 
 To redo an old report with a new viewer, without asking the agent again:

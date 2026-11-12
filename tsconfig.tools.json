@@ -1,0 +1,28 @@
+{
+  // Compiles the repo's tools (scripts/*.mts: build, deploy, the test suites and the asset builders) into
+  // dist/tools/scripts/*.mjs, and they only ever run from there, so they behave the same on every Node that can build
+  // the viewer. `pnpm run tools` runs it. The tools load the skill from its package (dist/skill/) and take only types
+  // from its source; tsc compiles those source files into dist/tools/skill/ as well, where nothing uses them.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "rootDir": ".",
+    "outDir": "dist/tools",
+    "newLine": "lf",
+    "noEmitOnError": true,
+    "typeRoots": ["./viewer/node_modules/@types"],
+    "types": ["node"],
+    // The browser check loads playwright-core from the viewer's packages; its types come from there too.
+    "paths": { "playwright-core": ["./viewer/node_modules/playwright-core/index.d.ts"] }
+  },
+  "include": ["scripts"]
+}

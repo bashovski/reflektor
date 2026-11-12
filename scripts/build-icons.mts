@@ -2,13 +2,12 @@
 // Turns the atom-material-icons package (MIT, Elior Boukhobza "Mallowigi") into dist/skill/assets/file-icons.json:
 // the filename rules plus every icon SVG. build.mjs then embeds only the icons a report's files use.
 //
-// Usage: node scripts/build-icons.mts   (pnpm build runs it, after `pnpm install` in viewer/)
+// pnpm build runs it, after `pnpm install` in viewer/.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { root } from "./paths.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = join(root, "viewer/node_modules/atom-material-icons");
 if (!existsSync(pkg)) throw new Error("atom-material-icons is missing. Run `pnpm install` in viewer/ first.");
 

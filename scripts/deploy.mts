@@ -16,11 +16,10 @@
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { portableSkillText } from "./portable-skill.mts";
+import { join, resolve } from "node:path";
+import { portableSkillText } from "./portable-skill.mjs";
+import { root } from "./paths.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = join(root, "dist", "skill");
 const mode = process.argv.includes("--copy") ? "copy" : "link";
 

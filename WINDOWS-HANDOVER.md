@@ -30,7 +30,7 @@ The repo is `git@github.com:bashovski/pr-report.git` (private). `README.md` expl
 You need:
 
 - **Git for Windows**, which includes Git Bash
-- **Node.js** 22.18 or newer to build (the Mac uses 24.12); the built skill runs on Node 18
+- **Node.js** 20.19, or 22.12 and newer, to build, as Vite 8 needs (the Mac uses 24.12); the built skill runs on Node 18
 - **pnpm** (the Mac uses 10.26)
 - **Google Chrome**, for `pnpm check:browser`
 
@@ -48,7 +48,7 @@ Run `pnpm run deploy` a second time, then make sure `dist\skill\SKILL.md` still 
 
 1. **The Bash tool runs in Git Bash.** The Windows design assumes that Claude Code on Windows runs Bash tool commands in Git Bash. If this machine's Claude Code runs them in PowerShell, stop and tell the user, because the design changes.
 2. **How the skill folder path looks.** Find out how Claude Code fills in `${CLAUDE_SKILL_DIR}` on Windows: with backslashes, forward slashes, or a `/c/...` path. Look at the exact commands Claude runs during `/pr-report`.
-3. **Git Bash is found.** `node -e "import('./skill/scripts/repo.mts').then(m => console.log(m.gitBash()))"` should print the path to Git's `bin\bash.exe`. It must never print the WSL `C:\Windows\System32\bash.exe`.
+3. **Git Bash is found.** after `pnpm build`, `node -e "import('./dist/skill/scripts/repo.mjs').then(m => console.log(m.gitBash()))"` should print the path to Git's `bin\bash.exe`. It must never print the WSL `C:\Windows\System32\bash.exe`.
 4. **The browser opens.** `explorer <url>` should open the default browser at the review page. It's used in `skill/scripts/review.mts:168` and `skill/scripts/build.mts:588`.
 
 ## What commit 2196382 changed for Windows
@@ -88,7 +88,7 @@ Pick a real repo on this machine that has a feature branch. In Claude Code there
 - **Daemon log:** `%USERPROFILE%\.pr-report\daemon.log`
 - **Daemon state:** `%USERPROFILE%\.pr-report\reviews.json` and `daemon.json`
 - **One branch's report files:** `<repo>\.git\pr-report\<branch>\`
-- **Stop the daemon:** `node skill/scripts/review.mts stop`
+- **Stop the daemon:** `node dist/skill/scripts/review.mjs stop`
 
 Environment variables:
 
