@@ -548,6 +548,14 @@ async function daemonFlow() {
     if (!review("wait", "--id", id).includes("Live question q_1")) fail("wait did not return the live question");
     review("answer", "--id", id, "--question", "q_1", "--text", "One per change.");
     if (!(await state()).questions[0]?.answer) fail("the answer did not reach the page state");
+    // --text-file with no path says so, instead of failing inside Node with a TypeError.
+    try {
+      review("answer", "--id", id, "--question", "q_1", "--text-file");
+      fail("answer --text-file with no path did not fail");
+    } catch (error) {
+      const e = error as ExecError;
+      if (e.status !== 1 || !e.stderr.includes("answer needs a file path after --text-file")) fail(`answer --text-file with no path did not say what is missing:\n${e.stderr}`);
+    }
 
     const comment = { id: "c_1", target: { type: "report" }, text: "Rename slug to handle", createdAt: new Date().toISOString() };
     await post("submit", { comments: [comment] });

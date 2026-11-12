@@ -93,7 +93,12 @@ const parseRef = (value: string | true | undefined) => {
   const [path, line] = String(value).split(":");
   return { path, line: line ? Number(line) : undefined };
 };
-const textArg = () => (args["text-file"] ? readFileSync(args["text-file"] as string, "utf8") : typeof args.text === "string" ? args.text : null);
+const textArg = () => {
+  const file = args["text-file"];
+  // A flag with no value parses as true. main() prints the reason and ends with exit code 1.
+  if (file === true) throw new Error(`${command} needs a file path after --text-file`);
+  return file ? readFileSync(file, "utf8") : typeof args.text === "string" ? args.text : null;
+};
 // The default browser, detached so this command can end right away.
 const openInBrowser = (url: string) => {
   const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
