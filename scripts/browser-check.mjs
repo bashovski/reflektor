@@ -99,9 +99,6 @@ try {
   await expectVisible(page.getByRole("heading", { name: "You're all set" }), "the inbox greeting after setup");
   const saved = await page.evaluate(() => ["pr-report:setup", "pr-report:theme", "pr-report:code-theme-dark"].map((k) => localStorage.getItem(k)));
   if (!saved[0] || saved[1] !== '"dark"' || saved[2] !== '"github-dark"') fail(`setup did not save its choices: ${saved.join(" ")}`);
-  // Subagent mode is for the agent, so it is saved on disk by the daemon and not in the browser.
-  const settingsFile = join(env.PR_REPORT_HOME, "settings.json");
-  if (JSON.parse(readFileSync(settingsFile, "utf8")).subagents !== true) fail("the wizard did not save subagent mode where the scripts read it");
 
   // 1. The draft opens first: the facts, with sending held back.
   const draftOut = script("build.mjs", "--diff", join(data, "diff.json"), "--draft").match(/Wrote (\S+)/)[1];

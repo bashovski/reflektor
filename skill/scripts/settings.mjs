@@ -7,6 +7,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { replaceFile } from "./repo.mjs";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const FILE = join(HOME, "settings.json");
@@ -19,6 +20,10 @@ const DEFAULTS = {
   subagents: false,
 };
 
+// `base` with the values `from` has for the same keys, where they are of the same type. The file and what the page
+// sends both go through it, so neither can add a key or change a type.
+const known = (from, base) => Object.fromEntries(Object.entries(base).map(([key, value]) => [key, typeof from?.[key] === typeof value ? from[key] : value]));
+
 export function readSettings() {
   let saved = null;
   try {
@@ -26,14 +31,16 @@ export function readSettings() {
   } catch {
     // No file yet, or one that cannot be read: the defaults stand.
   }
-  return Object.fromEntries(Object.entries(DEFAULTS).map(([key, fallback]) => [key, typeof saved?.[key] === typeof fallback ? saved[key] : fallback]));
+  return known(saved, DEFAULTS);
 }
 
-// Takes the known keys out of `patch`, saves them over what was there, and returns all settings.
+// Saves the known keys of `patch` over what was there, and returns all settings.
 export function writeSettings(patch) {
-  const next = readSettings();
-  for (const [key, fallback] of Object.entries(DEFAULTS)) if (typeof patch?.[key] === typeof fallback) next[key] = patch[key];
+  const next = known(patch, readSettings());
   mkdirSync(HOME, { recursive: true });
-  writeFileSync(FILE, `${JSON.stringify(next, null, 2)}\n`);
+  // Written beside the file and moved into place, so a script that reads at that moment never gets half a file.
+  const tmp = `${FILE}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`);
+  replaceFile(tmp, FILE);
   return next;
 }

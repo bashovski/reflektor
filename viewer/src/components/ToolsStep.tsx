@@ -1,5 +1,6 @@
 import { Check, ClipboardCopy, Loader2 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { pageToken } from "../lib/panel";
 import { cx } from "./ui";
 
 // The tools on this machine that pr-report can use: the GitHub and GitLab command lines. pr-report
@@ -58,15 +59,15 @@ const TOOLS: Tool[] = [
 const useTools = () => {
   const [tools, setTools] = useState<ToolsReport | "unavailable" | null>(null);
   useEffect(() => {
-    const config = window.__PR_SETUP__;
-    if (!config) {
+    const token = pageToken();
+    if (!token) {
       setTools("unavailable");
       return;
     }
     let stopped = false;
     const poll = async () => {
       try {
-        const res = await fetch("/api/setup/tools", { headers: { "x-review-token": config.token } });
+        const res = await fetch("/api/setup/tools", { headers: { "x-review-token": token } });
         if (res.ok && !stopped) setTools((await res.json()) as ToolsReport);
       } catch {
         // The daemon is away for a moment; the next poll tries again.
