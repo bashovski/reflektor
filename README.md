@@ -73,6 +73,7 @@ The report data is written to `<git folder>/pr-report/<branch>/` (usually `.git/
 |---|---|
 | `skill/` | What the agent loads. This is the folder that gets linked, or copied for agents other than Claude Code. |
 | `skill/SKILL.md` | The steps the agent follows |
+| `skill/subagents.md` | The extra steps for Subagentic Mode, read only when it is on |
 | `skill/agents.json` | The agents pr-report knows by name, and how to recognize them |
 | `skill/style-guide.md` | How report text is written |
 | `skill/schema/types.ts` | The data contract, and the only list of allowed values |
@@ -90,7 +91,7 @@ The report data is written to `<git folder>/pr-report/<branch>/` (usually `.git/
 
 | You want to change | Edit | Then |
 |---|---|---|
-| How the agent writes or what it flags | `skill/SKILL.md`, `skill/style-guide.md` | Nothing with a linked install: the next run uses it. For a copy, run the installer again. |
+| How the agent writes or what it flags | `skill/SKILL.md`, `skill/subagents.md`, `skill/style-guide.md` | Nothing with a linked install: the next run uses it. For a copy, run the installer again. |
 | How the report looks | `viewer/src/` | `pnpm dev` to see it live, `pnpm build` to ship it |
 | Allowed values (tags, section kinds, ...) | `skill/schema/types.ts` | Add a label and color in `viewer/src/lib/meta.ts`; TypeScript points at the spot |
 | What is read from git | `skill/scripts/collect.mjs` | `pnpm check` |
@@ -110,6 +111,10 @@ To redo an old report with a new viewer, without asking the agent again:
 ```bash
 node skill/scripts/build.mjs --diff .git/pr-report/<branch>/diff.json --report .git/pr-report/<branch>/report.json --open
 ```
+
+## Subagentic Mode
+
+Off by default. Turned on in the setup wizard or in Settings, it tells the agent to split a bigger change between subagents, one for each section of the report, which read and write at the same time. That is faster and costs more tokens. It needs an agent that can start subagents, like Claude Code, and small changes are written the usual way. The setting is kept in `~/.pr-report/settings.json`, where the skill's scripts read it.
 
 ## Per-repo settings
 

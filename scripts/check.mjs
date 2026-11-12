@@ -40,6 +40,8 @@ try {
   if (portable.includes("CLAUDE_SKILL_DIR") || /^(allowed-tools|argument-hint):/m.test(frontMatter) || !/^name: pr-report$/m.test(frontMatter) || !/^description: /m.test(frontMatter))
     fail("the skill text for other agents still has Claude Code's placeholder or front matter, or lost its name or description");
   if (!portable.includes('node "C:/Users/x/.agents/skills/pr-report/scripts/collect.mjs" --repo .')) fail("the skill text for other agents does not spell out the skill's folder in its commands");
+  // The steps for subagent mode are a file of their own. The placeholder is replaced in SKILL.md only, so it must not be in there.
+  if (readFileSync(join(root, "skill/subagents.md"), "utf8").includes("CLAUDE_SKILL_DIR")) fail("skill/subagents.md has Claude Code's placeholder, which nothing replaces in that file");
 
   // Which agent runs pr-report: said outright, read from the shell's variables, from the skills folder a script was
   // started from, or from the agent's own answer, in that order. Every case names its own variables, so the result does
@@ -95,6 +97,8 @@ try {
   if (!collected.includes("Patch coverage: 51%")) fail("collect.mjs did not read coverage from .pr-report.json");
   if (!collected.includes("(config)")) fail("collect.mjs did not take the base branch from .pr-report.json");
   if (!collected.includes("Safety checks: 1 high, 0 medium, 1 low")) fail("collect.mjs safety checks did not find the slug migration problems");
+  // The reader's settings: collect says nothing of subagent mode while it is off. The run on the second repo, below, has it on.
+  if (collected.includes("Subagent mode")) fail("collect.mjs speaks of subagent mode although the setting is off");
   const books = JSON.parse(readFileSync(join(repo, ".git/pr-report/feat-books/diff.json"), "utf8"));
   if (books.repo.avatar?.initials !== "AL" || books.repo.avatar.image !== null) fail(`acme-labs without a cached avatar should get initials AL: ${JSON.stringify(books.repo.avatar)}`);
   if (books.repo.web?.ownerUrl !== "https://github.com/acme-labs" || books.repo.web.forge !== "github") fail(`collect.mjs did not find the repo's web links: ${JSON.stringify(books.repo.web)}`);
@@ -115,7 +119,12 @@ try {
   writeFileSync(join(edgeRepo, "gen", "api.js"), "export const api = 1;\n");
   writeFileSync(join(edgeRepo, "big.txt"), "x".repeat(600 * 1024));
   writeFileSync(join(edgeRepo, "naïve name.ts"), "export const ok = true;\n");
+  // Subagent mode turned on in Settings, for this one run: collect has to say so and name the file with the steps.
+  writeFileSync(join(home.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: true }));
   const edgeOut = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", edgeRepo, "--no-fetch", "--base", "main", "--out", join(tmp, "edge.json")], home);
+  rmSync(join(home.PR_REPORT_HOME, "settings.json"));
+  const told = edgeOut.match(/^Subagent mode: on .* Read (.+subagents\.md) before/m);
+  if (!told || !existsSync(told[1])) fail("collect.mjs does not tell the agent that subagent mode is on, or the file it names with the steps is not there");
   if (!edgeOut.includes("AWS access key [AKIA…(20 characters)]")) fail("collect.mjs did not flag or mask a fake AWS key");
   const edgeData = JSON.parse(readFileSync(join(tmp, "edge.json"), "utf8"));
   if (!edgeData.repo.avatar?.image?.startsWith("data:image/png;base64,") || edgeData.repo.avatar.initials !== "EG")
@@ -361,6 +370,19 @@ async function daemonFlow() {
     writeFileSync(join(env.PR_REPORT_HOME, "cache", "avatars", "stale"), "x");
     const purged = await (await fetch(`${base}/api/cache/purge`, { method: "POST", headers: { "x-review-token": config.token } })).json();
     if (!(purged.removed >= 1) || existsSync(join(env.PR_REPORT_HOME, "cache")) || !existsSync(join(env.PR_REPORT_HOME, "daemon.json"))) fail("purging the cache did not remove exactly the cache folder");
+    // The settings the agent reads: behind the page token, off until changed, and saved to the file the scripts read.
+    const settingsUrl = `${base}/api/settings`;
+    const asPage = { "x-review-token": config.token, "content-type": "application/json" };
+    if ((await fetch(settingsUrl)).status !== 401) fail("the settings endpoint answers without the page token");
+    const settingsBefore = await (await fetch(settingsUrl, { headers: asPage })).json();
+    const settingsAfter = await (await fetch(settingsUrl, { method: "POST", headers: asPage, body: JSON.stringify({ subagents: true, other: "x" }) })).json();
+    const settingsOnDisk = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "settings.json"), "utf8"));
+    if (settingsBefore.subagents !== false || settingsAfter.subagents !== true || settingsOnDisk.subagents !== true || "other" in settingsOnDisk)
+      fail(`the settings were not saved as sent: ${JSON.stringify({ settingsBefore, settingsAfter, settingsOnDisk })}`);
+    if ((await fetch(settingsUrl, { method: "POST", headers: asPage, body: "{" })).status !== 400) fail("the settings endpoint takes a body that is not JSON");
+    // A value of the wrong type in the file counts as not set.
+    writeFileSync(join(env.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: "yes" }));
+    if ((await (await fetch(settingsUrl, { headers: asPage })).json()).subagents !== false) fail("a setting of the wrong type in settings.json is taken for on");
 
     // The page is told which agent it talks to: in its config, and live from whoever called last.
     if (config.agent?.name !== "Claude" || (await state()).agent?.product !== "Claude Code") fail(`the page does not know the agent that opened the review: ${JSON.stringify(config.agent)}`);

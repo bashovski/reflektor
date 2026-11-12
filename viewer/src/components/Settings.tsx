@@ -1,7 +1,9 @@
+import { Switch } from "@headlessui/react";
 import { Monitor, Moon, Sun, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 import type { BundledTheme } from "shiki/themes";
 import { type DiffStyle, type ThemeChoice, usePrefs } from "../lib/prefs";
+import { type AgentSettings, useAgentSettings } from "../lib/settings";
 import { codeThemesFor, type ThemeMode } from "../lib/themes";
 import { cx, Kbd, MOD_KEY } from "./ui";
 
@@ -15,6 +17,10 @@ export const SHORTCUTS = [
   ["?", "Open these settings"],
   [`${MOD_KEY}+Enter`, "Send the review"],
 ] as const;
+
+// A card the reader can choose: an outline, and the accent when it is the chosen one. The buttons of a `Choice` and
+// the switch below look the same through it.
+const card = (chosen: boolean) => cx("rounded-control border text-left", chosen ? "border-accent bg-accent/[0.06] ring-1 ring-accent" : "border-[var(--border)] hover:bg-zinc-500/[0.06]");
 
 // A row of equal buttons, one of them chosen. Shared with the setup page.
 export const Choice = <T extends string>({
@@ -32,10 +38,7 @@ export const Choice = <T extends string>({
         key={o.value}
         type="button"
         onClick={() => onChange(o.value)}
-        className={cx(
-          "flex flex-col items-start gap-0.5 rounded-control border px-3 py-2 text-left",
-          value === o.value ? "border-accent bg-accent/[0.06] ring-1 ring-accent" : "border-[var(--border)] hover:bg-zinc-500/[0.06]",
-        )}
+        className={cx("flex flex-col items-start gap-0.5 px-3 py-2", card(value === o.value))}
       >
         <span className="inline-flex items-center gap-1.5 text-sm font-medium">
           {o.icon}
@@ -46,6 +49,35 @@ export const Choice = <T extends string>({
     ))}
   </div>
 );
+
+// The one setting the agent reads: whether to split the writing of a report between subagents. The whole row is
+// the switch. It is shown in Settings and in the setup wizard.
+export const SubagentSwitch = ({ settings, change }: { settings: AgentSettings; change: (patch: Partial<AgentSettings>) => void }) => {
+  const on = settings.subagents;
+  return (
+    <Switch checked={on} onChange={(next) => change({ subagents: next })} className={cx("flex w-full items-center justify-between gap-4 px-3 py-2.5", card(on))}>
+      <span>
+        <span className="block text-sm font-medium">Subagentic Mode</span>
+        <span className="block text-xs text-muted">Consumes more tokens, but it&rsquo;s hella faster.</span>
+      </span>
+      <span aria-hidden className={cx("flex h-5 w-9 shrink-0 items-center rounded-control p-0.5 transition-colors", on ? "bg-accent" : "bg-zinc-500/30")}>
+        <span className={cx("size-4 rounded-control transition-transform", on ? "translate-x-4 bg-on-accent" : "bg-white")} />
+      </span>
+    </Switch>
+  );
+};
+
+// Shown where a daemon keeps the setting. A report saved as a file has none, and leaves the section out.
+const WritingSection = ({ open }: { open: boolean }) => {
+  const { settings, change } = useAgentSettings(open);
+  if (!settings) return null;
+  return (
+    <section>
+      <h3 className="mb-2 label-caps text-xs text-muted">Writing reports</h3>
+      <SubagentSwitch settings={settings} change={change} />
+    </section>
+  );
+};
 
 export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   const { theme, setTheme, resolvedTheme, diffStyle, setDiffStyle, codeTheme, setCodeTheme } = usePrefs();
@@ -121,6 +153,8 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
             ))}
           </div>
         </section>
+
+        <WritingSection open={open} />
 
         <section>
           <h3 className="mb-2 label-caps text-xs text-muted">Keyboard shortcuts</h3>

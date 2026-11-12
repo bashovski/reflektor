@@ -14,8 +14,10 @@
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ownerAvatar } from "./avatar.mjs";
 import { globToRegExp, parseRemote, reportDir, shellPath } from "./repo.mjs";
+import { readSettings } from "./settings.mjs";
 
 const MAX_BYTES = 512 * 1024;
 const MAX_LINES = 8000;
@@ -859,6 +861,9 @@ if (coverage) {
   console.log("Patch coverage: none (no coverage file given or listed in .pr-report.json)");
 }
 console.log(config ? "Config: .pr-report.json found" : "Config: no .pr-report.json");
+// The reader can ask for speed over tokens in the page's Settings. It is said only when it is on, so the usual run
+// reads as before, and the steps for it are in a file of their own, which only such a run has to read.
+if (readSettings().subagents) console.log(`Subagent mode: on (turned on in Settings). Read ${shellPath(fileURLToPath(new URL("../subagents.md", import.meta.url)))} before you read the changes.`);
 console.log("");
 console.log(`Read the changes with: git diff ${from} ${to} -- <path>   (includes uncommitted and untracked files)`);
 console.log("Files (status, lines, target from config, flags):");

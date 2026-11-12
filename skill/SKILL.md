@@ -108,6 +108,8 @@ It writes diff.json into the repo's git folder and prints:
 
 It also prints **Safety checks**: fixed rules that flag likely secrets (key formats, passwords in code, committed `.env` or key files) and risky migrations (dropped tables or columns, NOT NULL without a default, renames, type changes, writes without WHERE, indexes that lock a table). Secret values are masked.
 
+When the reader has turned on Subagentic Mode in Settings, it also prints `Subagent mode: on` and the path of a file. Read that file before step 4 and follow it.
+
 Exit code 3 means there are no changes: tell the user and stop.
 
 While the tests from step 2b run, their coverage file may be missing or STALE. That is expected: step 7b collects again once they are done.

@@ -9,6 +9,7 @@ These rules cover surface style only. The layout and the order of things on the 
 - **Blocks are square and flat.** A block is anything that sits on the page: a section, a file, the plan check. It takes `surface border`: a hairline border, no rounding, no shadow.
 - **Controls have 2px corners.** Buttons, inputs, badges, menus, dialogs, comment boxes and code chips take `rounded-control`. The size is set once, as `--radius-control` in `viewer/src/index.css`.
 - **Round is for dots.** Only status dots, the nodes of a flow and avatars of people are circles. A number mark, like the step numbers in the review path, is a small square with the control corner.
+- **A switch is square too.** Its track and its thumb take `rounded-control`, and the row it sits in is the switch: `SubagentSwitch` in `viewer/src/components/Settings.tsx`.
 - **One shadow.** Only things that float over the page (menus, dialogs, the review bar) have a shadow, and it is always `shadow-float`, set as `--shadow-float` in `index.css`.
 
 ## Type

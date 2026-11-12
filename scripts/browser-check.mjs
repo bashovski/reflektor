@@ -85,6 +85,10 @@ try {
   await expectVisible(page.getByRole("heading", { name: "Your tools" }), "the tools step");
   await expectVisible(page.getByText(/Logged in|not logged in|Not installed/).first(), "what the daemon found out about gh and glab", 15_000);
   await page.keyboard.press("Enter");
+  await expectVisible(page.getByRole("heading", { name: "Faster reports?" }), "the step about subagent mode");
+  await page.getByRole("switch", { name: /Subagentic Mode/ }).click();
+  await expectVisible(page.getByRole("switch", { name: /Subagentic Mode/, checked: true }), "subagent mode turned on in the wizard");
+  await page.keyboard.press("Enter");
   await expectVisible(page.getByRole("heading", { name: "Light or dark?" }), "the theme step");
   await page.getByRole("button", { name: "Dark Always dark" }).click();
   await page.keyboard.press("Enter");
@@ -292,6 +296,7 @@ try {
   await page.getByRole("button", { name: /^Settings/ }).click();
   const panel = page.frameLocator("iframe.panel");
   await expectVisible(panel.getByRole("heading", { name: "Settings" }), "Settings, opened from the inbox's menu");
+  await expectVisible(panel.getByRole("switch", { name: /Subagentic Mode/, checked: true }), "subagent mode in Settings, as it was set in the wizard");
   await panel.getByRole("button", { name: /^Close/ }).click();
   await page
     .locator("iframe.panel")

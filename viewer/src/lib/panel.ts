@@ -16,4 +16,4 @@ declare global {
 export const isPanelPage = () => Boolean(window.__PR_PANEL__);
 
 // The token the daemon gave this page, whichever kind of page it is.
-export const pageToken = () => window.__PR_REVIEW__?.token ?? window.__PR_PANEL__?.token ?? "";
+export const pageToken = () => window.__PR_REVIEW__?.token ?? window.__PR_PANEL__?.token ?? window.__PR_SETUP__?.token ?? "";
