@@ -99,6 +99,7 @@ try {
   if (!collected.includes("Safety checks: 1 high, 0 medium, 1 low")) fail("collect.mjs safety checks did not find the slug migration problems");
   // The reader's settings: collect says nothing of subagent mode while it is off. The run on the second repo, below, has it on.
   if (collected.includes("Subagent mode")) fail("collect.mjs speaks of subagent mode although the setting is off");
+  if (/^Hooks? /m.test(collected)) fail("collect.mjs printed a hook line for a repo without hooks");
   const books = JSON.parse(readFileSync(join(repo, ".git/pr-report/feat-books/diff.json"), "utf8"));
   if (books.repo.avatar?.initials !== "AL" || books.repo.avatar.image !== null) fail(`acme-labs without a cached avatar should get initials AL: ${JSON.stringify(books.repo.avatar)}`);
   if (books.repo.web?.ownerUrl !== "https://github.com/acme-labs" || books.repo.web.forge !== "github") fail(`collect.mjs did not find the repo's web links: ${JSON.stringify(books.repo.web)}`);
@@ -262,6 +263,7 @@ try {
   await daemonFlow();
   updateFlow();
   await concurrentStart();
+  await hooksFlow();
 } catch (e) {
   fail(e.stderr?.toString() || e.message);
 } finally {
@@ -699,6 +701,133 @@ async function concurrentStart() {
   for (const d of running) d.kill();
   await sleep(200);
   console.log("concurrent start: one daemon out of 6 started at once, past an old empty lock");
+}
+
+// ------------------------------------------------------------------ hooks
+// The project's own commands at fixed points of a report (hooks.mjs), on a fresh books repo with a
+// private daemon. Each hook runs a script that writes a line to a log, so the check can count when
+// each one ran and what it was handed.
+
+async function hooksFlow() {
+  const github = await startGithubStub();
+  const hooksRepo = join(tmp, "hooks-books");
+  run(bash, [join(root, "fixtures", "make-books-repo.sh"), hooksRepo]);
+  const data = join(hooksRepo, ".git/pr-report/feat-books");
+  const log = join(tmp, "hooks.log");
+  const logger = join(tmp, "log-hook.mjs");
+  writeFileSync(
+    logger,
+    [
+      'import { appendFileSync } from "node:fs";',
+      "const e = process.env;",
+      'appendFileSync(e.HOOK_LOG, `${[e.PR_REPORT_HOOK, e.PR_REPORT_BRANCH, e.PR_REPORT_BASE, e.PR_REPORT_ROUND ?? "-", e.PR_REPORT_REPORT?.endsWith("report.json") ? "report" : "-", e.PR_REPORT_URL ? "url" : "-"].join(" ")}\\n`);',
+      "console.log(`${e.PR_REPORT_HOOK} ran`);",
+      "if (e.HOOK_FAIL === e.PR_REPORT_HOOK) process.exit(1);",
+    ].join("\n"),
+  );
+  const logHook = `node "${logger.replaceAll("\\", "/")}"`;
+  const setHooks = (hooks) => {
+    const file = join(hooksRepo, ".pr-report.json");
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), hooks }, null, 2));
+  };
+  const ran = (hook) => (existsSync(log) ? readFileSync(log, "utf8") : "").split("\n").filter((line) => line.startsWith(`${hook} `));
+  const env = {
+    PR_REPORT_HOME: join(tmp, "hooks-home"),
+    PR_REPORT_PORT: String(5400 + Math.floor(Math.random() * 300)),
+    PR_REPORT_GITHUB_API: github.url,
+    PR_REPORT_GITHUB_TOKEN: "stub-token",
+    GH_CONFIG_DIR: join(tmp, "gh-config"),
+    PR_REPORT_AGENT: "claude-code",
+    HOOK_LOG: log,
+  };
+  const collect = (extra, ...a) => run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", hooksRepo, "--no-fetch", ...a], { ...env, ...extra });
+  const review = (extra, ...a) => run("node", [join(root, "skill/scripts/review.mjs"), ...a], { ...env, ...extra });
+  const build = (...a) => run("node", [join(root, "skill/scripts/build.mjs"), "--diff", join(data, "diff.json"), ...a]).match(/Wrote (\S+)/)[1];
+
+  try {
+    // preRun: its output goes to the agent, it knows the branch and the base, and collect goes on.
+    setHooks({ preRun: ['echo "Ticket ABC-1: let readers save books"', logHook], postRun: logHook, onApproved: logHook });
+    const collected = collect({});
+    if (!collected.includes("  Ticket ABC-1: let readers save books") || !collected.includes("Diff file")) fail(`preRun's output is not shown, or collect did not go on:\n${collected}`);
+    if (ran("preRun").join() !== "preRun feat/books main - - -") fail(`preRun was not handed the branch and base only: ${ran("preRun").join(" | ")}`);
+
+    // A failing preRun stops the report and says why; so does one that runs past its time limit.
+    try {
+      collect({ HOOK_FAIL: "preRun" });
+      fail("a failing preRun hook did not stop collect.mjs");
+    } catch (e) {
+      if (e.status !== 1 || !e.stdout.includes("preRun ran") || !e.stderr.includes("the preRun hook in .pr-report.json failed")) fail(`a failing preRun did not stop collect clearly:\n${e.stdout}${e.stderr}`);
+    }
+    setHooks({ preRun: "sleep 20" });
+    const started = Date.now();
+    try {
+      collect({ PR_REPORT_HOOK_SECONDS: "1" });
+      fail("a preRun hook past its time limit did not stop collect.mjs");
+    } catch (e) {
+      if (!e.stdout.includes("Hook preRun timed out after 1s") || Date.now() - started > 10_000) fail(`a slow preRun was not stopped at its time limit:\n${e.stdout}`);
+    }
+    setHooks({ preRun: logHook, postRun: logHook, onApproved: logHook });
+
+    // postRun: once a round, at the first build that is not a draft. A failure is only a warning.
+    writeFileSync(join(data, "report.json"), readFileSync(join(root, "samples/report.json")));
+    review({}, "open", "--report", build("--draft"));
+    if (ran("postRun").length) fail("postRun ran for a draft");
+    const opened = review({ HOOK_FAIL: "postRun" }, "open", "--report", build("--report", join(data, "report.json")));
+    const id = opened.match(/Review id: (\S+)/)?.[1];
+    if (!id || !opened.includes("warning: the postRun hook in .pr-report.json failed")) fail(`a failing postRun stopped the publish or gave no warning:\n${opened}`);
+    if (ran("postRun").join() !== "postRun feat/books main 1 report url") fail(`postRun was not handed the round's files: ${ran("postRun").join(" | ")}`);
+    review({}, "open", "--report", build("--report", join(data, "report.json")));
+    if (ran("postRun").length !== 1) fail("postRun ran again when the same round was published again");
+
+    // onApproved: the reviewer sends the round with no comments. It runs once, in the waiter, and a later resume does not run it again.
+    const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8"));
+    const page = await (await fetch(`http://127.0.0.1:${port}/r/${id}`)).text();
+    const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)[1]);
+    const approve = () =>
+      fetch(`http://127.0.0.1:${port}${config.api}/submit`, {
+        method: "POST",
+        headers: { "x-review-token": config.token, "content-type": "application/json" },
+        body: JSON.stringify({ comments: [] }),
+      });
+    await approve();
+    const waited = review({}, "wait", "--id", id);
+    if (!waited.includes("Hook onApproved:") || !waited.includes("The project's onApproved hook ran")) fail(`the waiter did not run onApproved when the review was done:\n${waited}`);
+    review({}, "resume", "--id", id);
+    if (ran("onApproved").join() !== "onApproved feat/books main 1 report url") fail(`onApproved did not run exactly once with the round's files: ${ran("onApproved").join(" | ")}`);
+
+    // The next round: postRun again, and with no waiter running, resume picks up the approval. Asked twice, it runs onApproved once.
+    review({}, "open", "--report", build("--report", join(data, "report.json")));
+    if (ran("postRun").at(-1) !== "postRun feat/books main 2 report url") fail(`postRun did not run for round 2: ${ran("postRun").join(" | ")}`);
+    await approve();
+    const resumed = review({}, "resume", "--id", id);
+    review({}, "resume", "--id", id);
+    if (!resumed.includes("Hook onApproved:") || ran("onApproved").length !== 2) fail(`resume did not run onApproved exactly once for round 2 (${ran("onApproved").length} runs in all):\n${resumed}`);
+
+    // The checks' trust rule: no hooks while the branch has a commit by someone not trusted, and none without a base.
+    writeFileSync(join(hooksRepo, "theirs.txt"), "from a teammate\n");
+    run(bash, ["-c", `cd "${hooksRepo}" && git add theirs.txt && git -c user.name=Pat -c user.email=pat@other.test commit -q -m theirs`]);
+    const before = ran("preRun").length;
+    const untrusted = collect({});
+    if (!untrusted.includes("Hooks skipped (preRun): this branch has commits by Pat <pat@other.test>") || ran("preRun").length !== before || !untrusted.includes("Diff file"))
+      fail(`preRun ran another author's code, or collect stopped:\n${untrusted}`);
+    run("node", [join(root, "skill/scripts/checks.mjs"), "--repo", hooksRepo, "--trust", "--run", "x=echo ok", "--out", join(tmp, "hooks-checks.json")], env);
+    collect({});
+    if (ran("preRun").length !== before + 1) fail("preRun did not run once the other author was trusted");
+    try {
+      collect({}, "--base", "no-such-branch");
+      fail("collect.mjs went on with a base branch that does not exist");
+    } catch (e) {
+      if (!e.stdout.includes("Hooks skipped (preRun): the base branch no-such-branch was not found") || ran("preRun").length !== before + 1) fail(`hooks ran without a base to check the authors against:\n${e.stdout}`);
+    }
+    console.log("hooks: preRun output and variables, a failing and a slow preRun, postRun once a round with only a warning on failure, onApproved once, and the trust rule all worked");
+  } finally {
+    try {
+      review({}, "stop");
+    } catch {
+      // Already stopped.
+    }
+    github.close();
+  }
 }
 
 if (failed) process.exitCode = 1;

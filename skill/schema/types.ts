@@ -123,7 +123,11 @@ export type RepoConfig = {
   coverage?: { command?: string; files?: string[] };
   // The project's own checks, run by checks.mjs. `when` limits one to changes in those paths.
   checks?: { name: string; command: string; timeout?: number; when?: string[] }[];
+  // Commands run at fixed points of a report (skill/scripts/hooks.mjs): one command or a list, in the repo's root.
+  hooks?: Partial<Record<HookName, string | string[]>>;
 };
+
+export type HookName = "preRun" | "postRun" | "onApproved";
 
 // ------------------------------------------------------------------ report.json
 // Text fields (highlights, notes, line notes, flow details, questions, before-merge items, test gaps)

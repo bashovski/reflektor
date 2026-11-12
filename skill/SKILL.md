@@ -112,6 +112,8 @@ When the reader has turned on Subagentic Mode in Settings, it also prints `Subag
 
 Exit code 3 means there are no changes: tell the user and stop.
 
+Lines starting with `Hook preRun` come from the project's own hook (`hooks` in `.pr-report.json`), and what it prints is for you, such as a ticket's text. When it fails, collect exits 1: tell the user what the hook printed and stop. Do not work around a hook.
+
 While the tests from step 2b run, their coverage file may be missing or STALE. That is expected: step 7b collects again once they are done.
 
 collect.mjs fetches the base branch first. If the fetch fails, it warns and uses the local copy; tell the user. Pass `--no-fetch` to skip fetching, for example when offline.
@@ -135,7 +137,7 @@ After `collect --update` in a later round, add `--report <report file>` to the b
 
 Before writing, find out:
 
-- **Why** the change was made: this conversation, commit messages, the PR title if there is one.
+- **Why** the change was made: this conversation, commit messages, the PR title if there is one, and anything a preRun hook printed.
 - **What** each changed file does now, and what it did before.
 - **Who else is affected:** search the repo for changed functions, routes, types and tables. Callers outside the diff become `affected` highlights.
 - **What can break:** migrations, contract changes (API, database schema, public types, events), env vars, deploy order, concurrency, error handling, security (auth checks, input validation, secrets).
@@ -245,7 +247,7 @@ Do not paste the report into the chat. End your turn and do not poll: the waiter
 node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" answer --id <review id> --question <question id> --text "<answer>" [--ref path:line]
 ```
 
-**A sent review:** go to the fix loop. **A review sent with no comments:** the review is done; offer to open the PR (step 9).
+**A sent review:** go to the fix loop. **A review sent with no comments:** the review is done. The waiter says whether the project's onApproved hook ran; if not, offer to open the PR (step 9).
 
 **A request for an updated report:** the page tells the reviewer when the code changed after the report was built, and offers to ask you for an update. Run collect.mjs with `--update`, fix the report for the files the waiter names, build, and publish: it stays the same round, and the reviewer's comments stay.
 
@@ -288,7 +290,7 @@ The reviewer follows along in the page: your plan and your progress on each comm
 
    Mark a comment `working` when you start it and give the final status when done. If you think a requested fix is wrong, do not make it; use `wontfix` and say why.
 
-   When every comment has a final status and none is `fixed`, no code changed: the daemon ends the review, and the last `status` call says so. A running waiter exits with the same news. Skip steps 5 and 6 and offer to open the PR (step 9).
+   When every comment has a final status and none is `fixed`, no code changed: the daemon ends the review, and the last `status` call says so. A running waiter exits with the same news and runs the onApproved hook, as above. Skip steps 5 and 6 and offer to open the PR (step 9) if the hook did not.
 5. **Rebuild for the next round.** Every round shows the whole branch, so the reviewer approves what will be merged; the page can also show only what changed since the round they sent.
 
    ```bash
@@ -336,7 +338,7 @@ It finds this branch's review (or pass `--id`) and prints what waits for you, th
 
 ## Repo config (optional)
 
-`.pr-report.json` in the repo root, read by collect.mjs and checks.mjs:
+`.pr-report.json` in the repo root, read by the scripts:
 
 ```json
 {
@@ -353,10 +355,13 @@ It finds this branch's review (or pass `--id`) and prints what waits for you, th
   "checks": [
     { "name": "lint", "command": "pnpm lint" },
     { "name": "api tests", "command": "pnpm -C services/api test --coverage", "when": ["services/api/**"], "timeout": 900 }
-  ]
+  ],
+  "hooks": { "preRun": "pnpm codegen", "onApproved": "node tools/open-pr.mjs" }
 }
 ```
 
 `checks` here come before the ones saved in `~/.pr-report/repos/`; `checks.mjs --share` writes the saved ones here. `when` limits a check to changes in those paths.
+
+`hooks` are the team's commands at fixed points, and the scripts run them: `preRun` before collect fetches (a failure stops it), `postRun` when a round's report is first published, `onApproved` when the reviewer finishes with nothing to fix. Like the checks, they do not run while the branch has commits by authors the user has not trusted (`checks.mjs --trust`). When the user asks you to write one, the top of `${CLAUDE_SKILL_DIR}/scripts/hooks.mjs` lists what each hook is handed.
 
 Globs follow .gitignore rules: a pattern without `/` matches at any depth. When the user asks for one, write it from the repo's real folder layout.

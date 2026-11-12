@@ -16,6 +16,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ownerAvatar } from "./avatar.mjs";
+import { runHooks } from "./hooks.mjs";
 import { globToRegExp, parseRemote, reportDir, shellPath } from "./repo.mjs";
 import { readSettings } from "./settings.mjs";
 
@@ -208,6 +209,13 @@ if (args.base) {
   }
 }
 if (!base) throw new Error("Could not find a base branch. Pass --base <branch>.");
+
+// The project's preRun hook (hooks.mjs): it can regenerate code or print a ticket's text for the agent.
+// When it fails, nothing is collected.
+if ((await runHooks("preRun", { root: repoRoot, branch: head, base, config })).failed) {
+  console.error("error: the preRun hook in .pr-report.json failed, so nothing was collected. What the hook printed says why.");
+  process.exit(1);
+}
 
 if (args.fetch && remote) {
   try {
