@@ -4,7 +4,7 @@
 // owner to github.com or gitlab.com for the owner's avatar.
 //
 // Usage:
-//   node collect.mjs [--repo .] [--base <branch>] [--since <sha|last>] [--files a,b,c] [--update]
+//   node collect.mts [--repo .] [--base <branch>] [--since <sha|last>] [--files a,b,c] [--update]
 //                    [--no-uncommitted] [--no-fetch] [--coverage <file>]... [--out diff.json]
 //
 // --update brings the last report up to date with the code: the whole branch again, report.json's
@@ -15,10 +15,10 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ownerAvatar } from "./avatar.mjs";
-import { runHooks } from "./hooks.mjs";
-import { globToRegExp, parseRemote, reportDir, shellPath } from "./repo.mjs";
-import { readSettings } from "./settings.mjs";
+import { ownerAvatar } from "./avatar.mts";
+import { runHooks } from "./hooks.mts";
+import { globToRegExp, parseRemote, reportDir, shellPath } from "./repo.mts";
+import { readSettings } from "./settings.mts";
 
 const MAX_BYTES = 512 * 1024;
 const MAX_LINES = 8000;
@@ -210,7 +210,7 @@ if (args.base) {
 }
 if (!base) throw new Error("Could not find a base branch. Pass --base <branch>.");
 
-// The project's preRun hook (hooks.mjs): it can regenerate code or print a ticket's text for the agent.
+// The project's preRun hook (hooks.mts): it can regenerate code or print a ticket's text for the agent.
 // When it fails, nothing is collected.
 if ((await runHooks("preRun", { root: repoRoot, branch: head, base, config })).failed) {
   console.error("error: the preRun hook in .pr-report.json failed, so nothing was collected. What the hook printed says why.");

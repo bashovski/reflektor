@@ -7,9 +7,9 @@
 // Source that was copied into viewer/src/vendor instead of installed is covered too, from the license file kept
 // next to it.
 //
-// Run it after changing viewer/package.json or viewer/src/vendor; scripts/check.mjs fails when a runtime dependency
+// Run it after changing viewer/package.json or viewer/src/vendor; scripts/check.mts fails when a runtime dependency
 // or a vendor folder is missing here.
-// Usage: node scripts/build-notices.mjs
+// Usage: node scripts/build-notices.mts
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -96,7 +96,7 @@ const header =
   `pr-report ships the open source packages below inside the skill: the viewer bundles its dependencies into \`skill/assets\`, ` +
   `the inbox serves Fuse.js, the file type icons come from atom-material-icons, Tailwind CSS generated the stylesheet, ` +
   `and the setup wizard's background is source copied from React Bits. ` +
-  `Each one's license follows. This file is written by \`scripts/build-notices.mjs\` from the installed packages and from \`viewer/src/vendor\`.\n\n`;
+  `Each one's license follows. This file is written by \`scripts/build-notices.mts\` from the installed packages and from \`viewer/src/vendor\`.\n\n`;
 const out = join(root, "skill", "THIRD-PARTY-NOTICES.md");
 writeFileSync(out, header + sections.join("\n"));
 console.log(`Wrote ${out}: ${sections.length} sections.`);

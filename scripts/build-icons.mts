@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Turns the atom-material-icons package (MIT, Elior Boukhobza "Mallowigi") into skill/assets/file-icons.json:
-// the filename rules plus every icon SVG. build.mjs then embeds only the icons a report's files use.
+// the filename rules plus every icon SVG. build.mts then embeds only the icons a report's files use.
 //
-// Usage: node scripts/build-icons.mjs   (needs `pnpm install` in viewer/ first)
+// Usage: node scripts/build-icons.mts   (needs `pnpm install` in viewer/ first)
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

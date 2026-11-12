@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // One local server for every review: http://127.0.0.1:7337 (or the next free port).
 // Pages talk to it to save comments, ask questions and send reviews; agents talk to it through
-// review.mjs to answer, post plans, report progress and publish new rounds. It streams each
+// review.mts to answer, post plans, report progress and publish new rounds. It streams each
 // review's live state to open pages with Server-Sent Events.
 //
 // Each repo's review folder (<git folder>/pr-report) stays the source of truth: the daemon only keeps
 // a list of those folders in ~/.pr-report/reviews.json, so a restart loses nothing.
 //
-// Started by review.mjs when needed. Stops itself after 4 hours without activity.
+// Started by review.mts when needed. Stops itself after 4 hours without activity.
 
 import { execFile } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
@@ -18,11 +18,11 @@ import { homedir } from "node:os";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { readChecksRun } from "./checks-run.mjs";
-import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mjs";
-import { purgeCache, whoAmI } from "./identity.mjs";
-import { readSettings, writeSettings } from "./settings.mjs";
-import { replaceFile } from "./repo.mjs";
+import { readChecksRun } from "./checks-run.mts";
+import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mts";
+import { purgeCache, whoAmI } from "./identity.mts";
+import { readSettings, writeSettings } from "./settings.mts";
+import { replaceFile } from "./repo.mts";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const FIRST_PORT = Number(process.env.PR_REPORT_PORT ?? 7337);
@@ -168,7 +168,7 @@ function save(r) {
   wakeWaiters(r);
 }
 
-// A round's report data: the JSON file build.mjs wrote, or the data inside an exported page.
+// A round's report data: the JSON file build.mts wrote, or the data inside an exported page.
 const roundFile = (entry) => entry.file ?? entry.html;
 function roundText(file) {
   if (!file || !existsSync(file)) return null;
@@ -223,7 +223,7 @@ const liveState = (r) => ({
   updatedAt: r.updatedAt,
 });
 
-// Every call from review.mjs says which agent makes it (agent.mjs). The review keeps the last one, so the page
+// Every call from review.mts says which agent makes it (agent.mts). The review keeps the last one, so the page
 // names whoever is on the other side now, also after another agent picked the review up. A call that names
 // nobody, such as one typed by hand, changes nothing. True when the agent changed.
 function noteAgent(r, req) {
@@ -754,7 +754,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const LOGO_FILE = join(here, "../brand/reflektor-logo.svg");
 const LOGO = existsSync(LOGO_FILE) ? readFileSync(LOGO_FILE, "utf8").trim() : "";
 const APP_DIR = [join(here, "../assets/app"), join(here, "../../viewer/dist/app")].find((d) => existsSync(join(d, "index.html")));
-// Fuse.js for the inbox search: copied next to the app by install.mjs, or read from the viewer's
+// Fuse.js for the inbox search: copied next to the app by install.mts, or read from the viewer's
 // packages in a checkout that is not built. Without it the inbox falls back to a plain substring match.
 const FUSE_FILE = [join(here, "../assets/fuse.mjs"), join(here, "../../viewer/node_modules/fuse.js/dist/fuse.basic.min.mjs")].find((f) => existsSync(f));
 
@@ -942,7 +942,7 @@ setInterval(() => {
 // ------------------------------------------------------------------ pull request
 // The branch's pull request on GitHub, followed while the review is on screen, so a pull request
 // opened, merged or closed after the report was built shows up without a new report. The agent tells
-// the daemon the moment it opens one (review.mjs pr); for what happens on GitHub afterwards the
+// the daemon the moment it opens one (review.mts pr); for what happens on GitHub afterwards the
 // daemon polls with conditional requests. GitHub allows 5,000 requests an hour per token, and a 304
 // Not Modified answer to a request with If-None-Match does not count, so following an idle pull
 // request costs nothing: one request per review when something changed, headers only otherwise.
@@ -1161,7 +1161,7 @@ async function handle(req, res, port) {
     return send(res, 200, await toolsReport());
   }
 
-  // ---------- agent API (review.mjs), admin token
+  // ---------- agent API (review.mts), admin token
   const admin = same(req.headers["x-admin-token"], adminToken);
   if (parts[1] === "health") return admin ? send(res, 200, { ok: true, version: VERSION, pid: process.pid }) : send(res, 401, { error: "bad token" });
   if (parts[1] === "shutdown" && admin) {
@@ -1190,7 +1190,7 @@ async function handle(req, res, port) {
   // ---------- page API without a review: who is reading, the daemon's cache, and the settings the agent reads
   if (parts[1] === "me" || parts[1] === "cache" || parts[1] === "settings") {
     if (!same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
-    // The page shows and changes the settings here; the scripts read the file (settings.mjs).
+    // The page shows and changes the settings here; the scripts read the file (settings.mts).
     if (req.method === "GET" && parts[1] === "settings") return send(res, 200, readSettings());
     if (req.method === "POST" && parts[1] === "settings") return send(res, 200, writeSettings(JSON.parse(await readBody(req))));
     if (req.method === "GET" && parts[1] === "me") {
@@ -1212,7 +1212,7 @@ async function handle(req, res, port) {
     const { report: file } = JSON.parse(await readBody(req));
     if (!file || !existsSync(file)) return send(res, 400, { error: "report file not found" });
     const raw = roundText(file);
-    if (!raw || !raw.startsWith("{")) return send(res, 400, { error: "the report has no data; build it with build.mjs" });
+    if (!raw || !raw.startsWith("{")) return send(res, 400, { error: "the report has no data; build it with build.mts" });
     const bundle = JSON.parse(raw);
     const dir = dirname(file);
     const repo = [bundle.diff.repo.owner, bundle.diff.repo.name].filter(Boolean).join("/");

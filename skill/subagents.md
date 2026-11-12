@@ -1,6 +1,6 @@
 # Subagent mode
 
-collect.mjs sends you here when the reader has turned on Subagentic Mode in the page's Settings: they want the report sooner and accept that it costs more tokens. The steps named below are the ones in SKILL.md.
+collect.mts sends you here when the reader has turned on Subagentic Mode in the page's Settings: they want the report sooner and accept that it costs more tokens. The steps named below are the ones in SKILL.md.
 
 This replaces the reading of step 4 and the writing of step 5. Use it only when both of these hold, and go on with step 4 as usual otherwise:
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Browser check: drives a whole review through the real page in headless Chrome, with a private
-// daemon, the fake books repo and review.mjs playing the agent. Covers what scripts/check.mjs cannot
+// daemon, the fake books repo and review.mts playing the agent. Covers what scripts/check.mts cannot
 // see from the API: the first-run setup page, the draft page, comments and Send, the warning when no
 // session listens, the plan, progress, the next round with its "since round 1" view, the warning about
 // changed code, and the offer of the setup to a browser that skipped it.
 //
 // Uses the installed Google Chrome (or PR_REPORT_CHROME=<path>), so no browser is downloaded.
-// Usage: node scripts/browser-check.mjs [--headed]
+// Usage: node scripts/browser-check.mts [--headed]
 
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -14,8 +14,8 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { gitBash } from "../skill/scripts/repo.mjs";
-import { githubPr, startGithubStub } from "./github-stub.mjs";
+import { gitBash } from "../skill/scripts/repo.mts";
+import { githubPr, startGithubStub } from "./github-stub.mts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const { chromium } = createRequire(join(root, "viewer/package.json"))("playwright-core");
@@ -40,7 +40,7 @@ const env = {
 
 const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
 const script = (name, ...args) => run("node", [join(root, "skill/scripts", name), ...args]);
-const review = (...args) => script("review.mjs", ...args);
+const review = (...args) => script("review.mts", ...args);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let failed = false;
@@ -67,7 +67,7 @@ const errors = [];
 
 try {
   run(gitBash() ?? "bash", [join(root, "fixtures/make-books-repo.sh"), repo]);
-  script("collect.mjs", "--repo", repo, "--no-fetch");
+  script("collect.mts", "--repo", repo, "--no-fetch");
   writeFileSync(join(data, "report.json"), readFileSync(join(root, "samples/report.json")));
 
   // 0. First-run setup, the way the installer opens it: before any review exists. Enter moves on,
@@ -101,14 +101,14 @@ try {
   if (!saved[0] || saved[1] !== '"dark"' || saved[2] !== '"github-dark"') fail(`setup did not save its choices: ${saved.join(" ")}`);
 
   // 1. The draft opens first: the facts, with sending held back.
-  const draftOut = script("build.mjs", "--diff", join(data, "diff.json"), "--draft").match(/Wrote (\S+)/)[1];
+  const draftOut = script("build.mts", "--diff", join(data, "diff.json"), "--draft").match(/Wrote (\S+)/)[1];
   const id = review("open", "--report", draftOut).match(/Review id: (\S+)/)[1];
   await page.goto(`http://127.0.0.1:${port}/r/${id}`);
   await expectVisible(page.getByText("Claude is reading the change and writing the notes"), "the draft notice");
   if (!(await page.getByRole("button", { name: "Claude is writing the notes" }).isDisabled())) fail("Send is not held back on a draft");
 
   // 2. The real report replaces the draft in the same tab.
-  const realOut = script("build.mjs", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)[1];
+  const realOut = script("build.mts", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)[1];
   review("open", "--report", realOut);
   await expectVisible(page.getByRole("heading", { name: /Save and list books in the library/ }), "the report after the draft");
   await expectVisible(page.getByRole("button", { name: "LGTM" }), "Send once the report is ready");
@@ -196,8 +196,8 @@ try {
   // 6. The fix, then round 2 with the whole branch and the change since round 1.
   const service = join(repo, "apps/api/src/books/book.service.ts");
   writeFileSync(service, `// handle, not slug\n${readFileSync(service, "utf8")}`);
-  script("collect.mjs", "--repo", repo, "--no-fetch", "--update");
-  const round2 = script("build.mjs", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)[1];
+  script("collect.mts", "--repo", repo, "--no-fetch", "--update");
+  const round2 = script("build.mts", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)[1];
   review("open", "--report", round2);
   await expectVisible(page.getByText("Round 2 is ready."), "the round 2 banner");
   await page.getByRole("button", { name: "Show round 2" }).click();

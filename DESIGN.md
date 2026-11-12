@@ -1,6 +1,6 @@
 # Design rules
 
-How the review page (`viewer/`) and the inbox (`skill/scripts/daemon.mjs`) look, and where each rule lives in the code. New work stays inside these rules. To change the look, change the rule here and in the place it names, not in single components.
+How the review page (`viewer/`) and the inbox (`skill/scripts/daemon.mts`) look, and where each rule lives in the code. New work stays inside these rules. To change the look, change the rule here and in the place it names, not in single components.
 
 These rules cover surface style only. The layout and the order of things on the page are not part of them.
 
@@ -62,4 +62,4 @@ The inbox's top bar has one thing a report's does not: a "Star us on GitHub" lin
 
 Settings, Help and the cache purge are not written twice. The inbox shows the report's own dialogs, from the page at `/panel`, in a see-through frame over itself (`viewer/src/lib/panel.ts`). The menu that opens them is written by hand in both places, so a change to one menu needs the same change to the other.
 
-The inbox is plain CSS inside `skill/scripts/daemon.mjs` and cannot use the classes above. It is laid out like a report: the same top bar (the mark on the left, the reader's menu on the right, with the same options in the menu), the same page width of 1440px with the same side padding, the same setup banner under the bar, and a page title at the size of a report's title. It follows the same rules by hand: 2px corners, mono capitals for labels and status words, mono for figures and branch names, the same focus ring and the same shadow for menus. A change to a rule here needs the same change there.
+The inbox is plain CSS inside `skill/scripts/daemon.mts` and cannot use the classes above. It is laid out like a report: the same top bar (the mark on the left, the reader's menu on the right, with the same options in the menu), the same page width of 1440px with the same side padding, the same setup banner under the bar, and a page title at the size of a report's title. It follows the same rules by hand: 2px corners, mono capitals for labels and status words, mono for figures and branch names, the same focus ring and the same shadow for menus. A change to a rule here needs the same change there.

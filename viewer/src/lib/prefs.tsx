@@ -4,7 +4,7 @@ import type { BundledTheme } from "shiki/themes";
 import { codeThemeFor, DEFAULT_CODE_THEME, HIGHLIGHTER, type ThemeMode } from "./themes";
 
 // What the reviewer set for themselves. It lives in this browser's localStorage, so every report
-// page, the setup page and the inbox agree. The inbox (daemon.mjs) and index.html read
+// page, the setup page and the inbox agree. The inbox (daemon.mts) and index.html read
 // pr-report:theme before the first paint, so that key keeps its name.
 
 export type ThemeChoice = "system" | "light" | "dark";

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { pageToken } from "./panel";
 
-// The settings the agent reads. The daemon keeps them on disk (skill/scripts/settings.mjs), and not in the browser
+// The settings the agent reads. The daemon keeps them on disk (skill/scripts/settings.mts), and not in the browser
 // like the look of the page, because the scripts that write a report need them.
 export type AgentSettings = {
   // Split the reading and writing of a report between subagents that work at the same time.

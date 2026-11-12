@@ -1,12 +1,12 @@
 // Hooks: shell commands a project names in .pr-report.json, run at fixed points of a report. They come
 // with the repo, so everyone who clones it gets them, and the scripts run them, so every agent does.
 //
-//   preRun      collect.mjs, before it fetches and reads the changes. A failure stops the report.
-//   postRun     review.mjs open, at the first publish of a round that is not a draft. A failure is a warning.
-//   onApproved  review.mjs wait or resume, when the reviewer finishes with nothing left to fix. A failure is a warning.
+//   preRun      collect.mts, before it fetches and reads the changes. A failure stops the report.
+//   postRun     review.mts open, at the first publish of a round that is not a draft. A failure is a warning.
+//   onApproved  review.mts wait or resume, when the reviewer finishes with nothing left to fix. A failure is a warning.
 //
 // A hook is one command or a list, run one after another in the repo's root, in the same shell as the
-// project checks (repo.mjs runShell). A failing command ends its list, and so does the time limit below.
+// project checks (repo.mts runShell). A failing command ends its list, and so does the time limit below.
 // What a hook prints is shown to the agent. The daemon and the page never run a command.
 //
 // Every hook gets PR_REPORT_HOOK (its name), PR_REPORT_BRANCH and PR_REPORT_BASE. postRun and onApproved
@@ -17,12 +17,12 @@
 //
 // Hooks run code from the branch (.pr-report.json and the scripts it names), so they follow the checks'
 // trust rule: when the branch has commits by someone the user has not trusted for this repo
-// (checks.mjs --trust), they do not run. Nor do they when the base cannot be found, since then nobody
+// (checks.mts --trust), they do not run. Nor do they when the base cannot be found, since then nobody
 // can tell whose commits are on the branch.
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { remoteOf, runShell, untrustedAuthors } from "./repo.mjs";
+import { remoteOf, runShell, untrustedAuthors } from "./repo.mts";
 
 // Code generation in preRun can be slow; the others should be quick. PR_REPORT_HOOK_SECONDS overrides
 // all three, for tests.
@@ -57,7 +57,7 @@ export async function runHooks(name, { root, branch, base, config = readJson(joi
   if (strangers.length) {
     log(
       `Hooks skipped (${name}): this branch has commits by ${strangers.map((a) => a.label).join(", ")}, and hooks run the branch's code. ` +
-        "They run once the user trusts these authors for this repo (checks.mjs --trust).",
+        "They run once the user trusts these authors for this repo (checks.mts --trust).",
     );
     return { ran: 0, failed: false };
   }

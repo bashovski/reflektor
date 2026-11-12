@@ -1,9 +1,9 @@
 // Data contract for the PR report.
-// diff.json   = DiffData, written by scripts/collect.mjs (facts from git, never edited by hand)
+// diff.json   = DiffData, written by scripts/collect.mts (facts from git, never edited by hand)
 // report.json = Report, written by the agent (judgment: words, grouping, flows)
-// The viewer receives Bundle, produced by scripts/build.mjs after validation.
+// The viewer receives Bundle, produced by scripts/build.mts after validation.
 //
-// This file is the only list of allowed values. build.mjs reads every union of string literals
+// This file is the only list of allowed values. build.mts reads every union of string literals
 // below (Tag, Target, SectionKind, ...) and rejects report.json values outside them.
 // Adding a value here also needs a label and color in viewer/src/lib/meta.ts (TypeScript will flag it).
 
@@ -48,19 +48,19 @@ export type FindingKind = "secret" | "migration";
 
 export type Severity = "high" | "medium" | "low";
 
-// A safety check hit from collect.mjs. `preview` shows a masked secret, never the full value.
+// A safety check hit from collect.mts. `preview` shows a masked secret, never the full value.
 export type Finding = { kind: FindingKind; rule: string; severity: Severity; path: string; line: number | null; message: string; preview?: string };
 
 export type CheckStatus = "passed" | "failed" | "timeout";
 
-// One project check run by checks.mjs. outputTail holds the last lines of stdout and stderr.
+// One project check run by checks.mts. outputTail holds the last lines of stdout and stderr.
 export type ProjectCheck = { name: string; command: string; status: CheckStatus; exitCode: number | null; durationMs: number; outputTail: string };
 
 // running: checks are still going, `pending` lists the ones without a result yet.
 // stopped: the run's process ended before its last check (killed or crashed).
 export type ChecksRunStatus = "running" | "done" | "stopped";
 
-// One run of checks.mjs, read from its checks.json. The daemon streams it to open pages as it changes.
+// One run of checks.mts, read from its checks.json. The daemon streams it to open pages as it changes.
 export type ChecksRun = {
   status: ChecksRunStatus;
   startedAt: string | null;
@@ -103,7 +103,7 @@ export type DiffData = {
     upstream?: { ref: string; ahead: number } | null;
   };
   scope: { mode: "branch" | "since" | "files" | "since+files"; from: string; includesUncommitted: boolean; files: string[] | null };
-  // collect.mjs --update: what changed since the round the reviewer sent. `from` is the snapshot
+  // collect.mts --update: what changed since the round the reviewer sent. `from` is the snapshot
   // that round showed; each file's oldContent is its content then (null when added since).
   sinceRound?: { round: number; from: string; files: DiffFile[] };
   commits: Commit[];
@@ -121,9 +121,9 @@ export type RepoConfig = {
   targets?: Partial<Record<Target, string[]>>;
   generated?: string[];
   coverage?: { command?: string; files?: string[] };
-  // The project's own checks, run by checks.mjs. `when` limits one to changes in those paths.
+  // The project's own checks, run by checks.mts. `when` limits one to changes in those paths.
   checks?: { name: string; command: string; timeout?: number; when?: string[] }[];
-  // Commands run at fixed points of a report (skill/scripts/hooks.mjs): one command or a list, in the repo's root.
+  // Commands run at fixed points of a report (skill/scripts/hooks.mts): one command or a list, in the repo's root.
   hooks?: Partial<Record<HookName, string | string[]>>;
 };
 
@@ -280,7 +280,7 @@ export type Report = {
   plan?: { source: string; items: PlanItem[] };
   // Answers to the previous review round. Add one reply per comment in that round's review file.
   review?: { round: number; replies: Reply[] };
-  // Set by collect.mjs --update: the snapshot the line numbers in this file refer to. Leave it as is.
+  // Set by collect.mts --update: the snapshot the line numbers in this file refer to. Leave it as is.
   refsAt?: string;
 };
 
@@ -311,7 +311,7 @@ export type ReviewComment = {
   createdAt: string;
 };
 
-// A question asked while reviewing, answered live by the agent through review.mjs.
+// A question asked while reviewing, answered live by the agent through review.mts.
 export type LiveQuestion = {
   id: string;
   target: CommentTarget;
@@ -343,7 +343,7 @@ export type FlowStepChecked = FlowStep & { verified: boolean };
 
 // The coding agent on the other side of a review, in the words the page shows. `name` is the assistant
 // ("Send to Claude"), `product` the program the user types into ("In Claude Code, run ..."), `resume` what
-// they type there to pick a review up. Worked out by scripts/agent.mjs from skill/agents.json.
+// they type there to pick a review up. Worked out by scripts/agent.mts from skill/agents.json.
 export type AgentInfo = { id: string | null; name: string; product: string; resume: string | null; version: string | null };
 
 export type Bundle = {
@@ -357,7 +357,7 @@ export type Bundle = {
   round: number;
   // File type icons (from atom-material-icons): SVG per icon key, and the key for each file path. Null when not installed.
   fileIcons: { icons: Record<string, string>; byPath: Record<string, string> } | null;
-  // Results from checks.mjs. `stale` = code changed after the checks ran.
+  // Results from checks.mts. `stale` = code changed after the checks ran.
   // `file` is the checks.json the daemon watches for live updates.
   projectChecks: (ChecksRun & { stale: boolean; file: string }) | null;
   // Pull request title and Markdown body, written from this report. Null when the report covers only

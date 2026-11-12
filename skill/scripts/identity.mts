@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { ownerAvatar } from "./avatar.mjs";
+import { ownerAvatar } from "./avatar.mts";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const CLI_TIMEOUT_MS = 10_000;
@@ -113,7 +113,7 @@ async function gitIdentity(root) {
   return { name: name || null, email: email || null };
 }
 
-// host and forge come from the repo's remote (collect.mjs works them out), root is the repo on disk.
+// host and forge come from the repo's remote (collect.mts works them out), root is the repo on disk.
 export async function whoAmI({ host, forge, root }) {
   const cwd = root && existsSync(root) ? root : undefined;
   const [found, git] = await Promise.all([account(forge, host, cwd), gitIdentity(root)]);

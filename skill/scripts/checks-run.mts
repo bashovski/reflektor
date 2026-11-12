@@ -1,4 +1,4 @@
-// Reads a checks.json written by checks.mjs, for build.mjs and the daemon.
+// Reads a checks.json written by checks.mts, for build.mts and the daemon.
 // "running" while its process lives, "stopped" when the process is gone before the last check
 // ended (killed or crashed), "done" after. Files from older versions have no status: done.
 

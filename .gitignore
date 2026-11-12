@@ -7,7 +7,7 @@ skill/assets/
 # npm writes this when the installer falls back to it; pnpm-lock.yaml is the viewer's lockfile
 viewer/package-lock.json
 
-# Made by scripts/check.mjs
+# Made by scripts/check.mts
 samples/bundle.json
 samples/*.html
 samples/review-*.json

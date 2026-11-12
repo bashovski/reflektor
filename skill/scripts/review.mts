@@ -12,7 +12,7 @@
 //   setup   [--no-open]                   open the first-run setup page (tools, light or dark, code theme)
 //   stop                                  stop the daemon
 //
-// Every command tells the daemon which agent is calling, worked out from the shell it runs in (agent.mjs).
+// Every command tells the daemon which agent is calling, worked out from the shell it runs in (agent.mts).
 // --agent <id> says it outright; --agent-name "<product>" is the agent's own answer when nothing else is known.
 
 import { execFileSync, spawn } from "node:child_process";
@@ -21,13 +21,13 @@ import { existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AGENT_HEADER, detectAgent, encodeAgent } from "./agent.mjs";
-import { runReportHooks } from "./hooks.mjs";
-import { shellPath } from "./repo.mjs";
+import { AGENT_HEADER, detectAgent, encodeAgent } from "./agent.mts";
+import { runReportHooks } from "./hooks.mts";
+import { shellPath } from "./repo.mts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
-const daemonScript = join(here, "daemon.mjs");
+const daemonScript = join(here, "daemon.mts");
 const daemonFile = join(HOME, "daemon.json");
 // Read from disk each time: a waiter that started before the skill was updated must take the new
 // daemon as current, not shut it down as out of date.
@@ -129,7 +129,7 @@ const describe = (t) => {
   }
 };
 
-const self = `node "${shellPath(join(here, "review.mjs"))}"`;
+const self = `node "${shellPath(join(here, "review.mts"))}"`;
 
 // What the reviewer did, and what the agent runs next. Printed by wait and resume.
 function explain(event, review) {
@@ -176,7 +176,7 @@ function explain(event, review) {
 const reviewDone = (event) => (event.type === "review-submitted" && event.count === 0) || event.type === "round-finished";
 
 // Tells the agent what the reviewer did. A finished review runs the project's onApproved hook first
-// (hooks.mjs), and the agent offers to open the pull request unless the hook took care of it.
+// (hooks.mts), and the agent offers to open the pull request unless the hook took care of it.
 async function handOver(event, review, info) {
   explain(event, review);
   if (!reviewDone(event)) return;
@@ -211,13 +211,13 @@ async function main() {
           : `Already open in ${data.tabs} tab(s); they show a banner for the new round.`,
       );
     }
-    // The project's postRun hook, once a round: at its first build that is not a draft (hooks.mjs).
+    // The project's postRun hook, once a round: at its first build that is not a draft (hooks.mts).
     if (data.firstReal) {
       const hooks = await runReportHooks("postRun", { dir: data.dir, round: data.round, url: data.url });
       if (hooks.failed) console.log("warning: the postRun hook in .pr-report.json failed. The report is published; tell the user what the hook printed.");
     }
     // Nothing in this shell says which agent this is, so the page speaks of "your agent" until it is told.
-    if (!agent) console.log(`note: the page does not know which agent you are. Add --agent-name "<the product you run in>" to review.mjs commands so it can say.`);
+    if (!agent) console.log(`note: the page does not know which agent you are. Add --agent-name "<the product you run in>" to review.mts commands so it can say.`);
     console.log(`Next: run in the background: ${self} wait --id ${data.id}`);
   } else if (command === "setup") {
     // The first-run page: the tools on this machine, light or dark, and a code theme. The installer
@@ -332,7 +332,7 @@ async function main() {
       console.log("Stopped the daemon.");
     }
   } else {
-    console.log("Usage: review.mjs open|wait|resume|answer|plan|status|pr|list|setup|stop (see the top of this file)");
+    console.log("Usage: review.mts open|wait|resume|answer|plan|status|pr|list|setup|stop (see the top of this file)");
     process.exit(2);
   }
 }

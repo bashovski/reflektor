@@ -19,7 +19,7 @@ const UNFINISHED = {
 
 const seconds = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
 
-// Results of the project's own lint, typecheck and test commands, run by checks.mjs. While they run,
+// Results of the project's own lint, typecheck and test commands, run by checks.mts. While they run,
 // the daemon streams each result here as it arrives.
 export const ProjectChecks = () => {
   const checks = useChecks();

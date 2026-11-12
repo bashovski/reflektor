@@ -17,11 +17,11 @@ pr-report is a Claude Code skill. `/pr-report` turns a branch's changes into a r
 
 The pipeline:
 
-- **`skill/scripts/collect.mjs`** reads git and writes `diff.json`.
+- **`skill/scripts/collect.mts`** reads git and writes `diff.json`.
 - **Claude** writes `report.json`.
-- **`skill/scripts/build.mjs`** checks the report against git and writes one JSON bundle per round.
-- **`skill/scripts/review.mjs open`** publishes the bundle to a local daemon at `http://127.0.0.1:7337`.
-- **`review.mjs wait`** runs in the background and wakes Claude when the reviewer does something in the page.
+- **`skill/scripts/build.mts`** checks the report against git and writes one JSON bundle per round.
+- **`skill/scripts/review.mts open`** publishes the bundle to a local daemon at `http://127.0.0.1:7337`.
+- **`review.mts wait`** runs in the background and wakes Claude when the reviewer does something in the page.
 
 The repo is `git@github.com:bashovski/pr-report.git` (private). `README.md` explains the layout. `skill/SKILL.md` holds the steps Claude follows.
 
@@ -30,7 +30,7 @@ The repo is `git@github.com:bashovski/pr-report.git` (private). `README.md` expl
 You need:
 
 - **Git for Windows**, which includes Git Bash
-- **Node.js** 18 or newer (the Mac uses 24.12)
+- **Node.js** 22.18 or newer (the Mac uses 24.12)
 - **pnpm** (the Mac uses 10.26)
 - **Google Chrome**, for `pnpm check:browser`
 
@@ -38,33 +38,33 @@ Run these in PowerShell:
 
 1. `git clone git@github.com:bashovski/pr-report.git`, then `cd pr-report`.
 2. `git ls-files --eol install.sh` should show `w/lf`. If it shows `w/crlf`, `.gitattributes` did not apply. Fix that first.
-3. `node scripts/install.mjs` should end with "Installed pr-report (link)".
+3. `node scripts/install.mts` should end with "Installed pr-report (link)".
 4. `Get-Item $HOME\.claude\skills\pr-report | Select-Object LinkType, Target` should show `Junction` pointing at this repo's `skill` folder.
 5. Run `pnpm check`, then `pnpm check:browser`. Each takes 1 to 2 minutes on the Mac.
 
-Run `node scripts/install.mjs` a second time, then make sure `skill\SKILL.md` still exists. The installer has to remove the old junction itself, never the files the junction points to.
+Run `node scripts/install.mts` a second time, then make sure `skill\SKILL.md` still exists. The installer has to remove the old junction itself, never the files the junction points to.
 
 ## Confirm these assumptions first
 
 1. **The Bash tool runs in Git Bash.** The Windows design assumes that Claude Code on Windows runs Bash tool commands in Git Bash. If this machine's Claude Code runs them in PowerShell, stop and tell the user, because the design changes.
 2. **How the skill folder path looks.** Find out how Claude Code fills in `${CLAUDE_SKILL_DIR}` on Windows: with backslashes, forward slashes, or a `/c/...` path. Look at the exact commands Claude runs during `/pr-report`.
-3. **Git Bash is found.** `node -e "import('./skill/scripts/repo.mjs').then(m => console.log(m.gitBash()))"` should print the path to Git's `bin\bash.exe`. It must never print the WSL `C:\Windows\System32\bash.exe`.
-4. **The browser opens.** `explorer <url>` should open the default browser at the review page. It's used in `skill/scripts/review.mjs:168` and `skill/scripts/build.mjs:588`.
+3. **Git Bash is found.** `node -e "import('./skill/scripts/repo.mts').then(m => console.log(m.gitBash()))"` should print the path to Git's `bin\bash.exe`. It must never print the WSL `C:\Windows\System32\bash.exe`.
+4. **The browser opens.** `explorer <url>` should open the default browser at the review page. It's used in `skill/scripts/review.mts:168` and `skill/scripts/build.mts:588`.
 
 ## What commit 2196382 changed for Windows
 
 | Problem | Fix | Where |
 |---|---|---|
 | Git for Windows checks out CRLF, which breaks the bash scripts | `* text=auto eol=lf` | `.gitattributes` |
-| The installer was bash only, and `ln -s` in Git Bash copies instead of linking | A Node installer that makes a directory junction | `scripts/install.mjs:74` |
-| The detached daemon gets its own console window, and closing that window stops it | `windowsHide: true` | `skill/scripts/review.mjs:73` |
-| The daemon has no console, so each git call (every 15 s) would flash a window | `windowsHide: true` | `skill/scripts/daemon.mjs:451` |
-| Checks ran in `cmd /c`, which can't run bash syntax and breaks commands with quotes | Run them in Git Bash, falling back to Node's `shell: true` (cmd) | `skill/scripts/checks.mjs:299`, `skill/scripts/repo.mjs:14` |
-| A timeout killed only the shell, so the test runner kept going | `taskkill /pid N /t /f` | `skill/scripts/checks.mjs:317` |
-| Git Bash drops the backslashes from printed paths that Claude reuses | `shellPath()` prints forward slashes on Windows | `skill/scripts/repo.mjs:10`, used in collect, build, checks and review |
+| The installer was bash only, and `ln -s` in Git Bash copies instead of linking | A Node installer that makes a directory junction | `scripts/install.mts:74` |
+| The detached daemon gets its own console window, and closing that window stops it | `windowsHide: true` | `skill/scripts/review.mts:73` |
+| The daemon has no console, so each git call (every 15 s) would flash a window | `windowsHide: true` | `skill/scripts/daemon.mts:451` |
+| Checks ran in `cmd /c`, which can't run bash syntax and breaks commands with quotes | Run them in Git Bash, falling back to Node's `shell: true` (cmd) | `skill/scripts/checks.mts:299`, `skill/scripts/repo.mts:14` |
+| A timeout killed only the shell, so the test runner kept going | `taskkill /pid N /t /f` | `skill/scripts/checks.mts:317` |
+| Git Bash drops the backslashes from printed paths that Claude reuses | `shellPath()` prints forward slashes on Windows | `skill/scripts/repo.mts:10`, used in collect, build, checks and review |
 | Script paths in SKILL.md were unquoted, which breaks on backslashes and spaces | Quoted; `allowed-tools` lists both the quoted and the unquoted form | `skill/SKILL.md:5` and every command in it |
-| Renaming onto a file that another process holds open can fail with EPERM | `replaceFile()` retries for up to about half a second | `skill/scripts/repo.mjs:29` |
-| The tests could pick WSL's bash | `gitBash()` | `scripts/check.mjs:21`, `scripts/browser-check.mjs:53` |
+| Renaming onto a file that another process holds open can fail with EPERM | `replaceFile()` retries for up to about half a second | `skill/scripts/repo.mts:29` |
+| The tests could pick WSL's bash | `gitBash()` | `scripts/check.mts:21`, `scripts/browser-check.mts:53` |
 
 ## Try a real review
 
@@ -78,17 +78,17 @@ Pick a real repo on this machine that has a feature branch. In Claude Code there
 
 ## Known risks, not handled yet
 
-- **Reserved names:** `branchSlug()` (`skill/scripts/repo.mjs:41`) turns a branch name into a folder name. A branch named `con`, `nul` or `aux`, or one ending in a dot, gives a folder Windows can't create.
+- **Reserved names:** `branchSlug()` (`skill/scripts/repo.mts:41`) turns a branch name into a folder name. A branch named `con`, `nul` or `aux`, or one ending in a dot, gives a folder Windows can't create.
 - **Drift check cost:** every 15 seconds, each open review runs `git add -A` into a temporary index. Git is slower on Windows, so watch the CPU on a big repo. `PR_REPORT_DRIFT_SECONDS` sets the interval.
 - **Spaces in repo paths:** the "Diff file:" and "Report file:" paths that collect prints aren't quoted. Claude has to quote them when the repo path has spaces.
-- **Path comparison:** `review.mjs resume` finds a review by comparing folder paths as plain strings (`skill/scripts/review.mjs:210`). A different drive-letter case (`c:` versus `C:`) would miss.
+- **Path comparison:** `review.mts resume` finds a review by comparing folder paths as plain strings (`skill/scripts/review.mts:210`). A different drive-letter case (`c:` versus `C:`) would miss.
 
 ## Where things live
 
 - **Daemon log:** `%USERPROFILE%\.pr-report\daemon.log`
 - **Daemon state:** `%USERPROFILE%\.pr-report\reviews.json` and `daemon.json`
 - **One branch's report files:** `<repo>\.git\pr-report\<branch>\`
-- **Stop the daemon:** `node skill/scripts/review.mjs stop`
+- **Stop the daemon:** `node skill/scripts/review.mts stop`
 
 Environment variables:
 
@@ -97,7 +97,7 @@ Environment variables:
 - **`PR_REPORT_IDLE_MINUTES`:** how long the daemon waits before stopping on its own, 240 by default.
 - **`PR_REPORT_DRIFT_SECONDS`:** how often it checks for changed code, 15 by default.
 - **`PR_REPORT_CHROME`:** the path to Chrome, when `pnpm check:browser` can't find it.
-- **`CLAUDE_SKILLS_DIR`:** where `install.mjs` installs the skill. Use a temp folder to test the installer.
+- **`CLAUDE_SKILLS_DIR`:** where `install.mts` installs the skill. Use a temp folder to test the installer.
 - **`CLAUDE_CODE_GIT_BASH_PATH`:** the bash that checks run in, when set.
 
 ## How to work in this repo

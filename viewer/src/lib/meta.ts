@@ -60,7 +60,7 @@ import type {
 // that only tells categories apart keeps its hue, so retuning a role never moves it: the targets, the highlight
 // and flow detail kinds that are not a warning, and the pull request states, which are GitHub's own colors.
 
-// The PR type pill: a color and a Lucide icon per tag. The inbox in skill/scripts/daemon.mjs draws the same
+// The PR type pill: a color and a Lucide icon per tag. The inbox in skill/scripts/daemon.mts draws the same
 // pill from its own copy of this list (TAGS there), so a change here needs the same change there.
 export const TAGS: Record<Tag, { color: string; icon: LucideIcon }> = {
   HOTFIX: { color: "#dc2626", icon: Flame },
@@ -200,7 +200,7 @@ export const FILE_STATUS = {
   renamed: { label: "Renamed", className: "text-sky-600 dark:text-sky-400" },
 } as const;
 
-// Pull request states, as GitHub colors them. The inbox in skill/scripts/daemon.mjs uses the same
+// Pull request states, as GitHub colors them. The inbox in skill/scripts/daemon.mts uses the same
 // colors and icons (PR_STATES there). `className` colors an icon, `pill` a label.
 export const PR_STATES: Record<PrState, { label: string; icon: LucideIcon; className: string; pill: string }> = {
   OPEN: { label: "Open", icon: GitPullRequest, className: "text-emerald-600 dark:text-emerald-400", pill: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300" },

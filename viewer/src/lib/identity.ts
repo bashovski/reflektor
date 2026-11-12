@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { RepoAvatar } from "../../../skill/schema/types";
 
 // Who is reading the page, as the daemon worked it out: the forge account when its CLI is logged in,
-// else the git identity of the repo. See skill/scripts/identity.mjs.
+// else the git identity of the repo. See skill/scripts/identity.mts.
 export type Identity = {
   source: "gh" | "glab" | "git" | "none";
   login: string | null;
@@ -17,7 +17,7 @@ type Params = { host: string | null; forge: string | null; root: string };
 
 // The last answer is kept in the browser and shown at once, so the avatar is there at the first paint and does not
 // pop in a moment later on every page. The inbox keeps and reads the same entry (the reader's menu in
-// skill/scripts/daemon.mjs), under the same key, so going from one to the other shows no change either.
+// skill/scripts/daemon.mts), under the same key, so going from one to the other shows no change either.
 const KEPT = "pr-report:me";
 const keyOf = (p: Params) => `${p.host ?? ""}|${p.forge ?? ""}|${p.root}`;
 const kept = (key: string): Identity | null => {

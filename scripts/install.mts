@@ -2,16 +2,16 @@
 // Builds the viewer and installs the pr-report skill for a coding agent. Runs the same on macOS, Linux
 // and Windows (PowerShell, cmd or Git Bash).
 //
-//   node scripts/install.mjs                    Claude Code: link ~/.claude/skills/pr-report to this repo's skill/ folder (edits apply right away)
-//   node scripts/install.mjs --copy             Claude Code: copy skill/ instead; use this if a Claude Code update removed the link
-//   node scripts/install.mjs --target agents    other agents: a copy in ~/.agents/skills/pr-report, the folder Codex and other agents
+//   node scripts/install.mts                    Claude Code: link ~/.claude/skills/pr-report to this repo's skill/ folder (edits apply right away)
+//   node scripts/install.mts --copy             Claude Code: copy skill/ instead; use this if a Claude Code update removed the link
+//   node scripts/install.mts --target agents    other agents: a copy in ~/.agents/skills/pr-report, the folder Codex and other agents
 //                                               that follow the Agent Skills format read
-//   node scripts/install.mjs --target <folder>  a copy in any other skills folder
-//   node scripts/install.mjs --build            only build the viewer into skill/assets/
-//   node scripts/install.mjs --no-open          do not open the setup page in the browser after a first install
+//   node scripts/install.mts --target <folder>  a copy in any other skills folder
+//   node scripts/install.mts --build            only build the viewer into skill/assets/
+//   node scripts/install.mts --no-open          do not open the setup page in the browser after a first install
 //
 // --target can be given more than once (--target claude --target agents); without it the target is claude.
-// A copy for another agent gets its own SKILL.md (see portable-skill.mjs) and is not a link, so run the
+// A copy for another agent gets its own SKILL.md (see portable-skill.mts) and is not a link, so run the
 // installer again after updating pr-report. On Windows the link is a directory junction, which needs no
 // admin rights or Developer Mode.
 
@@ -20,7 +20,7 @@ import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, r
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { portableSkillText } from "./portable-skill.mjs";
+import { portableSkillText } from "./portable-skill.mts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const mode = process.argv.includes("--build") ? "build" : process.argv.includes("--copy") ? "copy" : "link";
@@ -29,7 +29,10 @@ const fail = (message) => {
   console.error(`error: ${message}`);
   process.exit(1);
 };
-if (Number(process.versions.node.split(".")[0]) < 18) fail("Node.js 18 or newer is required");
+// The scripts are TypeScript (.mts) that Node runs directly, without a flag from 22.18. An older Node that runs this
+// file with --experimental-strip-types would install a skill that agents cannot start.
+const [major, minor] = process.versions.node.split(".").map(Number);
+if (major < 22 || (major === 22 && minor < 18)) fail(`Node.js 22.18 or newer is required (this is ${process.version})`);
 // Every report starts with git. Finding out here beats a failed first /pr-report.
 if (spawnSync("git", ["--version"], { stdio: "ignore" }).status !== 0) fail("git is required. Install it from https://git-scm.com, then run this again.");
 
@@ -49,7 +52,7 @@ const assets = join(root, "skill", "assets");
 const pnpm = spawnSync("pnpm --version", { shell: true, stdio: "ignore" }).status === 0;
 console.log(`Building the viewer with ${pnpm ? "pnpm" : "npm, since pnpm was not found"}...`);
 sh(pnpm ? "pnpm install --frozen-lockfile" : "npm install", viewer);
-node(join(root, "scripts", "build-icons.mjs"));
+node(join(root, "scripts", "build-icons.mts"));
 sh(pnpm ? "pnpm build" : "npm run build", viewer);
 mkdirSync(assets, { recursive: true });
 rmSync(join(assets, "app"), { recursive: true, force: true });
@@ -108,9 +111,9 @@ function install(name) {
 const installed = targets.map(install);
 
 // A first install ends in the browser: the setup page checks the tools on this machine and picks how
-// reports look. review.mjs starts the review daemon for it, from the installed skill, the same way a
+// reports look. review.mts starts the review daemon for it, from the installed skill, the same way a
 // report does. A later install (an update) keeps the daemon and the browser alone.
-const setupScript = join(installed[0].target, "scripts", "review.mjs");
+const setupScript = join(installed[0].target, "scripts", "review.mts");
 if (installed.some((t) => t.first) && !process.argv.includes("--no-open")) {
   const r = spawnSync(process.execPath, [setupScript, "setup"], { encoding: "utf8" });
   if (r.status === 0) console.log(r.stdout.trim());
@@ -128,5 +131,5 @@ if (installed.some((t) => !t.claude)) {
   console.log("Next, in another agent: open it in a repo, on a branch with changes, and ask for a PR report. In Codex, type $pr-report.");
   console.log("That install is a copy: run this installer again with the same --target after updating pr-report.");
 } else {
-  console.log("For Codex and other agents that read ~/.agents/skills: node scripts/install.mjs --target agents");
+  console.log("For Codex and other agents that read ~/.agents/skills: node scripts/install.mts --target agents");
 }

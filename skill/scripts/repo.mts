@@ -119,7 +119,7 @@ export function repoHome(root) {
 }
 
 // Authors of the branch's commits other than the user and the authors trusted earlier for this repo
-// (trust.json, written by checks.mjs --trust). Their code runs when the checks or the hooks run.
+// (trust.json, written by checks.mts --trust). Their code runs when the checks or the hooks run.
 // The branch starts at the merge base with the first of refs that exists. null when none does: then
 // the branch's commits cannot be told apart from the base's.
 export function untrustedAuthors(root, refs) {

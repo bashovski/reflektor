@@ -3,7 +3,7 @@ import { FINDING_KINDS, SEVERITY } from "../lib/meta";
 import { useReport } from "../lib/state";
 import { cx, Pill, RefLink } from "./ui";
 
-// Results of the fixed safety rules in collect.mjs: likely secrets and risky migrations.
+// Results of the fixed safety rules in collect.mts: likely secrets and risky migrations.
 export const Findings = () => {
   const { bundle } = useReport();
   const findings = bundle.diff.findings ?? [];

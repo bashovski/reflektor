@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm -C viewer dev",
-    "build": "node scripts/install.mjs --build",
-    "check": "pnpm -C viewer typecheck && node scripts/check.mjs",
-    "check:browser": "node scripts/browser-check.mjs",
-    "sample": "node scripts/check.mjs --open"
+    "build": "node scripts/install.mts --build",
+    "check": "pnpm -C viewer typecheck && node scripts/check.mts",
+    "check:browser": "node scripts/browser-check.mts",
+    "sample": "node scripts/check.mts --open"
   }
 }
