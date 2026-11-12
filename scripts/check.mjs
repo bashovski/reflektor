@@ -40,6 +40,8 @@ try {
   if (portable.includes("CLAUDE_SKILL_DIR") || /^(allowed-tools|argument-hint):/m.test(frontMatter) || !/^name: pr-report$/m.test(frontMatter) || !/^description: /m.test(frontMatter))
     fail("the skill text for other agents still has Claude Code's placeholder or front matter, or lost its name or description");
   if (!portable.includes('node "C:/Users/x/.agents/skills/pr-report/scripts/collect.mjs" --repo .')) fail("the skill text for other agents does not spell out the skill's folder in its commands");
+  // The steps for subagent mode are a file of their own. The placeholder is replaced in SKILL.md only, so it must not be in there.
+  if (readFileSync(join(root, "skill/subagents.md"), "utf8").includes("CLAUDE_SKILL_DIR")) fail("skill/subagents.md has Claude Code's placeholder, which nothing replaces in that file");
 
   // Which agent runs pr-report: said outright, read from the shell's variables, from the skills folder a script was
   // started from, or from the agent's own answer, in that order. Every case names its own variables, so the result does
@@ -99,7 +101,8 @@ try {
   if (collected.includes("Subagent mode")) fail("collect.mjs speaks of subagent mode although the setting is off");
   mkdirSync(home.PR_REPORT_HOME, { recursive: true });
   writeFileSync(join(home.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: true, unknown: 1 }));
-  if (!run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"], home).includes("Subagent mode: on")) fail("collect.mjs does not tell the agent that subagent mode is on");
+  const told = run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"], home).match(/^Subagent mode: on .* Read (.+subagents\.md) before/m);
+  if (!told || !existsSync(told[1])) fail("collect.mjs does not tell the agent that subagent mode is on, or the file it names with the steps is not there");
   writeFileSync(join(home.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: "yes" }));
   if (run("node", [join(root, "skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"], home).includes("Subagent mode")) fail("collect.mjs takes a setting of the wrong type for on");
   rmSync(join(home.PR_REPORT_HOME, "settings.json"));

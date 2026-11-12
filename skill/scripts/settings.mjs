@@ -15,7 +15,7 @@ const FILE = join(HOME, "settings.json");
 // written, and a value of the wrong type counts as not set.
 const DEFAULTS = {
   // Split the reading and writing of a report between subagents that work at the same time. Faster, and it costs
-  // more tokens, so it is off until the reader turns it on. SKILL.md step 4b says what the agent does with it.
+  // more tokens, so it is off until the reader turns it on. skill/subagents.md says what the agent does with it.
   subagents: false,
 };
 

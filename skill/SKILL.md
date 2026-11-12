@@ -108,6 +108,8 @@ It writes diff.json into the repo's git folder and prints:
 
 It also prints **Safety checks**: fixed rules that flag likely secrets (key formats, passwords in code, committed `.env` or key files) and risky migrations (dropped tables or columns, NOT NULL without a default, renames, type changes, writes without WHERE, indexes that lock a table). Secret values are masked.
 
+When the reader has turned on Subagentic Mode in Settings, it also prints `Subagent mode: on` and the path of a file. Read that file before step 4 and follow it.
+
 Exit code 3 means there are no changes: tell the user and stop.
 
 While the tests from step 2b run, their coverage file may be missing or STALE. That is expected: step 7b collects again once they are done.
@@ -141,29 +143,6 @@ Before writing, find out:
 - **The safety checks:** every high or medium finding must appear in the report as a `risk` highlight with a `ref` to its line and a `fix`. A secret also gets a `beforeMerge` item: remove it, rotate it, and load it from the environment. A false positive still gets a highlight that says why it is safe. Never copy a secret value into report text.
 
 For large changes (more than about 60 files or 3000 changed lines), read must-review files fully and skim the rest. Say in the summary that the report focuses on the most important parts.
-
-## 4b. Subagent mode
-
-Only when collect printed `Subagent mode: on`. The reader has then asked for speed over tokens. Use it when both of these hold, and skip this step otherwise:
-
-- You can start subagents that run at the same time (in Claude Code, the Agent tool).
-- The change is big enough to split: 3 or more sections with files to read, or about 400 changed lines.
-
-Then split the reading of step 4 and the writing of step 5 by section:
-
-1. From collect's file table, put every file in a section and give each section its review level, as step 5 describes. Do not read the diffs yourself.
-2. Start one subagent for each section, all in one message so they run together. Put small sections that belong together into one subagent. Leave out sections that hold only generated or lock files, and write those yourself. At most 8 subagents.
-3. A subagent knows nothing of this conversation, so tell it:
-   - the repo path, its files, and the `git diff` command collect printed, to run for those files only
-   - why the change was made, in two or three sentences, and the plan's items if there was a plan
-   - the coverage lines and the safety findings collect printed for its files
-   - to read `${CLAUDE_SKILL_DIR}/schema/types.ts` and `${CLAUDE_SKILL_DIR}/style-guide.md` first, and to search the repo for callers of what its files change
-   - what to send back, as JSON and nothing else: `section` (a `Section` with its highlights, questions and files, as step 5 describes), `contracts`, `schema` tables, `beforeMerge` items, `gaps` in testing, and `steps`: the entry points and calls in its files that a flow would show, each with `symbol`, `ref` and one line on what it does
-   - what not to do: change code, run tests or write files
-4. While they work, write the header and the plan check yourself.
-5. When all have answered, put report.json together: the sections in the order step 5 gives, the contracts and schema tables with doubles removed, the 6 most important `beforeMerge` items and the 5 most important testing gaps. Write the flows yourself from the `steps` the subagents sent, since a flow crosses sections. Then go on with step 6.
-
-If a subagent fails or sends something you cannot use, do its section yourself.
 
 ## 5. Write report.json
 
