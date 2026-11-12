@@ -820,7 +820,9 @@ async function hooksFlow() {
     if (ran("postRun").length) fail("postRun ran for a draft");
     const opened = review({ HOOK_FAIL: "postRun" }, "open", "--report", build("--report", join(data, "report.json")));
     const id = opened.match(/Review id: (\S+)/)?.[1];
-    if (!id || !opened.includes("warning: the postRun hook in .pr-report.json failed")) fail(`a failing postRun stopped the publish or gave no warning:\n${opened}`);
+    // Without a review id the rest of the hooks check cannot run: stop here, as daemonFlow does.
+    if (!id) return fail(`review.mjs open printed no review id, so a failing postRun stopped the publish:\n${opened}`);
+    if (!opened.includes("warning: the postRun hook in .pr-report.json failed")) fail(`a failing postRun gave no warning:\n${opened}`);
     if (ran("postRun").join() !== "postRun feat/books main 1 report url") fail(`postRun was not handed the round's files: ${ran("postRun").join(" | ")}`);
     review({}, "open", "--report", build("--report", join(data, "report.json")));
     if (ran("postRun").length !== 1) fail("postRun ran again when the same round was published again");
@@ -836,17 +838,17 @@ async function hooksFlow() {
         body: JSON.stringify({ comments: [] }),
       });
     await approve();
-    const waited = review({}, "wait", "--id", id!);
+    const waited = review({}, "wait", "--id", id);
     if (!waited.includes("Hook onApproved:") || !waited.includes("The project's onApproved hook ran")) fail(`the waiter did not run onApproved when the review was done:\n${waited}`);
-    review({}, "resume", "--id", id!);
+    review({}, "resume", "--id", id);
     if (ran("onApproved").join() !== "onApproved feat/books main 1 report url") fail(`onApproved did not run exactly once with the round's files: ${ran("onApproved").join(" | ")}`);
 
     // The next round: postRun again, and with no waiter running, resume picks up the approval. Asked twice, it runs onApproved once.
     review({}, "open", "--report", build("--report", join(data, "report.json")));
     if (ran("postRun").at(-1) !== "postRun feat/books main 2 report url") fail(`postRun did not run for round 2: ${ran("postRun").join(" | ")}`);
     await approve();
-    const resumed = review({}, "resume", "--id", id!);
-    review({}, "resume", "--id", id!);
+    const resumed = review({}, "resume", "--id", id);
+    review({}, "resume", "--id", id);
     if (!resumed.includes("Hook onApproved:") || ran("onApproved").length !== 2) fail(`resume did not run onApproved exactly once for round 2 (${ran("onApproved").length} runs in all):\n${resumed}`);
 
     // The checks' trust rule: no hooks while the branch has a commit by someone not trusted, and none without a base.
