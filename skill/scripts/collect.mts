@@ -11,10 +11,11 @@
 // line references moved to where those lines are now, and, after a sent review, what changed since
 // that round. For the fix loop, and for code that changed after a report was built.
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, type ExecFileSyncOptions } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { BaseSource, CoverageData, DiffData, DiffFile, FileStatus, Finding, Forge, PrState, Ref, RepoConfig, Report, Review, Severity, Target } from "../schema/types.ts";
 import { ownerAvatar } from "./avatar.mts";
 import { runHooks } from "./hooks.mts";
 import { globToRegExp, parseRemote, reportDir, shellPath } from "./repo.mts";
@@ -37,8 +38,11 @@ const GENERATED = [
 
 // ------------------------------------------------------------------ args
 
-function parseArgs(argv) {
-  const args = { repo: ".", coverage: [], uncommitted: true, fetch: true, out: null };
+// The command line, as the usage above lists it.
+type Args = { repo: string; base?: string; since?: string; files?: string[]; coverage: string[]; uncommitted: boolean; fetch: boolean; update?: boolean; out: string | null };
+
+function parseArgs(argv: string[]): Args {
+  const args: Args = { repo: ".", coverage: [], uncommitted: true, fetch: true, out: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -58,29 +62,32 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const warnings = [];
+const warnings: string[] = [];
 
 // ------------------------------------------------------------------ git helpers
 
 const repoRoot = run("git", ["rev-parse", "--show-toplevel"], resolve(args.repo)).trim();
 
-function run(cmd, argv, cwd = repoRoot, opts = {}) {
+// Text by default; raw bytes when opts asks for encoding "buffer".
+function run(cmd: string, argv: string[], cwd: string, opts: ExecFileSyncOptions & { encoding: "buffer" }): Buffer;
+function run(cmd: string, argv: string[], cwd?: string, opts?: ExecFileSyncOptions): string;
+function run(cmd: string, argv: string[], cwd: string = repoRoot, opts: ExecFileSyncOptions = {}): string | Buffer {
   return execFileSync(cmd, argv, { cwd, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"], ...opts });
 }
-const git = (...argv) => run("git", ["-c", "core.quotePath=false", ...argv]);
-const tryGit = (...argv) => {
+const git = (...argv: string[]) => run("git", ["-c", "core.quotePath=false", ...argv]);
+const tryGit = (...argv: string[]) => {
   try {
     return git(...argv);
   } catch {
     return null;
   }
 };
-const refExists = (ref) => tryGit("rev-parse", "--verify", "--quiet", `${ref}^{commit}`) !== null;
+const refExists = (ref: string) => tryGit("rev-parse", "--verify", "--quiet", `${ref}^{commit}`) !== null;
 // One git process for many lookups, fed through stdin. Returns raw bytes.
-const gitStdin = (input, ...argv) =>
+const gitStdin = (input: string, ...argv: string[]) =>
   run("git", ["-c", "core.quotePath=false", ...argv], repoRoot, { input: Buffer.from(input), encoding: "buffer", stdio: ["pipe", "pipe", "pipe"] });
 
-function hasCommand(cmd) {
+function hasCommand(cmd: string) {
   try {
     run(process.platform === "win32" ? "where" : "which", [cmd]);
     return true;
@@ -91,28 +98,28 @@ function hasCommand(cmd) {
 
 // ------------------------------------------------------------------ repo config (.pr-report.json)
 
-function loadConfig() {
+function loadConfig(): RepoConfig | null {
   const file = join(repoRoot, ".pr-report.json");
   if (!existsSync(file)) return null;
   try {
-    return JSON.parse(readFileSync(file, "utf8"));
+    return JSON.parse(readFileSync(file, "utf8")) as RepoConfig;
   } catch (e) {
-    warnings.push(`.pr-report.json is not valid JSON, ignored: ${e.message}`);
+    warnings.push(`.pr-report.json is not valid JSON, ignored: ${(e as Error).message}`);
     return null;
   }
 }
 
 const config = loadConfig();
-const targetGlobs = Object.entries(config?.targets ?? {}).flatMap(([target, globs]) => globs.map((g) => [target, globToRegExp(g)]));
+const targetGlobs = (Object.entries(config?.targets ?? {}) as [Target, string[]][]).flatMap(([target, globs]) => globs.map((g): [Target, RegExp] => [target, globToRegExp(g)]));
 const generatedGlobs = (config?.generated ?? []).map(globToRegExp);
-const targetFor = (path) => targetGlobs.find(([, re]) => re.test(path))?.[0] ?? null;
+const targetFor = (path: string) => targetGlobs.find(([, re]) => re.test(path))?.[0] ?? null;
 
 // ------------------------------------------------------------------ repo identity
 
 const remoteName = (tryGit("remote") ?? "").split("\n").map((s) => s.trim()).filter(Boolean);
 const remote = remoteName.includes("origin") ? "origin" : remoteName[0];
 const remoteUrl = remote ? tryGit("remote", "get-url", remote)?.trim() : null;
-const identity = parseRemote(remoteUrl) ?? {
+const identity: Pick<DiffData["repo"], "host" | "owner" | "name"> = parseRemote(remoteUrl) ?? {
   host: null,
   owner: null,
   name: basename(repoRoot),
@@ -128,11 +135,11 @@ if (identity.host && !identity.host.includes(".") && remoteUrl && !/^https?:/.te
     // No ssh client: keep the name from the URL.
   }
 }
-identity.host = { "ssh.github.com": "github.com", "altssh.gitlab.com": "gitlab.com" }[identity.host] ?? identity.host;
+identity.host = ({ "ssh.github.com": "github.com", "altssh.gitlab.com": "gitlab.com" } as Record<string, string>)[identity.host as string] ?? identity.host;
 
 // The repo on the web, for the page's owner and pull request links. Self-hosted GitLab and GitHub
 // Enterprise keep their URL layout, so the forge comes from the host name.
-const forge = /github/.test(identity.host ?? "") ? "github" : /gitlab/.test(identity.host ?? "") ? "gitlab" : /bitbucket/.test(identity.host ?? "") ? "bitbucket" : null;
+const forge: Forge | null = /github/.test(identity.host ?? "") ? "github" : /gitlab/.test(identity.host ?? "") ? "gitlab" : /bitbucket/.test(identity.host ?? "") ? "bitbucket" : null;
 const web = identity.host && identity.owner ? { url: `https://${identity.host}/${identity.owner}/${identity.name}`, ownerUrl: `https://${identity.host}/${identity.owner}`, forge } : null;
 
 // ------------------------------------------------------------------ base branch
@@ -140,18 +147,23 @@ const web = identity.host && identity.owner ? { url: `https://${identity.host}/$
 const head = git("rev-parse", "--abbrev-ref", "HEAD").trim();
 const headSha = git("rev-parse", "HEAD").trim();
 
+// The pull request as `gh pr view --json number,url,title,baseRefName,state` prints it.
+type PullRequest = { number: number; url: string; title: string; baseRefName: string; state: PrState };
+// The fields read from `glab mr view --output json`.
+type MergeRequest = { iid: number; web_url: string; title: string; target_branch: string; state: string };
+
 // The branch's pull request through gh (github.com only), or its merge request through glab
 // (GitLab), in any state. An open one sets the base branch; the page links to it either way.
-function findPr() {
+function findPr(): PullRequest | null {
   if (head === "HEAD") return null;
   try {
     if (identity.host === "github.com" && hasCommand("gh")) {
-      return JSON.parse(run("gh", ["pr", "view", head, "--json", "number,url,title,baseRefName,state"], repoRoot, { timeout: 15_000 }));
+      return JSON.parse(run("gh", ["pr", "view", head, "--json", "number,url,title,baseRefName,state"], repoRoot, { timeout: 15_000 })) as PullRequest;
     }
     if (forge === "gitlab" && hasCommand("glab")) {
-      const mr = JSON.parse(run("glab", ["mr", "view", head, "--output", "json"], repoRoot, { timeout: 15_000 }));
+      const mr = JSON.parse(run("glab", ["mr", "view", head, "--output", "json"], repoRoot, { timeout: 15_000 })) as MergeRequest;
       // glab says "opened", "merged" or "closed"; the page expects gh's upper-case words.
-      return { number: mr.iid, url: mr.web_url, title: mr.title, baseRefName: mr.target_branch, state: mr.state === "opened" ? "OPEN" : String(mr.state).toUpperCase() };
+      return { number: mr.iid, url: mr.web_url, title: mr.title, baseRefName: mr.target_branch, state: mr.state === "opened" ? "OPEN" : String(mr.state).toUpperCase() as PrState };
     }
   } catch {
     // No pull request for this branch, or the tool is not logged in.
@@ -169,13 +181,13 @@ const COMMON_BASES = ["main", "master", "develop", "staging", "demo", "trunk"];
 // base, so remote branches win ties, then the alphabet. A branch that already holds every commit of
 // HEAD is a copy or a descendant, not a base, so it is left out. Only the 50 most recently committed
 // branches are tried, to keep this quick in a repo with hundreds.
-function forkedFrom() {
+function forkedFrom(): string | undefined {
   const patterns = ["refs/heads", ...(remote ? [`refs/remotes/${remote}`] : [])];
   const refs = (tryGit("for-each-ref", "--sort=-committerdate", "--count=50", "--format=%(refname:short)", ...patterns) ?? "")
     .split("\n")
     .map((s) => s.trim())
     .filter((ref) => ref && ref !== head && ref !== `${remote}/HEAD` && ref !== `${remote}/${head}`);
-  let best = null;
+  let best: { ref: string; time: number; onRemote: boolean } | null = null;
   for (const ref of refs) {
     const forkPoint = tryGit("merge-base", "HEAD", ref)?.trim();
     if (!forkPoint || forkPoint === headSha) continue;
@@ -187,8 +199,8 @@ function forkedFrom() {
   return best ? best.ref.replace(`${remote}/`, "") : undefined;
 }
 
-let base;
-let baseSource;
+let base: string | undefined;
+let baseSource: BaseSource;
 if (args.base) {
   base = args.base;
   baseSource = "argument";
@@ -240,13 +252,16 @@ const out = resolve(args.out ?? join(reportDir(gitDir, head), "diff.json"));
 const stateFile = join(dirname(out), "last.json");
 const reportFile = join(dirname(out), "report.json");
 
+// last.json, which build.mts writes after each build: the commits that report showed.
+type LastBuild = { headSha: string; snapshot?: string };
+
 let from = mergeBase;
-let mode = "branch";
+let mode: DiffData["scope"]["mode"] = "branch";
 if (args.since) {
   let since = args.since;
   if (since === "last") {
     if (!existsSync(stateFile)) throw new Error("No earlier report found for --since last. Run once without it first.");
-    const last = JSON.parse(readFileSync(stateFile, "utf8"));
+    const last = JSON.parse(readFileSync(stateFile, "utf8")) as LastBuild;
     since = last.snapshot ?? last.headSha;
   }
   from = git("rev-parse", since).trim();
@@ -294,8 +309,11 @@ const to = args.uncommitted ? snapshot : "HEAD";
 
 // ------------------------------------------------------------------ changed files
 
-function parseNameStatus(text) {
-  const out = [];
+// One line of `git diff --name-status`.
+type NameStatus = { status: FileStatus; oldPath: string | null; path: string };
+
+function parseNameStatus(text: string) {
+  const out: NameStatus[] = [];
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     const [status, a, b] = line.split("\t");
@@ -308,8 +326,8 @@ function parseNameStatus(text) {
   return out;
 }
 
-function parseNumstat(text) {
-  const map = new Map();
+function parseNumstat(text: string) {
+  const map = new Map<string, { additions: number; deletions: number; binary: boolean }>();
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     const [add, del, ...rest] = line.split("\t");
@@ -323,10 +341,10 @@ function parseNumstat(text) {
 }
 
 // Line numbers that changed, from a zero-context diff.
-function parseChangedLines(text) {
-  const map = new Map();
-  let current = null;
-  let oldPath = null;
+function parseChangedLines(text: string) {
+  const map = new Map<string, DiffFile["changedLines"]>();
+  let current: string | null = null;
+  let oldPath: string | null = null;
   for (const line of text.split("\n")) {
     if (line.startsWith("--- ")) {
       const p = line.slice(4);
@@ -342,7 +360,7 @@ function parseChangedLines(text) {
     const h = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
     if (h && current) {
       const [oldStart, oldLen, newStart, newLen] = [Number(h[1]), h[2] === undefined ? 1 : Number(h[2]), Number(h[3]), h[4] === undefined ? 1 : Number(h[4])];
-      const entry = map.get(current);
+      const entry = map.get(current)!;
       for (let i = 0; i < oldLen; i++) entry.removed.push(oldStart + i);
       for (let i = 0; i < newLen; i++) entry.added.push(newStart + i);
     }
@@ -350,19 +368,19 @@ function parseChangedLines(text) {
   return map;
 }
 
-const uncommittedSet = new Set();
-const untracked = [];
+const uncommittedSet = new Set<string>();
+const untracked: string[] = [];
 if (args.uncommitted) {
   for (const p of (tryGit("diff", "--name-only", "HEAD", snapshot) ?? "").split("\n")) if (p.trim()) uncommittedSet.add(p.trim());
   for (const p of git("ls-files", "--others", "--exclude-standard").split("\n")) if (p.trim()) untracked.push(p.trim());
 }
 
 // Files marked `linguist-generated` in .gitattributes, asked for all paths at once.
-function generatedByAttribute(paths) {
+function generatedByAttribute(paths: string[]): Set<string> {
   if (!paths.length) return new Set();
   try {
     const out = gitStdin(paths.join("\0") + "\0", "check-attr", "-z", "--stdin", "linguist-generated").toString("utf8").split("\0");
-    const set = new Set();
+    const set = new Set<string>();
     for (let i = 0; i + 2 < out.length; i += 3) if (out[i + 2] === "set" || out[i + 2] === "true") set.add(out[i]);
     return set;
   } catch {
@@ -371,19 +389,21 @@ function generatedByAttribute(paths) {
 }
 
 const TOO_LARGE = Symbol("too large");
+// One file version as readBlobs reads it.
+type BlobText = string | typeof TOO_LARGE | null;
 
 // Reads every "<rev>:<path>" with two git processes instead of one per file: --batch-check for the
 // sizes, then --batch for the contents of files small enough to show.
 // Each value is the text, TOO_LARGE, or null when git has no such file.
-function readBlobs(specs) {
-  const result = new Map(specs.map((s) => [s, null]));
+function readBlobs(specs: string[]) {
+  const result = new Map<string, BlobText>(specs.map((s) => [s, null]));
   // The batch protocol is line based; the rare path with a newline in it is read on its own.
   for (const spec of specs.filter((s) => s.includes("\n"))) result.set(spec, tryGit("show", spec));
   const batchable = specs.filter((s) => !s.includes("\n"));
   if (!batchable.length) return result;
 
   const checks = gitStdin(batchable.join("\n") + "\n", "cat-file", "--batch-check").toString("utf8").split("\n");
-  const wanted = [];
+  const wanted: string[] = [];
   batchable.forEach((spec, i) => {
     const [, type, size] = checks[i].split(" ");
     if (type !== "blob") return;
@@ -404,24 +424,24 @@ function readBlobs(specs) {
   return result;
 }
 
-function looksBinary(text) {
+function looksBinary(text: BlobText | undefined) {
   return typeof text === "string" && text.slice(0, 8000).includes("\u0000");
 }
-function tooLarge(text) {
+function tooLarge(text: BlobText | undefined) {
   return text === TOO_LARGE || (typeof text === "string" && (text.length > MAX_BYTES || text.split("\n").length > MAX_LINES));
 }
 
 // The files that differ between two commits, with both versions and the changed line numbers.
-function diffFiles(a, b, wanted = null) {
+function diffFiles(a: string, b: string, wanted: Set<string | null> | null = null): DiffFile[] {
   let entries = parseNameStatus(git("diff", "--name-status", "-M", a, b));
   if (wanted) entries = entries.filter((e) => wanted.has(e.path) || wanted.has(e.oldPath));
   const numstat = parseNumstat(git("diff", "--numstat", "-M", a, b));
   const changedLines = parseChangedLines(git("diff", "-U0", "--no-color", "-M", a, b));
-  const oldSpec = (e) => `${a}:${e.oldPath ?? e.path}`;
-  const newSpec = (e) => `${b}:${e.path}`;
+  const oldSpec = (e: NameStatus) => `${a}:${e.oldPath ?? e.path}`;
+  const newSpec = (e: NameStatus) => `${b}:${e.path}`;
   const blobs = readBlobs([...entries.filter((e) => e.status !== "added").map(oldSpec), ...entries.filter((e) => e.status !== "deleted").map(newSpec)]);
   const attributeGenerated = generatedByAttribute(entries.map((e) => e.path));
-  const isGenerated = (path) =>
+  const isGenerated = (path: string) =>
     LOCKFILES.has(basename(path)) || GENERATED.some((re) => re.test(path)) || generatedGlobs.some((re) => re.test(path)) || attributeGenerated.has(path);
 
   return entries
@@ -447,8 +467,9 @@ function diffFiles(a, b, wanted = null) {
         uncommitted: uncommittedSet.has(e.path),
         untracked: untracked.includes(e.path),
         target: targetFor(e.path),
-        oldContent,
-        newContent,
+        // TOO_LARGE was cleared above, with every other version the page does not show.
+        oldContent: oldContent as string | null,
+        newContent: newContent as string | null,
         changedLines: changedLines.get(e.path) ?? { added: [], removed: [] },
       };
     })
@@ -468,7 +489,7 @@ if (!files.length) {
 // report.json is carried forward: its line references move to where those lines are now, and the
 // ones on changed lines are listed for the agent to check.
 
-const commitExists = (sha) => Boolean(sha) && tryGit("cat-file", "-e", `${sha}^{commit}`) !== null;
+const commitExists = (sha: string | null | undefined) => Boolean(sha) && tryGit("cat-file", "-e", `${sha}^{commit}`) !== null;
 const toHead = to === "HEAD" ? headSha : to;
 
 function latestReview() {
@@ -476,14 +497,19 @@ function latestReview() {
   const rounds = existsSync(dir) ? readdirSync(dir).map((f) => Number(f.match(/^review-(\d+)\.json$/)?.[1])).filter(Boolean) : [];
   if (!rounds.length) return null;
   const round = Math.max(...rounds);
-  return { round, ...JSON.parse(readFileSync(join(dir, `review-${round}.json`), "utf8")) };
+  return { round, ...(JSON.parse(readFileSync(join(dir, `review-${round}.json`), "utf8")) as Partial<Review>) };
 }
 
+// One hunk of a zero-context diff.
+type Hunk = { oldStart: number; oldLen: number; newStart: number; newLen: number };
+// Where one file went between two commits: its new path (null when deleted) and its hunks.
+type FileMoves = { newPath: string | null; hunks: Hunk[] };
+
 // Hunks of a zero-context diff per file: where lines went between two commits.
-function parseHunks(text) {
-  const map = new Map();
-  let oldPath = null;
-  let current = null;
+function parseHunks(text: string) {
+  const map = new Map<string, FileMoves>();
+  let oldPath: string | null = null;
+  let current: FileMoves | null = null;
   for (const line of text.split("\n")) {
     if (line.startsWith("--- ")) oldPath = line.slice(4) === "/dev/null" ? null : line.slice(4).replace(/^a\//, "");
     else if (line.startsWith("+++ ")) {
@@ -499,7 +525,7 @@ function parseHunks(text) {
 }
 
 // Where an old line is now. `changed` when the line itself changed; it then points at the new code there.
-function moveLine(hunks, line) {
+function moveLine(hunks: Hunk[], line: number) {
   let delta = 0;
   for (const h of hunks) {
     if (h.oldLen === 0) {
@@ -516,38 +542,39 @@ function moveLine(hunks, line) {
   return { line: line + delta, changed: false };
 }
 
-let sinceRound = null;
-let carried = null;
+let sinceRound: NonNullable<DiffData["sinceRound"]> | null = null;
+let carried: { moved: number; check: string[]; gone: string[] } | null = null;
 if (args.update) {
   const sent = latestReview();
   const roundFrom = sent && (commitExists(sent.snapshot) ? sent.snapshot : commitExists(sent.headSha) ? sent.headSha : null);
   if (sent && !roundFrom) warnings.push(`The code of round ${sent.round} is no longer in git, so the page cannot show what changed since then.`);
-  else if (sent) sinceRound = { round: sent.round, from: roundFrom, files: diffFiles(roundFrom, to) };
+  else if (sent) sinceRound = { round: sent.round, from: roundFrom!, files: diffFiles(roundFrom!, to) };
 
   // report.json's references point into the snapshot it was last built against.
-  const report = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, "utf8")) : null;
-  const last = existsSync(stateFile) ? JSON.parse(readFileSync(stateFile, "utf8")) : null;
+  const report = existsSync(reportFile) ? (JSON.parse(readFileSync(reportFile, "utf8")) as Report) : null;
+  const last = existsSync(stateFile) ? (JSON.parse(readFileSync(stateFile, "utf8")) as LastBuild) : null;
   const refsFrom = report?.refsAt ?? last?.snapshot ?? last?.headSha;
   if (!report) warnings.push(`No report.json at ${reportFile} to carry forward; write a new one.`);
   else if (!commitExists(refsFrom)) warnings.push("The code report.json was written for is no longer in git, so its line references were not moved. Check them.");
   else if (refsFrom === toHead) carried = { moved: 0, check: [], gone: [] };
   else {
-    const moves = parseHunks(git("diff", "-U0", "--no-color", "-M", refsFrom, to));
+    const moves = parseHunks(git("diff", "-U0", "--no-color", "-M", refsFrom!, to));
     carried = { moved: 0, check: [], gone: [] };
     // Moves one reference in place. Old-side lines are in the base version, which did not change.
-    const carry = (ref, where, path = ref?.path) => {
+    // A line note has no path of its own: its file's comes in as `path`.
+    const carry = (ref: Partial<Ref> | undefined, where: string, path = ref?.path) => {
       if (!ref || ref.side === "old" || !path) return;
       const m = moves.get(path);
       if (!m) return;
       if (!m.newPath) {
-        carried.gone.push(`${where}: ${path}`);
+        carried!.gone.push(`${where}: ${path}`);
         return;
       }
       if (m.newPath !== path && "path" in ref) ref.path = m.newPath;
       if (ref.line == null) return;
       const moved = moveLine(m.hunks, ref.line);
-      if (moved.line !== ref.line) carried.moved++;
-      if (moved.changed) carried.check.push(`${where}: ${m.newPath}:${moved.line}`);
+      if (moved.line !== ref.line) carried!.moved++;
+      if (moved.changed) carried!.check.push(`${where}: ${m.newPath}:${moved.line}`);
       ref.line = moved.line;
     };
     for (const [i, b] of (report.beforeMerge ?? []).entries()) carry(b.ref, `beforeMerge[${i}]`);
@@ -577,7 +604,7 @@ if (args.update) {
 // Fixed rules on added lines: likely secrets, and database migrations that can break a deploy.
 // These are facts for the agent to judge; secret values are never printed in full.
 
-const SECRET_RULES = [
+const SECRET_RULES: [id: string, label: string, re: RegExp][] = [
   ["aws-key", "AWS access key", /\b((?:AKIA|ASIA)[0-9A-Z]{16})\b/],
   ["private-key", "Private key", /(-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----)/],
   ["github-token", "GitHub token", /\b(gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,})\b/],
@@ -593,13 +620,13 @@ const SECRET_RULES = [
 // Values that are obviously placeholders, so "postgres://app:app@db" in a dev setup is not flagged.
 const PLACEHOLDER = /^(password|passwd|secret|changeme|change-me|example|sample|test|testing|dev|local|postgres|root|admin|user|pass|x+|\*+|\.+)$/i;
 const NOT_REAL = /(^|\/)(\.env\.(example|sample|template|dist)|[^/]*\.(example|sample|template)(\.[^/]+)?|[^/]*\.md)$|(^|\/)(tests?|__tests__|spec|fixtures?|testdata)\//i;
-const SECRET_FILES = [
+const SECRET_FILES: [re: RegExp, rule: string, message: string][] = [
   [/(^|\/)\.env(\.(local|prod|production|staging|dev|development))?$/i, "Env file committed", "Env files usually hold real secrets. Keep them out of git and add them to .gitignore."],
   [/\.(pem|key|p12|pfx|keystore|jks)$|(^|\/)id_(rsa|dsa|ecdsa|ed25519)$/i, "Key file committed", "Private key files must not be in git. Anyone with repo access can use the key."],
 ];
 
 const MIGRATION_PATH = /(^|\/)(migrations?|migrate|alembic|flyway|liquibase)(\/|$)|\.sql$|(^|\/)schema\.(rb|sql|prisma)$/i;
-const MIGRATION_RULES = [
+const MIGRATION_RULES: [rule: string, severity: Severity, test: RegExp | ((line: string) => boolean), message: string][] = [
   ["Drops a table", "high", /\bDROP\s+TABLE\b|\bdrop_table\b|\.dropTable\s*\(|\bDeleteModel\s*\(|Schema::drop/i,
     "Drops a table. Its data is gone, and code that still reads it breaks during the deploy."],
   ["Drops a column", "high", /\bDROP\s+COLUMN\b|\bremove_column\b|\.dropColumn\s*\(|\bRemoveField\s*\(/i,
@@ -618,9 +645,9 @@ const MIGRATION_RULES = [
 ];
 const INDEX_RULE = /\bCREATE\s+(UNIQUE\s+)?INDEX\s+(?!CONCURRENTLY)(?:IF\s+NOT\s+EXISTS\s+)?\S+\s+ON\s+(?:ONLY\s+)?["`]?([\w.]+)/i;
 
-const mask = (value) => (value.length <= 8 ? "…" : `${value.slice(0, 4)}…(${value.length} characters)`);
+const mask = (value: string) => (value.length <= 8 ? "…" : `${value.slice(0, 4)}…(${value.length} characters)`);
 
-const findings = [];
+const findings: Finding[] = [];
 for (const f of files) {
   if (f.status === "added" && !NOT_REAL.test(f.path)) {
     for (const [re, rule, message] of SECRET_FILES) {
@@ -682,17 +709,20 @@ const commits = git("log", "--format=%H%x1f%h%x1f%s%x1f%an%x1f%aI", `${from}..HE
 // Reads common coverage formats and maps them onto added lines.
 // Formats: lcov, Go coverprofile, Cobertura XML, JaCoCo XML, Clover XML, coverage.py JSON.
 
-function parseCoverage(file) {
+// The parts of a coverage.py JSON report read here.
+type CoveragePyJson = { meta?: unknown; files?: Record<string, { executed_lines?: number[]; missing_lines?: number[] }> };
+
+function parseCoverage(file: string) {
   const text = readFileSync(file, "utf8");
-  const result = new Map(); // path -> Map(line -> hits)
-  const add = (path, line, hits) => {
+  const result = new Map<string, Map<number, number>>(); // path -> Map(line -> hits)
+  const add = (path: string, line: number, hits: number) => {
     if (!result.has(path)) result.set(path, new Map());
-    const m = result.get(path);
+    const m = result.get(path)!;
     m.set(line, Math.max(m.get(line) ?? 0, hits));
   };
 
   if (/^(TN:|SF:)/m.test(text) && /end_of_record/.test(text)) {
-    let sf = null;
+    let sf: string | null = null;
     for (const line of text.split("\n")) {
       if (line.startsWith("SF:")) sf = line.slice(3).trim();
       else if (line.startsWith("DA:") && sf) {
@@ -711,7 +741,7 @@ function parseCoverage(file) {
     return { format: "go", result };
   }
   if (text.trimStart().startsWith("{")) {
-    const json = JSON.parse(text);
+    const json = JSON.parse(text) as CoveragePyJson;
     if (json.files && json.meta) {
       for (const [path, f] of Object.entries(json.files)) {
         for (const l of f.executed_lines ?? []) add(path, l, 1);
@@ -745,9 +775,9 @@ function parseCoverage(file) {
 }
 
 // Coverage tools write paths relative to different roots, so match on the longest shared suffix.
-function matchPath(covPath, diffPaths) {
+function matchPath(covPath: string, diffPaths: string[]) {
   const norm = covPath.replace(/\\/g, "/").replace(/^\.\//, "");
-  let best = null;
+  let best: string | null = null;
   let bestLen = 0;
   for (const p of diffPaths) {
     if (norm === p || norm.endsWith(`/${p}`) || p.endsWith(`/${norm}`)) {
@@ -761,14 +791,14 @@ function matchPath(covPath, diffPaths) {
   return best;
 }
 
-let coverage = null;
+let coverage: CoverageData | null = null;
 const coverageFiles = args.coverage.length
   ? args.coverage.map((f) => resolve(f))
   : (config?.coverage?.files ?? []).map((f) => resolve(repoRoot, f)).filter(existsSync);
 if (coverageFiles.length) {
   const diffPaths = files.map((f) => f.path);
-  const perFile = {};
-  const sources = [];
+  const perFile: CoverageData["files"] = {};
+  const sources: CoverageData["sources"] = [];
   // A coverage file older than the newest change does not describe this code.
   const newestChange = Math.max(
     commits.length ? Date.parse(commits[0].date) : 0,
@@ -788,7 +818,7 @@ if (coverageFiles.length) {
     for (const [covPath, lines] of result) {
       const path = matchPath(covPath, diffPaths);
       if (!path) continue;
-      const added = new Set(files.find((f) => f.path === path).changedLines.added);
+      const added = new Set(files.find((f) => f.path === path)!.changedLines.added);
       const entry = (perFile[path] ??= { covered: [], uncovered: [] });
       for (const [line, hits] of lines) {
         if (!added.has(line)) continue;
@@ -815,7 +845,7 @@ if (coverageFiles.length) {
 
 // ------------------------------------------------------------------ output
 
-const data = {
+const data: DiffData = {
   version: 1,
   generatedAt: new Date().toISOString(),
   // --no-fetch stays offline: an avatar downloaded before is still used.
@@ -845,8 +875,8 @@ console.log(`Report file: ${shellPath(reportFile)}   (${carried ? "carried forwa
 console.log(`${identity.owner ?? ""}${identity.owner ? "/" : ""}${identity.name}  ${head} → ${base} (${baseSource})`);
 console.log(`${commits.length} commits, ${files.length} files, +${data.stats.additions} -${data.stats.deletions}, ${data.stats.uncommittedFiles} uncommitted`);
 // Groups line numbers into ranges: [3,4,5,9] -> "3-5, 9"
-const ranges = (lines) => {
-  const out = [];
+const ranges = (lines: number[]) => {
+  const out: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     let j = i;
     while (j + 1 < lines.length && lines[j + 1] === lines[j] + 1) j++;
@@ -896,7 +926,7 @@ if (carried) {
     if (carried.check.length > 40) console.log(`  ... and ${carried.check.length - 40} more`);
   }
   if (carried.gone.length) console.log(`These point at deleted files; move or remove them:\n${carried.gone.map((g) => `  ${g}`).join("\n")}`);
-  const report = JSON.parse(readFileSync(reportFile, "utf8"));
+  const report = JSON.parse(readFileSync(reportFile, "utf8")) as Report;
   const inSections = new Set((report.sections ?? []).flatMap((sec) => (sec.files ?? []).map((f) => f.path)));
   const inBranch = new Set(files.map((f) => f.path));
   const missing = files.filter((f) => !inSections.has(f.path)).map((f) => f.path);
@@ -906,7 +936,7 @@ if (carried) {
   console.log("");
 }
 if (findings.length) {
-  const count = (sev) => findings.filter((f) => f.severity === sev).length;
+  const count = (sev: Severity) => findings.filter((f) => f.severity === sev).length;
   console.log(`Safety checks: ${count("high")} high, ${count("medium")} medium, ${count("low")} low`);
   for (const f of findings) {
     console.log(`  ${f.severity.toUpperCase().padEnd(6)} ${f.kind.padEnd(9)} ${f.path}${f.line ? `:${f.line}` : ""}  ${f.rule}${f.preview ? ` [${f.preview}]` : ""}`);

@@ -25,7 +25,7 @@ import { portableSkillText } from "./portable-skill.mts";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const mode = process.argv.includes("--build") ? "build" : process.argv.includes("--copy") ? "copy" : "link";
 
-const fail = (message) => {
+const fail = (message: string): never => {
   console.error(`error: ${message}`);
   process.exit(1);
 };
@@ -38,11 +38,11 @@ if (spawnSync("git", ["--version"], { stdio: "ignore" }).status !== 0) fail("git
 
 // pnpm and npm are .cmd files on Windows, which only start through a shell. The commands are fixed
 // strings, so nothing from outside reaches the shell.
-const sh = (command, cwd) => {
+const sh = (command: string, cwd: string) => {
   const r = spawnSync(command, { cwd, shell: true, encoding: "utf8" });
   if (r.status !== 0) fail(`${command} failed in ${cwd}\n${r.stdout ?? ""}${r.stderr ?? ""}`);
 };
-const node = (script) => {
+const node = (script: string) => {
   const r = spawnSync(process.execPath, [script], { cwd: root, encoding: "utf8" });
   if (r.status !== 0) fail(`${script} failed\n${r.stdout ?? ""}${r.stderr ?? ""}`);
 };
@@ -72,7 +72,7 @@ if (process.argv.includes("--target") && !targets.length) fail("--target needs a
 if (!targets.length) targets.push("claude");
 const source = join(root, "skill");
 
-function install(name) {
+function install(name: string) {
   const claude = name === "claude";
   const skills = claude
     ? (process.env.CLAUDE_SKILLS_DIR ?? join(homedir(), ".claude", "skills"))

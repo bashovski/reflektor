@@ -12,12 +12,16 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = join(root, "viewer/node_modules/atom-material-icons");
 if (!existsSync(pkg)) throw new Error("atom-material-icons is missing. Run `pnpm install` in viewer/ first.");
 
-const version = JSON.parse(readFileSync(join(pkg, "package.json"), "utf8")).version;
-const rules = JSON.parse(readFileSync(join(pkg, "public/icon_associations.json"), "utf8")).associations.associations.regex;
-const iconFile = (icon) => join(pkg, "public", icon);
+// One filename rule in public/icon_associations.json (only the fields used here).
+type IconRule = { pattern: string; color: string; icon: string };
+
+const version = (JSON.parse(readFileSync(join(pkg, "package.json"), "utf8")) as { version: string }).version;
+const rules = (JSON.parse(readFileSync(join(pkg, "public/icon_associations.json"), "utf8")) as { associations: { associations: { regex: IconRule[] } } })
+  .associations.associations.regex;
+const iconFile = (icon: string) => join(pkg, "public", icon);
 
 // Smaller SVGs: no comments, no XML prolog, no runs of whitespace.
-const minify = (svg) =>
+const minify = (svg: string) =>
   svg
     .replace(/<\?xml[^>]*>/g, "")
     .replace(/<!--[\s\S]*?-->/g, "")
@@ -25,8 +29,8 @@ const minify = (svg) =>
     .replace(/>\s+</g, "><")
     .trim();
 
-const icons = {};
-const kept = [];
+const icons: Record<string, string> = {};
+const kept: [string, string, string][] = [];
 for (const rule of rules) {
   const file = iconFile(rule.icon);
   if (!existsSync(file)) continue;

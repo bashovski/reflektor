@@ -1,0 +1,25 @@
+{
+  // Typechecks the scripts in skill/scripts/ and scripts/. Node runs them as they are and only strips the types,
+  // so nothing is emitted, and only syntax that strips away is allowed (no enum, namespace or parameter properties).
+  // TypeScript and @types/node come from the viewer's packages: pnpm -C viewer exec tsc -p ../tsconfig.scripts.json
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "typeRoots": ["./viewer/node_modules/@types"],
+    // The browser check loads playwright-core from the viewer's packages; its types come from there too.
+    "paths": { "playwright-core": ["./viewer/node_modules/playwright-core/index.d.ts"] },
+    "types": ["node"]
+  },
+  "include": ["skill/scripts", "scripts", "skill/schema"]
+}

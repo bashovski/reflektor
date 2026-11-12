@@ -5,13 +5,37 @@
 //
 // Usage: node scripts/check.mts [--open]
 
-import { execFile, execFileSync, spawn } from "node:child_process";
+import { type ChildProcessByStdio, execFile, execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import type { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
+import type { AgentInfo, Bundle, ChecksRun, DiffData, DiffFile, HookName, LiveQuestion, PrState, Report, RepoConfig } from "../skill/schema/types.ts";
 import { gitBash } from "../skill/scripts/repo.mts";
 import { githubPr, startGithubStub } from "./github-stub.mts";
+
+// What execFileSync throws when the command fails. Every call asks for utf8, so the output is text.
+type ExecError = Error & { status: number | null; stdout: string; stderr: string };
+// daemon.json in the daemon's home, as far as it is read here.
+type DaemonFile = { port: number; pid: number };
+// window.__PR_REVIEW__ on a review page (ReviewConfig in viewer/src/lib/live.tsx).
+type ReviewConfig = { token: string; api: string; agent?: AgentInfo | null };
+// A review's state on the event stream, the fields read here (LiveState in viewer/src/lib/live.tsx).
+type LiveState = {
+  round: number;
+  phase: "reviewing" | "sent" | "planning" | "working" | "done";
+  statuses: Record<string, { status: string }>;
+  questions: LiveQuestion[];
+  checks: ChecksRun | null;
+  roundBuiltAt: string | null;
+  drift: { files: string[]; fileCount: number; commits: number; branch: string | null } | null;
+  pr?: { number: number; state: PrState; base: string | null; mergedAt: string | null } | null;
+  agent: AgentInfo | null;
+  listening: boolean;
+  undeliveredSince: string | null;
+  updatedAt: string;
+};
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const tmp = mkdtempSync(join(tmpdir(), "pr-report-check-"));
@@ -20,11 +44,11 @@ const html = join(root, "samples", "books-report.html");
 
 // On Windows, the Git Bash that Claude Code uses, not the WSL one that "bash" can find first.
 const bash = gitBash() ?? "bash";
-const run = (cmd, args, env) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...env } });
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const run = (cmd: string, args: string[], env?: NodeJS.ProcessEnv) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...env } });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let failed = false;
-const fail = (message) => {
+const fail = (message: string) => {
   console.error(`FAIL ${message}`);
   failed = true;
 };
@@ -48,11 +72,12 @@ try {
   // not depend on the shell this check runs in.
   const { detectAgent, decodeAgent, encodeAgent } = await import("../skill/scripts/agent.mts");
   const elsewhere = join(root, "skill/scripts/review.mts");
-  const who = (options) => {
+  type AgentOptions = Parameters<typeof detectAgent>[0];
+  const who = (options: AgentOptions) => {
     const a = detectAgent({ env: {}, launchPath: elsewhere, ...options });
     return a ? `${a.id}|${a.name}|${a.product}|${a.resume}|${a.version}|${a.source}` : "nobody";
   };
-  const agentCases = [
+  const agentCases: [string, AgentOptions, string][] = [
     ["a flag wins over the shell", { id: "codex", env: { CLAUDECODE: "1" } }, "codex|Codex|Codex|null|null|flag"],
     ["PR_REPORT_AGENT", { env: { PR_REPORT_AGENT: "claude-code", AI_AGENT: "codex" } }, "claude-code|Claude|Claude Code|/pr-report resume|null|flag"],
     ["AI_AGENT with a version", { env: { AI_AGENT: "claude-code_2-1-321_agent" } }, "claude-code|Claude|Claude Code|/pr-report resume|2.1.321|env"],
@@ -75,18 +100,18 @@ try {
   // that cannot share code: the daemon uses Node built-ins only. So the lists are compared here instead.
   // The third-party notices file ships with the skill and must name every package the viewer bundles.
   const notices = readFileSync(join(root, "skill/THIRD-PARTY-NOTICES.md"), "utf8");
-  for (const dep of Object.keys(JSON.parse(readFileSync(join(root, "viewer/package.json"), "utf8")).dependencies))
+  for (const dep of Object.keys((JSON.parse(readFileSync(join(root, "viewer/package.json"), "utf8")) as { dependencies: Record<string, string> }).dependencies))
     if (!notices.includes(`## ${dep} `)) fail(`THIRD-PARTY-NOTICES.md does not cover ${dep}; run node scripts/build-notices.mts`);
   // So must source that was copied into the viewer by hand: each folder in viewer/src/vendor.
   const vendor = join(root, "viewer/src/vendor");
   for (const folder of existsSync(vendor) ? readdirSync(vendor) : [])
     if (!notices.includes(`## ${folder} `)) fail(`THIRD-PARTY-NOTICES.md does not cover viewer/src/vendor/${folder}; add it to COPIED in scripts/build-notices.mts and run it`);
 
-  const lucideName = (icon) => icon[0].toLowerCase() + icon.slice(1);
+  const lucideName = (icon: string) => icon[0].toLowerCase() + icon.slice(1);
   const viewerTags = Object.fromEntries(
-    [...readFileSync(join(root, "viewer/src/lib/meta.ts"), "utf8").matchAll(/^\s+([A-Z]+): \{ color: "(#[0-9a-f]{6})", icon: (\w+) \}/gm)].map(([, tag, color, icon]) => [tag, `${color} ${lucideName(icon)}`]),
+    [...readFileSync(join(root, "viewer/src/lib/meta.ts"), "utf8").matchAll(/^\s+([A-Z]+): \{ color: "(#[0-9a-f]{6})", icon: (\w+) \}/gm)].map(([, tag, color, icon]): [string, string] => [tag, `${color} ${lucideName(icon)}`]),
   );
-  const inboxTags = Object.fromEntries([...readFileSync(join(root, "skill/scripts/daemon.mts"), "utf8").matchAll(/^\s+([A-Z]+): \["(#[0-9a-f]{6})", "(\w+)"\]/gm)].map(([, tag, color, icon]) => [tag, `${color} ${icon}`]));
+  const inboxTags = Object.fromEntries([...readFileSync(join(root, "skill/scripts/daemon.mts"), "utf8").matchAll(/^\s+([A-Z]+): \["(#[0-9a-f]{6})", "(\w+)"\]/gm)].map(([, tag, color, icon]): [string, string] => [tag, `${color} ${icon}`]));
   if (Object.keys(viewerTags).length < 7 || Object.keys(inboxTags).length < 7) fail(`could not read both tag lists (viewer ${Object.keys(viewerTags).length}, inbox ${Object.keys(inboxTags).length})`);
   for (const tag of new Set([...Object.keys(viewerTags), ...Object.keys(inboxTags)]))
     if (viewerTags[tag] !== inboxTags[tag]) fail(`the tag lists differ for ${tag}: viewer has ${viewerTags[tag] ?? "nothing"}, the inbox has ${inboxTags[tag] ?? "nothing"}`);
@@ -100,7 +125,7 @@ try {
   // The reader's settings: collect says nothing of subagent mode while it is off. The run on the second repo, below, has it on.
   if (collected.includes("Subagent mode")) fail("collect.mts speaks of subagent mode although the setting is off");
   if (/^Hooks? /m.test(collected)) fail("collect.mts printed a hook line for a repo without hooks");
-  const books = JSON.parse(readFileSync(join(repo, ".git/pr-report/feat-books/diff.json"), "utf8"));
+  const books = JSON.parse(readFileSync(join(repo, ".git/pr-report/feat-books/diff.json"), "utf8")) as DiffData;
   if (books.repo.avatar?.initials !== "AL" || books.repo.avatar.image !== null) fail(`acme-labs without a cached avatar should get initials AL: ${JSON.stringify(books.repo.avatar)}`);
   if (books.repo.web?.ownerUrl !== "https://github.com/acme-labs" || books.repo.web.forge !== "github") fail(`collect.mts did not find the repo's web links: ${JSON.stringify(books.repo.web)}`);
   if (books.branch.upstream !== null) fail("feat/books is not on the remote, but collect.mts says it is");
@@ -127,10 +152,10 @@ try {
   const told = edgeOut.match(/^Subagent mode: on .* Read (.+subagents\.md) before/m);
   if (!told || !existsSync(told[1])) fail("collect.mts does not tell the agent that subagent mode is on, or the file it names with the steps is not there");
   if (!edgeOut.includes("AWS access key [AKIA…(20 characters)]")) fail("collect.mts did not flag or mask a fake AWS key");
-  const edgeData = JSON.parse(readFileSync(join(tmp, "edge.json"), "utf8"));
+  const edgeData = JSON.parse(readFileSync(join(tmp, "edge.json"), "utf8")) as DiffData;
   if (!edgeData.repo.avatar?.image?.startsWith("data:image/png;base64,") || edgeData.repo.avatar.initials !== "EG")
     fail(`a cached avatar was not used: ${JSON.stringify(edgeData.repo.avatar).slice(0, 120)}`);
-  const edge = Object.fromEntries(edgeData.files.map((f) => [f.path, f]));
+  const edge = Object.fromEntries(edgeData.files.map((f): [string, DiffFile] => [f.path, f]));
   if (!edge["gen/api.js"]?.generated) fail("collect.mts did not mark a linguist-generated file as generated");
   if (!edge["big.txt"]?.tooLarge || edge["big.txt"].newContent !== null) fail("collect.mts did not leave out a file over the size limit");
   if (edge["naïve name.ts"]?.newContent !== "export const ok = true;\n") fail("collect.mts did not read a file with a space and accent in its name");
@@ -149,7 +174,7 @@ try {
     }),
   );
   const edgeBuilt = run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(tmp, "edge.json"), "--report", join(tmp, "edge-report.json"), "--out", join(tmp, "edge-out", "edge-r1.json")]);
-  const edgeContracts = JSON.parse(readFileSync(join(tmp, "edge-out", "edge-r1.json"), "utf8")).report.contracts;
+  const edgeContracts = (JSON.parse(readFileSync(join(tmp, "edge-out", "edge-r1.json"), "utf8")) as Bundle).report.contracts!;
   if (!edgeBuilt.includes('could not find "Nope"')) fail("build.mts did not drop a made-up contract name");
   if (edgeBuilt.includes('member "')) fail(`build.mts rejected a real contract member:\n${edgeBuilt}`);
   if (edgeContracts.map((c) => c.name).join() !== "Status,LIMIT,api") fail(`unexpected contracts after the build: ${edgeContracts.map((c) => c.name).join()}`);
@@ -159,7 +184,7 @@ try {
   // common name exists. "old" forked earlier, "feat-copy" holds every commit of feat, so neither counts.
   const basesRepo = join(tmp, "bases");
   mkdirSync(basesRepo, { recursive: true });
-  const at = (date, cmd) => `GIT_AUTHOR_DATE="${date}" GIT_COMMITTER_DATE="${date}" git -c user.name=t -c user.email=t@t ${cmd}`;
+  const at = (date: string, cmd: string) => `GIT_AUTHOR_DATE="${date}" GIT_COMMITTER_DATE="${date}" git -c user.name=t -c user.email=t@t ${cmd}`;
   run(bash, ["-c", [
     `cd "${basesRepo}" && git init -q -b release`,
     `echo one > a.txt && git add a.txt && ${at("2024-01-01T10:00:00", "commit -q -m one")}`,
@@ -176,7 +201,7 @@ try {
 
   // Saved checks: worked out once per repo and reused, skipped when nothing they cover changed, out
   // of date when the file they came from changes or a command is missing.
-  const checks = (...a) => run("node", [join(root, "skill/scripts/checks.mts"), "--repo", edgeRepo, ...a], home);
+  const checks = (...a: string[]) => run("node", [join(root, "skill/scripts/checks.mts"), "--repo", edgeRepo, ...a], home);
   const savedRun = join(tmp, "saved-checks.json");
   if (!checks("--plan").includes("No checks for this repo yet")) fail("checks.mts --plan did not ask for checks in a repo without any");
   writeFileSync(join(edgeRepo, "package.json"), '{"scripts":{"lint":"echo ok"}}\n');
@@ -202,7 +227,8 @@ try {
   try {
     checks("--run", "x=echo ran", "--out", savedRun);
     fail("checks ran another author's code without --trust");
-  } catch (e) {
+  } catch (error) {
+    const e = error as ExecError;
     if (e.status !== 4 || !e.stdout.includes("Not started")) fail(`checks without --trust did not refuse clearly: ${e.stdout}`);
   }
   if (!checks("--run", "x=echo ran", "--out", savedRun, "--trust").includes("Project checks: 1 passed")) fail("--trust did not start the checks");
@@ -229,11 +255,11 @@ try {
 
   // A draft: the facts before the agent's report, every file listed, nothing that needs the report.
   run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--draft", "--out", join(tmp, "draft.json")]);
-  const draft = JSON.parse(readFileSync(join(tmp, "draft.json"), "utf8"));
+  const draft = JSON.parse(readFileSync(join(tmp, "draft.json"), "utf8")) as Bundle;
   const listed = draft.report.sections.flatMap((s) => s.files).length;
   if (!draft.draft || draft.prDescription !== null || listed !== draft.diff.files.length) fail(`a draft build is not a draft of every file: ${JSON.stringify({ draft: draft.draft, listed })}`);
 
-  const bundle = JSON.parse(readFileSync(join(root, "samples/bundle.json"), "utf8"));
+  const bundle = JSON.parse(readFileSync(join(root, "samples/bundle.json"), "utf8")) as Bundle;
   const missingIcons = bundle.diff.files.filter((f) => !bundle.fileIcons?.byPath[f.path]);
   if (missingIcons.length) fail(`no file icon for ${missingIcons.length} files (run node scripts/build-icons.mts)`);
 
@@ -255,7 +281,7 @@ try {
   };
   for (let i = 0; i < 50 && !started(); i++) await sleep(50);
   run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--checks", bgChecks, "--out", join(tmp, "bg.json")]);
-  const bgRun = JSON.parse(readFileSync(join(tmp, "bg.json"), "utf8")).projectChecks;
+  const bgRun = (JSON.parse(readFileSync(join(tmp, "bg.json"), "utf8")) as Bundle).projectChecks;
   if (bgRun?.status !== "running" || bgRun.pending.join() !== "slow" || bgRun.file !== bgChecks) fail(`build.mts did not record the running checks: ${JSON.stringify(bgRun)}`);
   const waited = run("node", [join(root, "skill/scripts/checks.mts"), "--repo", repo, "--out", bgChecks, "--wait"]);
   if (!waited.includes("Project checks: 1 passed")) fail(`checks.mts --wait did not print the finished results:\n${waited}`);
@@ -264,7 +290,8 @@ try {
   updateFlow();
   await concurrentStart();
   await hooksFlow();
-} catch (e) {
+} catch (error) {
+  const e = error as ExecError;
   fail(e.stderr?.toString() || e.message);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
@@ -273,7 +300,7 @@ try {
 // ------------------------------------------------------------------ app size
 // The page's own scripts and styles load once and stay cached. Languages, themes and fonts load
 // separately when needed, so this budget catches a build that bundles them into the entry again.
-async function checkAppAssets(base, page) {
+async function checkAppAssets(base: string, page: string) {
   const ENTRY_BUDGET = 1_200_000;
   const urls = [...page.matchAll(/(?:src|href)="(\/app\/assets\/[^"]+\.(?:js|css))"/g)].map((m) => m[1]);
   if (!urls.length) return fail("the review page links no app scripts");
@@ -308,14 +335,14 @@ async function daemonFlow() {
     PR_REPORT_AGENT: "claude-code",
   };
   const reviewDir = join(tmp, "review");
-  const review = (...args) => run("node", [join(root, "skill/scripts/review.mts"), ...args], env);
+  const review = (...args: string[]) => run("node", [join(root, "skill/scripts/review.mts"), ...args], env);
   // For a command the daemon answers only after asking the GitHub stub, which lives in this process:
   // a blocking call would keep the stub from answering.
-  const reviewAsync = (...args) =>
-    new Promise((resolveOut, reject) =>
+  const reviewAsync = (...args: string[]) =>
+    new Promise<string>((resolveOut, reject) =>
       execFile("node", [join(root, "skill/scripts/review.mts"), ...args], { cwd: root, encoding: "utf8", env: { ...process.env, ...env } }, (e, stdout) => (e ? reject(e) : resolveOut(stdout))),
     );
-  const build = (out) =>
+  const build = (out: string) =>
     run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
   try {
     build(join(reviewDir, "round1.json"));
@@ -323,10 +350,10 @@ async function daemonFlow() {
     const id = opened.match(/Review id: (\S+)/)?.[1];
     if (!id) return fail(`review.mts open printed no id:\n${opened}`);
 
-    const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8"));
+    const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")) as DaemonFile;
     const base = `http://127.0.0.1:${port}`;
     const page = await (await fetch(`${base}/r/${id}`)).text();
-    const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)[1]);
+    const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)![1]) as ReviewConfig;
     if (!page.includes("<title>feat/books · library</title>")) fail("the review page does not carry the branch · repo title");
     if (page.length > 20_000) fail(`the review page is ${page.length} bytes; it should load the app and its data, not carry them`);
     await checkAppAssets(base, page);
@@ -335,23 +362,24 @@ async function daemonFlow() {
     try {
       review("open", "--report", join(reviewDir, "missing.json"));
       fail("review.mts open with a missing report did not fail");
-    } catch (e) {
+    } catch (error) {
+      const e = error as ExecError;
       const err = String(e.stderr ?? "");
       if (e.status !== 1 || !err.includes("report file not found") || err.includes("Assertion failed") || err.includes("    at ")) fail(`a failing review.mts command did not end cleanly (exit ${e.status}):\n${err}`);
     }
-    const post = (path, body) =>
+    const post = (path: string, body: unknown) =>
       fetch(`${base}${config.api}/${path}`, { method: "POST", headers: { "x-review-token": config.token, "content-type": "application/json" }, body: JSON.stringify(body) });
-    const state = async () => {
+    const state = async (): Promise<LiveState> => {
       const res = await fetch(`${base}/api/events?token=${config.token}&watch=${id}`, { signal: AbortSignal.timeout(2000) });
-      const reader = res.body.getReader();
+      const reader = res.body!.getReader();
       const { value } = await reader.read();
       reader.cancel();
-      return JSON.parse(new TextDecoder().decode(value).match(/data: (.*)/)[1]);
+      return JSON.parse(new TextDecoder().decode(value).match(/data: (.*)/)![1]);
     };
     // The start of the stream as text, for the events around the states.
     const streamStart = async () => {
       const res = await fetch(`${base}/api/events?token=${config.token}&watch=${id}`, { signal: AbortSignal.timeout(2000) });
-      const reader = res.body.getReader();
+      const reader = res.body!.getReader();
       let text = "";
       for (let i = 0; i < 3 && !text.includes("event: daemon"); i++) text += new TextDecoder().decode((await reader.read()).value);
       reader.cancel();
@@ -361,7 +389,7 @@ async function daemonFlow() {
     // Who is reading: the page token is required, and without a gh login the answer is the repo's git identity.
     const meUrl = `${base}/api/me?${new URLSearchParams({ host: "github.com", forge: "github", root: repo })}`;
     if ((await fetch(meUrl)).status !== 401) fail("the identity endpoint answers without the page token");
-    const me = await (await fetch(meUrl, { headers: { "x-review-token": config.token } })).json();
+    const me = (await (await fetch(meUrl, { headers: { "x-review-token": config.token } })).json()) as { source: string; name: string | null; avatar?: { initials: string } };
     if (me.source !== "git" || me.name !== "Sample Dev" || me.avatar?.initials !== "SD") fail(`the identity did not fall back to the repo's git config: ${JSON.stringify(me)}`);
     // The stream introduces the daemon (version, uptime) after the review states, so a first-chunk reader still gets a state first.
     const hello = await streamStart();
@@ -370,21 +398,21 @@ async function daemonFlow() {
     // Purging the cache from the page removes what is under cache/ and nothing else.
     mkdirSync(join(env.PR_REPORT_HOME, "cache", "avatars"), { recursive: true });
     writeFileSync(join(env.PR_REPORT_HOME, "cache", "avatars", "stale"), "x");
-    const purged = await (await fetch(`${base}/api/cache/purge`, { method: "POST", headers: { "x-review-token": config.token } })).json();
+    const purged = (await (await fetch(`${base}/api/cache/purge`, { method: "POST", headers: { "x-review-token": config.token } })).json()) as { removed: number };
     if (!(purged.removed >= 1) || existsSync(join(env.PR_REPORT_HOME, "cache")) || !existsSync(join(env.PR_REPORT_HOME, "daemon.json"))) fail("purging the cache did not remove exactly the cache folder");
     // The settings the agent reads: behind the page token, off until changed, and saved to the file the scripts read.
     const settingsUrl = `${base}/api/settings`;
     const asPage = { "x-review-token": config.token, "content-type": "application/json" };
     if ((await fetch(settingsUrl)).status !== 401) fail("the settings endpoint answers without the page token");
-    const settingsBefore = await (await fetch(settingsUrl, { headers: asPage })).json();
-    const settingsAfter = await (await fetch(settingsUrl, { method: "POST", headers: asPage, body: JSON.stringify({ subagents: true, other: "x" }) })).json();
-    const settingsOnDisk = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "settings.json"), "utf8"));
+    const settingsBefore = (await (await fetch(settingsUrl, { headers: asPage })).json()) as Record<string, unknown>;
+    const settingsAfter = (await (await fetch(settingsUrl, { method: "POST", headers: asPage, body: JSON.stringify({ subagents: true, other: "x" }) })).json()) as Record<string, unknown>;
+    const settingsOnDisk = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "settings.json"), "utf8")) as Record<string, unknown>;
     if (settingsBefore.subagents !== false || settingsAfter.subagents !== true || settingsOnDisk.subagents !== true || "other" in settingsOnDisk)
       fail(`the settings were not saved as sent: ${JSON.stringify({ settingsBefore, settingsAfter, settingsOnDisk })}`);
     if ((await fetch(settingsUrl, { method: "POST", headers: asPage, body: "{" })).status !== 400) fail("the settings endpoint takes a body that is not JSON");
     // A value of the wrong type in the file counts as not set.
     writeFileSync(join(env.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: "yes" }));
-    if ((await (await fetch(settingsUrl, { headers: asPage })).json()).subagents !== false) fail("a setting of the wrong type in settings.json is taken for on");
+    if (((await (await fetch(settingsUrl, { headers: asPage })).json()) as Record<string, unknown>).subagents !== false) fail("a setting of the wrong type in settings.json is taken for on");
 
     // The page is told which agent it talks to: in its config, and live from whoever called last.
     if (config.agent?.name !== "Claude" || (await state()).agent?.product !== "Claude Code") fail(`the page does not know the agent that opened the review: ${JSON.stringify(config.agent)}`);
@@ -398,7 +426,7 @@ async function daemonFlow() {
 
     // The inbox reloads on state events; the first one on connect must match what it shows, or it reloads forever.
     const inbox = await (await fetch(`${base}/`)).text();
-    const shown = JSON.parse(inbox.match(/const shown=(\{.*?\});/)?.[1] ?? "{}");
+    const shown = JSON.parse(inbox.match(/const shown=(\{.*?\});/)?.[1] ?? "{}") as Record<string, string>;
     if (shown[id] !== (await state()).updatedAt) fail("the inbox would reload on the stream's first state event (reload loop)");
     if ((await state()).listening) fail("a review with no waiter counts as listened to");
     if (!/<span class="av" style="background:#[0-9a-f]{6}">AL<\/span>/.test(inbox)) fail("the inbox does not show the owner's initials");
@@ -407,7 +435,7 @@ async function daemonFlow() {
     if (!/<span class="tag" style="background:#[0-9a-f]{6}"><svg /.test(inbox)) fail("the inbox tag has no color or icon");
     if (!inbox.includes('name="q"') || !(await (await fetch(`${base}/fuse.mjs`)).text()).includes("Fuse.js")) fail("the inbox search or its Fuse.js file is missing");
 
-    const round1 = await (await fetch(`${base}${config.api}/bundle?round=1`, { headers: { "x-review-token": config.token } })).json();
+    const round1 = (await (await fetch(`${base}${config.api}/bundle?round=1`, { headers: { "x-review-token": config.token } })).json()) as Bundle;
     if (!round1?.report?.title) fail("the daemon did not return round 1's report data as an object");
     await post("presence", { tab: "t1" });
     // The agent rebuilds round 1 (for example after the checks end) and publishes it again.
@@ -415,7 +443,7 @@ async function daemonFlow() {
     const again = review("open", "--report", join(reviewDir, "round1.json"));
     if (!again.includes("Open in 1 tab")) fail("an open tab was not counted");
     if (!again.includes("already published")) fail("publishing round 1 again did not say it was already published");
-    const rebuiltAt = JSON.parse(readFileSync(join(reviewDir, "round1.json"), "utf8")).builtAt;
+    const rebuiltAt = (JSON.parse(readFileSync(join(reviewDir, "round1.json"), "utf8")) as Bundle).builtAt;
     if ((await state()).roundBuiltAt !== rebuiltAt) fail("open pages are not told that round 1 was published again");
 
     // Code edited after the build: the page is told, and the reviewer can ask the agent for an update.
@@ -423,7 +451,7 @@ async function daemonFlow() {
     const original = readFileSync(edited, "utf8");
     writeFileSync(edited, `${original}// edited after the report\n`);
     await post("presence", { tab: "t1" });
-    const driftIs = async (test) => {
+    const driftIs = async (test: (drift: LiveState["drift"]) => boolean) => {
       for (let i = 0; i < 30; i++) {
         if (test((await state()).drift)) return true;
         await sleep(200);
@@ -440,14 +468,14 @@ async function daemonFlow() {
     // requests, so an unchanged answer is a 304 that costs nothing against the rate limit.
     await post("presence", { tab: "t1" });
     const polls = () => github.requests.filter((q) => q.path === "/repos/acme-labs/library/pulls");
-    const pollsUntil = async (test, tries = 40) => {
+    const pollsUntil = async (test: () => boolean, tries = 40) => {
       for (let i = 0; i < tries; i++) {
         if (test()) return true;
         await sleep(200);
       }
       return false;
     };
-    const prIs = async (test) => {
+    const prIs = async (test: (pr: LiveState["pr"]) => boolean) => {
       for (let i = 0; i < 40; i++) {
         if (test((await state()).pr)) return true;
         await sleep(200);
@@ -487,10 +515,10 @@ async function daemonFlow() {
     const mergedAt = polls().length;
     await sleep(1500);
     if (polls().length !== mergedAt) fail("the daemon kept polling GitHub after the pull request was merged");
-    if (JSON.parse(readFileSync(join(reviewDir, "review-state.json"), "utf8")).pr?.state !== "MERGED") fail("the pull request is not saved with the review's state");
+    if ((JSON.parse(readFileSync(join(reviewDir, "review-state.json"), "utf8")) as Pick<LiveState, "pr">).pr?.state !== "MERGED") fail("the pull request is not saved with the review's state");
 
     // Project checks stream into the page as they run, finish or crash.
-    const until = async (test) => {
+    const until = async (test: (checks: LiveState["checks"]) => boolean) => {
       for (let i = 0; i < 40; i++) {
         const s = await state();
         if (test(s.checks)) return s.checks;
@@ -505,7 +533,7 @@ async function daemonFlow() {
     if (!(await until((c) => c?.status === "done" && c.results[0]?.status === "passed"))) fail("a finished check did not reach the page state");
     spawn("node", [checksScript, "--repo", repo, "--run", "hang=sleep 3"], { stdio: "ignore" });
     await until((c) => c?.status === "running");
-    process.kill(JSON.parse(readFileSync(join(repo, ".git/pr-report/feat-books/checks.json"), "utf8")).pid, "SIGKILL");
+    process.kill((JSON.parse(readFileSync(join(repo, ".git/pr-report/feat-books/checks.json"), "utf8")) as { pid: number }).pid, "SIGKILL");
     if (!(await until((c) => c?.status === "stopped" && c.pending.join() === "hang"))) fail("a crashed check run was not shown as stopped");
 
     await post("questions", { id: "q_1", target: { type: "report" }, text: "Why two migrations?" });
@@ -558,15 +586,15 @@ async function daemonFlow() {
     const waiterExit = new Promise((resolveExit) => waiter.on("exit", resolveExit));
     await sleep(500);
     if (!(await state()).listening) fail("a running waiter does not count as listening");
-    const daemonPid = () => JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")).pid;
+    const daemonPid = () => (JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")) as DaemonFile).pid;
     const oldPid = daemonPid();
     const goodbye = await fetch(`${base}/api/events?token=${config.token}&watch=${id}`);
-    const goodbyeReader = goodbye.body.getReader();
+    const goodbyeReader = goodbye.body!.getReader();
     review("stop");
     // The daemon tells open pages it is going away, so they can show "restarting" rather than "unavailable".
     let heard = "";
     for (let i = 0; i < 5 && !heard.includes("event: shutdown"); i++) {
-      const chunk = await Promise.race([goodbyeReader.read(), sleep(1000).then(() => ({ done: true }))]).catch(() => ({ done: true }));
+      const chunk: { done: boolean; value?: Uint8Array } = await Promise.race([goodbyeReader.read(), sleep(1000).then(() => ({ done: true }))]).catch(() => ({ done: true }));
       if (chunk.done) break;
       heard += new TextDecoder().decode(chunk.value);
     }
@@ -624,15 +652,15 @@ async function daemonFlow() {
 function updateFlow() {
   const dir = join(tmp, "rounds");
   mkdirSync(dir, { recursive: true });
-  const collect = (...a) => run("node", [join(root, "skill/scripts/collect.mts"), "--repo", repo, "--no-fetch", "--out", join(dir, "diff.json"), ...a]);
-  const build = (out) => run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(dir, "diff.json"), "--report", join(dir, "report.json"), "--out", join(dir, out)]);
-  const readReport = () => JSON.parse(readFileSync(join(dir, "report.json"), "utf8"));
-  const service = (r) => r.sections.find((s) => s.kind === "backend");
+  const collect = (...a: string[]) => run("node", [join(root, "skill/scripts/collect.mts"), "--repo", repo, "--no-fetch", "--out", join(dir, "diff.json"), ...a]);
+  const build = (out: string) => run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(dir, "diff.json"), "--report", join(dir, "report.json"), "--out", join(dir, out)]);
+  const readReport = () => JSON.parse(readFileSync(join(dir, "report.json"), "utf8")) as Report;
+  const service = (r: Report) => r.sections.find((s) => s.kind === "backend")!;
 
   collect();
   writeFileSync(join(dir, "report.json"), readFileSync(join(root, "samples/report.json")));
   build("r1.json");
-  const round1 = JSON.parse(readFileSync(join(dir, "r1.json"), "utf8"));
+  const round1 = JSON.parse(readFileSync(join(dir, "r1.json"), "utf8")) as Bundle;
   writeFileSync(join(dir, "review-1.json"), JSON.stringify({ version: 1, round: 1, branch: "feat/books", headSha: round1.diff.branch.headSha, snapshot: round1.diff.branch.snapshot, comments: [] }));
   const description = readFileSync(join(dir, "pr-description.md"), "utf8");
 
@@ -646,15 +674,15 @@ function updateFlow() {
   if (!collected.includes("Since round 1, which the reviewer sent: 1 file changed")) fail(`collect --update did not list the change since round 1:\n${collected}`);
   if (!collected.includes("apps/api/src/books/book.service.ts:21")) fail("collect --update did not ask to check a reference on a changed line");
   const carried = readReport();
-  const notes = service(carried).files.find((f) => f.path.endsWith("book.service.ts")).lineNotes.map((n) => n.line);
+  const notes = service(carried).files.find((f) => f.path.endsWith("book.service.ts"))!.lineNotes!.map((n) => n.line);
   if (notes.join() !== "8,21") fail(`line notes were not moved with their lines: ${notes.join()}`);
   if (!carried.refsAt) fail("the carried report does not record which code its references point into");
 
   if (!collect("--update").includes("0 line references moved")) fail("collecting the next round twice moved the references twice");
-  if (service(readReport()).files.find((f) => f.path.endsWith("book.service.ts")).lineNotes[0].line !== 8) fail("a second collect changed the moved references");
+  if (service(readReport()).files.find((f) => f.path.endsWith("book.service.ts"))!.lineNotes![0].line !== 8) fail("a second collect changed the moved references");
 
   build("r2.json");
-  const round2 = JSON.parse(readFileSync(join(dir, "r2.json"), "utf8"));
+  const round2 = JSON.parse(readFileSync(join(dir, "r2.json"), "utf8")) as Bundle;
   if (round2.round !== 2 || round2.diff.files.length !== round1.diff.files.length) fail("round 2 does not show the whole branch");
   if (round2.diff.sinceRound?.round !== 1 || round2.diff.sinceRound.files.map((f) => f.path).join() !== "apps/api/src/books/book.service.ts") fail("round 2 does not carry the change since round 1");
   if (!round2.prDescription || readFileSync(join(dir, "pr-description.md"), "utf8") === description) fail("a whole-branch round did not rewrite the PR description");
@@ -664,7 +692,7 @@ function updateFlow() {
   writeFileSync(file, `${readFileSync(file, "utf8")}\n// three\n`);
   collect("--since", "last");
   const partial = build("r3.json");
-  if (JSON.parse(readFileSync(join(dir, "r3.json"), "utf8")).prDescription !== null) fail("a --since report carried a PR description");
+  if ((JSON.parse(readFileSync(join(dir, "r3.json"), "utf8")) as Bundle).prDescription !== null) fail("a --since report carried a PR description");
   if (readFileSync(join(dir, "pr-description.md"), "utf8") !== whole || !partial.includes("PR description not updated")) fail("a --since report overwrote the PR description");
   // Another branch in the same checkout gets its own report folder, so their rounds stay apart.
   run("git", ["-C", repo, "checkout", "-q", "-b", "feat/other"]);
@@ -685,7 +713,8 @@ async function concurrentStart() {
   utimesSync(join(home, "daemon.lock"), old, old);
   const env = { ...process.env, PR_REPORT_HOME: home, PR_REPORT_PORT: String(5000 + Math.floor(Math.random() * 300)) };
   const daemons = Array.from({ length: 6 }, () => {
-    const child = spawn("node", [join(root, "skill/scripts/daemon.mts")], { env, stdio: ["ignore", "pipe", "pipe"] });
+    // `output` collects what the daemon prints, on the child itself.
+    const child = spawn("node", [join(root, "skill/scripts/daemon.mts")], { env, stdio: ["ignore", "pipe", "pipe"] }) as ChildProcessByStdio<null, Readable, Readable> & { output: string };
     child.output = "";
     child.stdout.on("data", (d) => (child.output += d));
     child.stderr.on("data", (d) => (child.output += d));
@@ -694,7 +723,7 @@ async function concurrentStart() {
   for (let i = 0; i < 60 && daemons.filter((d) => d.exitCode === null).length > 1; i++) await sleep(100);
   await sleep(500);
   const running = daemons.filter((d) => d.exitCode === null);
-  const info = JSON.parse(readFileSync(join(home, "daemon.json"), "utf8"));
+  const info = JSON.parse(readFileSync(join(home, "daemon.json"), "utf8")) as DaemonFile;
   if (running.length !== 1 || running[0].pid !== info.pid) fail(`${running.length} daemons kept running after 6 started at once:\n${daemons.map((d) => d.output).join("")}`);
   const crashed = daemons.find((d) => /Error|Assertion/.test(d.output));
   if (crashed) fail(`a daemon crashed when 6 started at once:\n${crashed.output}`);
@@ -726,11 +755,11 @@ async function hooksFlow() {
     ].join("\n"),
   );
   const logHook = `node "${logger.replaceAll("\\", "/")}"`;
-  const setHooks = (hooks) => {
+  const setHooks = (hooks: RepoConfig["hooks"]) => {
     const file = join(hooksRepo, ".pr-report.json");
-    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), hooks }, null, 2));
+    writeFileSync(file, JSON.stringify({ ...(JSON.parse(readFileSync(file, "utf8")) as RepoConfig), hooks }, null, 2));
   };
-  const ran = (hook) => (existsSync(log) ? readFileSync(log, "utf8") : "").split("\n").filter((line) => line.startsWith(`${hook} `));
+  const ran = (hook: HookName) => (existsSync(log) ? readFileSync(log, "utf8") : "").split("\n").filter((line) => line.startsWith(`${hook} `));
   const env = {
     PR_REPORT_HOME: join(tmp, "hooks-home"),
     PR_REPORT_PORT: String(5400 + Math.floor(Math.random() * 300)),
@@ -740,9 +769,9 @@ async function hooksFlow() {
     PR_REPORT_AGENT: "claude-code",
     HOOK_LOG: log,
   };
-  const collect = (extra, ...a) => run("node", [join(root, "skill/scripts/collect.mts"), "--repo", hooksRepo, "--no-fetch", ...a], { ...env, ...extra });
-  const review = (extra, ...a) => run("node", [join(root, "skill/scripts/review.mts"), ...a], { ...env, ...extra });
-  const build = (...a) => run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(data, "diff.json"), ...a]).match(/Wrote (\S+)/)[1];
+  const collect = (extra: NodeJS.ProcessEnv, ...a: string[]) => run("node", [join(root, "skill/scripts/collect.mts"), "--repo", hooksRepo, "--no-fetch", ...a], { ...env, ...extra });
+  const review = (extra: NodeJS.ProcessEnv, ...a: string[]) => run("node", [join(root, "skill/scripts/review.mts"), ...a], { ...env, ...extra });
+  const build = (...a: string[]) => run("node", [join(root, "skill/scripts/build.mts"), "--diff", join(data, "diff.json"), ...a]).match(/Wrote (\S+)/)![1];
 
   try {
     // preRun: its output goes to the agent, it knows the branch and the base, and collect goes on.
@@ -755,7 +784,8 @@ async function hooksFlow() {
     try {
       collect({ HOOK_FAIL: "preRun" });
       fail("a failing preRun hook did not stop collect.mts");
-    } catch (e) {
+    } catch (error) {
+      const e = error as ExecError;
       if (e.status !== 1 || !e.stdout.includes("preRun ran") || !e.stderr.includes("the preRun hook in .pr-report.json failed")) fail(`a failing preRun did not stop collect clearly:\n${e.stdout}${e.stderr}`);
     }
     setHooks({ preRun: "sleep 20" });
@@ -763,7 +793,8 @@ async function hooksFlow() {
     try {
       collect({ PR_REPORT_HOOK_SECONDS: "1" });
       fail("a preRun hook past its time limit did not stop collect.mts");
-    } catch (e) {
+    } catch (error) {
+      const e = error as ExecError;
       if (!e.stdout.includes("Hook preRun timed out after 1s") || Date.now() - started > 10_000) fail(`a slow preRun was not stopped at its time limit:\n${e.stdout}`);
     }
     setHooks({ preRun: logHook, postRun: logHook, onApproved: logHook });
@@ -780,9 +811,9 @@ async function hooksFlow() {
     if (ran("postRun").length !== 1) fail("postRun ran again when the same round was published again");
 
     // onApproved: the reviewer sends the round with no comments. It runs once, in the waiter, and a later resume does not run it again.
-    const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8"));
+    const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")) as DaemonFile;
     const page = await (await fetch(`http://127.0.0.1:${port}/r/${id}`)).text();
-    const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)[1]);
+    const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)![1]) as ReviewConfig;
     const approve = () =>
       fetch(`http://127.0.0.1:${port}${config.api}/submit`, {
         method: "POST",
@@ -790,17 +821,17 @@ async function hooksFlow() {
         body: JSON.stringify({ comments: [] }),
       });
     await approve();
-    const waited = review({}, "wait", "--id", id);
+    const waited = review({}, "wait", "--id", id!);
     if (!waited.includes("Hook onApproved:") || !waited.includes("The project's onApproved hook ran")) fail(`the waiter did not run onApproved when the review was done:\n${waited}`);
-    review({}, "resume", "--id", id);
+    review({}, "resume", "--id", id!);
     if (ran("onApproved").join() !== "onApproved feat/books main 1 report url") fail(`onApproved did not run exactly once with the round's files: ${ran("onApproved").join(" | ")}`);
 
     // The next round: postRun again, and with no waiter running, resume picks up the approval. Asked twice, it runs onApproved once.
     review({}, "open", "--report", build("--report", join(data, "report.json")));
     if (ran("postRun").at(-1) !== "postRun feat/books main 2 report url") fail(`postRun did not run for round 2: ${ran("postRun").join(" | ")}`);
     await approve();
-    const resumed = review({}, "resume", "--id", id);
-    review({}, "resume", "--id", id);
+    const resumed = review({}, "resume", "--id", id!);
+    review({}, "resume", "--id", id!);
     if (!resumed.includes("Hook onApproved:") || ran("onApproved").length !== 2) fail(`resume did not run onApproved exactly once for round 2 (${ran("onApproved").length} runs in all):\n${resumed}`);
 
     // The checks' trust rule: no hooks while the branch has a commit by someone not trusted, and none without a base.
@@ -816,7 +847,8 @@ async function hooksFlow() {
     try {
       collect({}, "--base", "no-such-branch");
       fail("collect.mts went on with a base branch that does not exist");
-    } catch (e) {
+    } catch (error) {
+      const e = error as ExecError;
       if (!e.stdout.includes("Hooks skipped (preRun): the base branch no-such-branch was not found") || ran("preRun").length !== before + 1) fail(`hooks ran without a base to check the authors against:\n${e.stdout}`);
     }
     console.log("hooks: preRun output and variables, a failing and a slow preRun, postRun once a round with only a warning on failure, onApproved once, and the trust rule all worked");

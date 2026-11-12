@@ -77,7 +77,7 @@ The report data is written to `<git folder>/pr-report/<branch>/` (usually `.git/
 | `skill/agents.json` | The agents pr-report knows by name, and how to recognize them |
 | `skill/style-guide.md` | How report text is written |
 | `skill/schema/types.ts` | The data contract, and the only list of allowed values |
-| `skill/scripts/` | `collect.mts`, `checks.mts`, `build.mts`, `review.mts` (agent CLI), `agent.mts` (which agent is calling) and `daemon.mts` (review server). No dependencies. |
+| `skill/scripts/` | `collect.mts`, `checks.mts`, `build.mts`, `review.mts` (agent CLI), `agent.mts` (which agent is calling) and `daemon.mts` (review server). TypeScript that Node runs as it is, with no dependencies. `tsconfig.scripts.json` typechecks them. |
 | `viewer/` | React source of the report page |
 | `fixtures/make-books-repo.sh` | Builds a fake repo with a "books" feature branch |
 | `samples/report.json` | A hand-written report for that fake repo |
@@ -99,7 +99,7 @@ The report data is written to `<git folder>/pr-report/<branch>/` (usually `.git/
 Commands:
 
 ```bash
-pnpm check    # typecheck, then run the whole pipeline on the fake repo; fails on any warning
+pnpm check    # typecheck the viewer and the scripts, then run the whole pipeline on the fake repo; fails on any warning
 pnpm check:browser  # drive a whole review through the page in headless Chrome (needs Google Chrome)
 pnpm dev      # viewer with live reload, using the sample data (run pnpm check once first)
 pnpm build    # build the viewer: skill/assets/app/ (served by the daemon) and skill/assets/viewer.html (standalone)

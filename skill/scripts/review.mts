@@ -21,9 +21,44 @@ import { existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { CommentTarget, LiveQuestion, PrState, ReviewComment } from "../schema/types.ts";
 import { AGENT_HEADER, detectAgent, encodeAgent } from "./agent.mts";
 import { runReportHooks } from "./hooks.mts";
 import { shellPath } from "./repo.mts";
+
+// daemon.json, which the daemon writes when it starts: where it listens and its admin token.
+type DaemonInfo = { port: number; pid: number; version: string; adminToken: string; startedAt: string };
+// What GET /api/health answers.
+type Health = { ok: boolean; version: string; pid: number };
+// A review's phase in the daemon.
+type Phase = "reviewing" | "sent" | "planning" | "working" | "done";
+// A pull request as the daemon follows it (prFrom in daemon.mts).
+type FollowedPr = { number: number; url: string; title: string | null; state: PrState; base: string | null; mergedAt: string | null; checkedAt: string };
+// The reviewer's decision on the agent's plan. `kinds` maps a step's index to the kind the reviewer chose for it.
+type PlanDecision = { decision: "approve" | "changes"; note: string | null; kinds: Record<string, string>; at: string };
+// What the reviewer did, as the daemon queues it (pushEvent in daemon.mts). A question's target is read for `fix`, which only some targets have.
+type ReviewEvent =
+  | { type: "question"; questionId: string; question: LiveQuestion & { target: { fix?: string } } }
+  | { type: "review-submitted"; round: number; file: string; count: number }
+  | { type: "plan-decision"; decision: PlanDecision }
+  | { type: "round-finished"; round: number; count: number }
+  | { type: "refresh"; round: number; files: string[]; commits: number };
+// The review an event belongs to, as next-event sends it.
+type EventReview = { id: string; round: number; dir: string };
+// What GET /api/r/<id>/next-event answers when the reviewer did something.
+type NextEvent = { event: ReviewEvent; review: EventReview };
+// What GET /api/r/<id>/resume answers: the event a lost session never handled, if any, and where the round stands.
+type Resumed = { event: ReviewEvent | null; review: EventReview & { phase: Phase; file: string; comments: number; open: ReviewComment[] } };
+// What GET /api/reviews answers: liveState in daemon.mts with each review's folder and page URL, only the fields read here.
+type ReviewList = { reviews: { id: string; branch: string; dir: string; round: number; phase: Phase; updatedAt: string; url: string; pr: FollowedPr | null }[] };
+// What POST /api/reviews answers: the round just published.
+type Published = { id: string; round: number; republished: boolean; firstReal: boolean; url: string; tabs: number; dir: string };
+// What POST /api/r/<id>/status answers: whether that status finished the round.
+type StatusSet = { ok: true; finished: boolean; round: number };
+// What POST /api/r/<id>/pr answers: the pull request the page follows now.
+type PrSet = { pr: FollowedPr };
+// The plan file the agent wrote; only its steps are counted here.
+type PlanFile = { steps: unknown[] };
 
 const here = dirname(fileURLToPath(import.meta.url));
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
@@ -34,7 +69,7 @@ const daemonFile = join(HOME, "daemon.json");
 const expectedVersion = () => createHash("sha1").update(readFileSync(daemonScript)).digest("hex").slice(0, 12);
 
 const [command, ...rest] = process.argv.slice(2);
-const args = {};
+const args: Record<string, string | true> = {};
 for (let i = 0; i < rest.length; i++) {
   const key = rest[i].replace(/^--/, "");
   if (rest[i + 1] === undefined || rest[i + 1].startsWith("--")) args[key] = true;
@@ -45,45 +80,45 @@ for (let i = 0; i < rest.length; i++) {
 // every agent on the machine and cannot know by itself.
 const agent = detectAgent({ id: typeof args.agent === "string" ? args.agent : undefined, name: typeof args["agent-name"] === "string" ? args["agent-name"] : undefined });
 
-const readJson = (file) => {
+const readJson = (file: string): unknown => {
   try {
     return JSON.parse(readFileSync(file, "utf8"));
   } catch {
     return null;
   }
 };
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const parseRef = (value) => {
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const parseRef = (value: string | true | undefined) => {
   if (!value || value === true) return undefined;
   const [path, line] = String(value).split(":");
   return { path, line: line ? Number(line) : undefined };
 };
-const textArg = () => (args["text-file"] ? readFileSync(args["text-file"], "utf8") : typeof args.text === "string" ? args.text : null);
+const textArg = () => (args["text-file"] ? readFileSync(args["text-file"] as string, "utf8") : typeof args.text === "string" ? args.text : null);
 // The default browser, detached so this command can end right away.
-const openInBrowser = (url) => {
+const openInBrowser = (url: string) => {
   const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
   spawn(opener, [url], { detached: true, stdio: "ignore" }).unref();
 };
 
-async function health(info) {
+async function health(info: DaemonInfo) {
   try {
     const res = await fetch(`http://127.0.0.1:${info.port}/api/health`, { headers: { "x-admin-token": info.adminToken }, signal: AbortSignal.timeout(1500) });
-    return res.ok ? await res.json() : null;
+    return res.ok ? ((await res.json()) as Health) : null;
   } catch {
     return null;
   }
 }
 
-async function ensureDaemon() {
-  let info = readJson(daemonFile);
+async function ensureDaemon(): Promise<DaemonInfo> {
+  let info = readJson(daemonFile) as DaemonInfo | null;
   let status = info && (await health(info));
   if (status && status.version !== expectedVersion()) {
     // The skill was updated: replace the running daemon with the new code.
-    await fetch(`http://127.0.0.1:${info.port}/api/shutdown`, { method: "POST", headers: { "x-admin-token": info.adminToken } }).catch(() => {});
-    for (let i = 0; i < 30 && (await health(info)); i++) await sleep(100);
+    await fetch(`http://127.0.0.1:${info!.port}/api/shutdown`, { method: "POST", headers: { "x-admin-token": info!.adminToken } }).catch(() => {});
+    for (let i = 0; i < 30 && (await health(info!)); i++) await sleep(100);
     status = null;
   }
-  if (status) return info;
+  if (status) return info!;
 
   mkdirSync(HOME, { recursive: true });
   const log = openSync(join(HOME, "daemon.log"), "a");
@@ -91,24 +126,25 @@ async function ensureDaemon() {
   spawn(process.execPath, [daemonScript], { detached: true, stdio: ["ignore", log, log], env: process.env, windowsHide: true }).unref();
   for (let i = 0; i < 80; i++) {
     await sleep(100);
-    info = readJson(daemonFile);
+    info = readJson(daemonFile) as DaemonInfo | null;
     if (info && info.version === expectedVersion() && (await health(info))) return info;
   }
   throw new Error(`The daemon did not start. See ${join(HOME, "daemon.log")}`);
 }
 
-async function api(info, method, path, body) {
+// `data` is the daemon's JSON answer, read as T; it is null on a 204, which only next-event sends.
+async function api<T = unknown>(info: DaemonInfo, method: string, path: string, body?: unknown): Promise<{ status: number; data: T }> {
   const res = await fetch(`http://127.0.0.1:${info.port}${path}`, {
     method,
     headers: { "x-admin-token": info.adminToken, ...(agent ? { [AGENT_HEADER]: encodeAgent(agent) } : {}), ...(body ? { "content-type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = res.status === 204 ? null : await res.json().catch(() => null);
-  if (!res.ok && res.status !== 204) throw new Error(data?.error ?? `HTTP ${res.status}`);
-  return { status: res.status, data };
+  if (!res.ok && res.status !== 204) throw new Error((data as { error?: string } | null)?.error ?? `HTTP ${res.status}`);
+  return { status: res.status, data: data as T };
 }
 
-const need = (...keys) => {
+const need = (...keys: string[]) => {
   const missing = keys.filter((k) => !args[k] || args[k] === true);
   if (missing.length) {
     console.log(`${command} needs ${missing.map((k) => `--${k}`).join(", ")}`);
@@ -116,7 +152,7 @@ const need = (...keys) => {
   }
 };
 
-const describe = (t) => {
+const describe = (t: CommentTarget) => {
   switch (t.type) {
     case "line":
       return `${t.path} ${t.start === t.end ? `line ${t.start}` : `lines ${t.start}-${t.end}`} (${t.side === "old" && t.round ? `the version round ${t.round} showed` : `${t.side} version`})`;
@@ -132,7 +168,7 @@ const describe = (t) => {
 const self = `node "${shellPath(join(here, "review.mts"))}"`;
 
 // What the reviewer did, and what the agent runs next. Printed by wait and resume.
-function explain(event, review) {
+function explain(event: ReviewEvent, review: EventReview) {
   if (event.type === "question") {
     const q = event.question;
     console.log(`Live question ${q.id} in review ${review.id}`);
@@ -173,11 +209,11 @@ function explain(event, review) {
 
 // The two events that end a review: sent with no comments, or a round whose comments are all handled
 // without a code change.
-const reviewDone = (event) => (event.type === "review-submitted" && event.count === 0) || event.type === "round-finished";
+const reviewDone = (event: ReviewEvent): event is Extract<ReviewEvent, { type: "review-submitted" | "round-finished" }> => (event.type === "review-submitted" && event.count === 0) || event.type === "round-finished";
 
 // Tells the agent what the reviewer did. A finished review runs the project's onApproved hook first
 // (hooks.mts), and the agent offers to open the pull request unless the hook took care of it.
-async function handOver(event, review, info) {
+async function handOver(event: ReviewEvent, review: EventReview, info: DaemonInfo) {
   explain(event, review);
   if (!reviewDone(event)) return;
   const hooks = await runReportHooks("onApproved", { dir: review.dir, round: event.round, url: `http://127.0.0.1:${info.port}/r/${review.id}` });
@@ -197,7 +233,7 @@ async function main() {
   if (command === "open") {
     need("report");
     const info = await ensureDaemon();
-    const { data } = await api(info, "POST", "/api/reviews", { report: resolve(args.report) });
+    const { data } = await api<Published>(info, "POST", "/api/reviews", { report: resolve(args.report as string) });
     console.log(`Review: ${data.url}`);
     console.log(`Review id: ${data.id} (round ${data.round})`);
     if (data.republished) console.log(`Round ${data.round} was already published. It now uses this build; comments, plan and progress are kept.`);
@@ -236,12 +272,12 @@ async function main() {
     for (let failures = 0; ; ) {
       let result;
       try {
-        result = await api(info, "GET", `/api/r/${encodeURIComponent(args.id)}/next-event`);
+        result = await api<NextEvent>(info, "GET", `/api/r/${encodeURIComponent(args.id)}/next-event`);
         failures = 0;
       } catch (e) {
         // The daemon restarts when the skill is updated. Start it again and keep waiting.
         if (++failures > 3) {
-          console.log(`The review daemon is not reachable (${e.message}). Run wait again in the background.`);
+          console.log(`The review daemon is not reachable (${(e as Error).message}). Run wait again in the background.`);
           return;
         }
         await sleep(1000);
@@ -257,10 +293,10 @@ async function main() {
     let id = typeof args.id === "string" ? args.id : null;
     if (!id) {
       // This branch's review: the newest one whose files are in this repo's git folder.
-      const git = (...a) => execFileSync("git", a, { cwd: resolve(typeof args.repo === "string" ? args.repo : "."), encoding: "utf8" }).trim();
+      const git = (...a: string[]) => execFileSync("git", a, { cwd: resolve(typeof args.repo === "string" ? args.repo : "."), encoding: "utf8" }).trim();
       const gitDir = resolve(git("rev-parse", "--show-toplevel"), git("rev-parse", "--git-dir"));
       const branch = git("rev-parse", "--abbrev-ref", "HEAD");
-      const { data } = await api(info, "GET", "/api/reviews");
+      const { data } = await api<ReviewList>(info, "GET", "/api/reviews");
       const mine = data.reviews.filter((r) => r.branch === branch && (r.dir === join(gitDir, "pr-report") || r.dir.startsWith(gitDir)));
       id = mine.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id;
       if (!id) {
@@ -268,7 +304,7 @@ async function main() {
         return;
       }
     }
-    const { data } = await api(info, "GET", `/api/r/${encodeURIComponent(id)}/resume`);
+    const { data } = await api<Resumed>(info, "GET", `/api/r/${encodeURIComponent(id)}/resume`);
     const { event, review } = data;
     console.log(`Picking up review ${review.id}, round ${review.round}: http://127.0.0.1:${info.port}/r/${review.id}\n`);
     if (event) await handOver(event, review, info);
@@ -295,14 +331,14 @@ async function main() {
     console.log(`Answered ${args.question}. The page shows it right away.`);
   } else if (command === "plan") {
     need("id", "file");
-    const plan = JSON.parse(readFileSync(args.file, "utf8"));
+    const plan = JSON.parse(readFileSync(args.file as string, "utf8")) as PlanFile;
     const info = await ensureDaemon();
     await api(info, "POST", `/api/r/${encodeURIComponent(args.id)}/plan`, plan);
     console.log(`Plan posted with ${plan.steps.length} steps. The reviewer can approve it in the page or in the chat.`);
   } else if (command === "status") {
     need("id", "comment", "status");
     const info = await ensureDaemon();
-    const { data } = await api(info, "POST", `/api/r/${encodeURIComponent(args.id)}/status`, {
+    const { data } = await api<StatusSet>(info, "POST", `/api/r/${encodeURIComponent(args.id)}/status`, {
       commentId: args.comment,
       status: args.status,
       text: textArg(),
@@ -316,16 +352,16 @@ async function main() {
   } else if (command === "pr") {
     need("id", "url");
     const info = await ensureDaemon();
-    const { data } = await api(info, "POST", `/api/r/${encodeURIComponent(args.id)}/pr`, { url: args.url, title: typeof args.title === "string" ? args.title : undefined });
+    const { data } = await api<PrSet>(info, "POST", `/api/r/${encodeURIComponent(args.id)}/pr`, { url: args.url, title: typeof args.title === "string" ? args.title : undefined });
     console.log(`The page shows pull request #${data.pr.number} (${data.pr.state.toLowerCase()}) and follows it: when it is merged on GitHub, the page says so.`);
   } else if (command === "list") {
     const info = await ensureDaemon();
-    const { data } = await api(info, "GET", "/api/reviews");
+    const { data } = await api<ReviewList>(info, "GET", "/api/reviews");
     if (!data.reviews.length) console.log("No reviews yet.");
     for (const r of data.reviews) console.log(`${r.id.padEnd(36)} round ${String(r.round).padEnd(3)} ${(r.pr?.state === "MERGED" ? "merged" : r.phase).padEnd(10)} ${r.url}`);
     console.log(`\nInbox: http://127.0.0.1:${info.port}/`);
   } else if (command === "stop") {
-    const info = readJson(daemonFile);
+    const info = readJson(daemonFile) as DaemonInfo | null;
     if (!info || !existsSync(daemonFile)) console.log("The daemon is not running.");
     else {
       await api(info, "POST", "/api/shutdown").catch(() => {});

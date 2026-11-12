@@ -6,7 +6,7 @@
 
 const CLAUDE_ONLY = /^(allowed-tools|argument-hint):/;
 
-export function portableSkillText(text, skillDir) {
+export function portableSkillText(text: string, skillDir: string): string {
   // Forward slashes, also on Windows: the path goes into commands the agent runs in a POSIX shell.
   const dir = skillDir.replace(/\\/g, "/");
   const lines = text.split("\n");

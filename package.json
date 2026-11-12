@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "pnpm -C viewer dev",
     "build": "node scripts/install.mts --build",
-    "check": "pnpm -C viewer typecheck && node scripts/check.mts",
+    "check": "pnpm -C viewer typecheck && pnpm -C viewer exec tsc -p ../tsconfig.scripts.json && node scripts/check.mts",
     "check:browser": "node scripts/browser-check.mts",
     "sample": "node scripts/check.mts --open"
   }

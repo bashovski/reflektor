@@ -14,7 +14,9 @@ const FILE = join(HOME, "settings.json");
 
 // Every setting with the value it has until someone changes it. A key that is not listed here is never read or
 // written, and a value of the wrong type counts as not set.
-const DEFAULTS = {
+export type Settings = { subagents: boolean };
+
+const DEFAULTS: Settings = {
   // Split the reading and writing of a report between subagents that work at the same time. Faster, and it costs
   // more tokens, so it is off until the reader turns it on. skill/subagents.md says what the agent does with it.
   subagents: false,
@@ -22,10 +24,13 @@ const DEFAULTS = {
 
 // `base` with the values `from` has for the same keys, where they are of the same type. The file and what the page
 // sends both go through it, so neither can add a key or change a type.
-const known = (from, base) => Object.fromEntries(Object.entries(base).map(([key, value]) => [key, typeof from?.[key] === typeof value ? from[key] : value]));
+const known = (from: unknown, base: Settings): Settings => {
+  const given = (from ?? {}) as Record<string, unknown>;
+  return Object.fromEntries(Object.entries(base).map(([key, value]) => [key, typeof given[key] === typeof value ? given[key] : value])) as Settings;
+};
 
-export function readSettings() {
-  let saved = null;
+export function readSettings(): Settings {
+  let saved: unknown = null;
   try {
     saved = JSON.parse(readFileSync(FILE, "utf8"));
   } catch {
@@ -35,7 +40,7 @@ export function readSettings() {
 }
 
 // Saves the known keys of `patch` over what was there, and returns all settings.
-export function writeSettings(patch) {
+export function writeSettings(patch: unknown): Settings {
   const next = known(patch, readSettings());
   mkdirSync(HOME, { recursive: true });
   // Written beside the file and moved into place, so a script that reads at that moment never gets half a file.

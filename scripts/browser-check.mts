@@ -14,11 +14,17 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Review } from "../skill/schema/types.ts";
 import { gitBash } from "../skill/scripts/repo.mts";
+// playwright-core is one of the viewer's packages, so its types come from there too.
+import type { BrowserType, Locator } from "playwright-core";
 import { githubPr, startGithubStub } from "./github-stub.mts";
 
+// An execFileSync error carries the command's stderr; other errors do not.
+type ExecError = Error & { stderr?: string };
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const { chromium } = createRequire(join(root, "viewer/package.json"))("playwright-core");
+const { chromium } = createRequire(join(root, "viewer/package.json"))("playwright-core") as { chromium: BrowserType };
 const tmp = mkdtempSync(join(tmpdir(), "pr-report-browser-"));
 const repo = join(tmp, "books");
 const data = join(repo, ".git/pr-report/feat-books");
@@ -38,18 +44,18 @@ const env = {
   PR_REPORT_AGENT: "claude-code",
 };
 
-const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
-const script = (name, ...args) => run("node", [join(root, "skill/scripts", name), ...args]);
-const review = (...args) => script("review.mts", ...args);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const run = (cmd: string, args: string[]) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
+const script = (name: string, ...args: string[]) => run("node", [join(root, "skill/scripts", name), ...args]);
+const review = (...args: string[]) => script("review.mts", ...args);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let failed = false;
-const fail = (message) => {
+const fail = (message: string) => {
   console.error(`FAIL ${message}`);
   failed = true;
 };
 // Waits for a locator to show, and fails with a readable message when it does not.
-const expectVisible = async (locator, what, timeout = 10_000) => {
+const expectVisible = async (locator: Locator, what: string, timeout = 10_000) => {
   try {
     await locator.first().waitFor({ state: "visible", timeout });
     return true;
@@ -63,7 +69,7 @@ const browser = await chromium.launch({
   headless: !process.argv.includes("--headed"),
   ...(process.env.PR_REPORT_CHROME ? { executablePath: process.env.PR_REPORT_CHROME } : { channel: "chrome" }),
 });
-const errors = [];
+const errors: string[] = [];
 
 try {
   run(gitBash() ?? "bash", [join(root, "fixtures/make-books-repo.sh"), repo]);
@@ -74,7 +80,7 @@ try {
   // the picks are saved for this browser, and the inbox greets the reader when setup ends. The rest
   // of the check then runs in dark mode with GitHub Dark, a theme the renderer has to load first.
   review("setup", "--no-open");
-  const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8"));
+  const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")) as { port: number };
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -101,14 +107,14 @@ try {
   if (!saved[0] || saved[1] !== '"dark"' || saved[2] !== '"github-dark"') fail(`setup did not save its choices: ${saved.join(" ")}`);
 
   // 1. The draft opens first: the facts, with sending held back.
-  const draftOut = script("build.mts", "--diff", join(data, "diff.json"), "--draft").match(/Wrote (\S+)/)[1];
-  const id = review("open", "--report", draftOut).match(/Review id: (\S+)/)[1];
+  const draftOut = script("build.mts", "--diff", join(data, "diff.json"), "--draft").match(/Wrote (\S+)/)![1];
+  const id = review("open", "--report", draftOut).match(/Review id: (\S+)/)![1];
   await page.goto(`http://127.0.0.1:${port}/r/${id}`);
   await expectVisible(page.getByText("Claude is reading the change and writing the notes"), "the draft notice");
   if (!(await page.getByRole("button", { name: "Claude is writing the notes" }).isDisabled())) fail("Send is not held back on a draft");
 
   // 2. The real report replaces the draft in the same tab.
-  const realOut = script("build.mts", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)[1];
+  const realOut = script("build.mts", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)![1];
   review("open", "--report", realOut);
   await expectVisible(page.getByRole("heading", { name: /Save and list books in the library/ }), "the report after the draft");
   await expectVisible(page.getByRole("button", { name: "LGTM" }), "Send once the report is ready");
@@ -183,7 +189,7 @@ try {
 
   // 5. The agent picks it up, posts a plan, the reviewer approves it in the page, progress shows.
   if (!review("resume", "--id", id).includes("was sent with 2 comments")) fail("resume did not hand over the sent review");
-  const sent = JSON.parse(readFileSync(join(data, "review-1.json"), "utf8")).comments.map((c) => c.id);
+  const sent = (JSON.parse(readFileSync(join(data, "review-1.json"), "utf8")) as Review).comments.map((c) => c.id);
   writeFileSync(join(tmp, "plan.json"), JSON.stringify({ steps: [{ comments: sent, where: "book.service.ts:19", kind: "fix", action: "Rename the column and catch the duplicate" }] }));
   review("plan", "--id", id, "--file", join(tmp, "plan.json"));
   await expectVisible(page.getByText("Rename the column and catch the duplicate"), "the plan");
@@ -197,7 +203,7 @@ try {
   const service = join(repo, "apps/api/src/books/book.service.ts");
   writeFileSync(service, `// handle, not slug\n${readFileSync(service, "utf8")}`);
   script("collect.mts", "--repo", repo, "--no-fetch", "--update");
-  const round2 = script("build.mts", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)[1];
+  const round2 = script("build.mts", "--diff", join(data, "diff.json"), "--report", join(data, "report.json")).match(/Wrote (\S+)/)![1];
   review("open", "--report", round2);
   await expectVisible(page.getByText("Round 2 is ready."), "the round 2 banner");
   await page.getByRole("button", { name: "Show round 2" }).click();
@@ -264,8 +270,8 @@ try {
   await expectVisible(page.getByRole("link", { name: "Set up Reflektor" }), "the setup offer above a report");
   // The top of the page must not jump between a report and the inbox: the mark, the reader's avatar and the setup
   // offer under the bar sit at the same place and have the same size on both.
-  const topOfPage = async () => {
-    const box = async (locator) => {
+  const topOfPage = async (): Promise<Record<string, number[] | null>> => {
+    const box = async (locator: Locator) => {
       const b = await locator.boundingBox();
       return b && [b.x, b.y, b.width, b.height];
     };
@@ -309,7 +315,8 @@ try {
   console.log(
     "browser: setup page, draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, user menu, agent name, changed-code warning, pull request opened and merged, inbox grouping and search, and the setup offer all worked",
   );
-} catch (e) {
+} catch (error) {
+  const e = error as ExecError;
   fail(e.stderr?.toString() || e.stack || e.message);
 } finally {
   await browser.close();

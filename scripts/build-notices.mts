@@ -17,10 +17,19 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const modules = join(root, "viewer", "node_modules");
-const viewer = JSON.parse(readFileSync(join(root, "viewer", "package.json"), "utf8"));
+// The fields of a package.json read here.
+type PackageJson = {
+  version: string;
+  license?: string;
+  homepage?: string;
+  repository?: string | { url?: string };
+  dependencies: Record<string, string>;
+};
+
+const viewer = JSON.parse(readFileSync(join(root, "viewer", "package.json"), "utf8")) as PackageJson;
 
 // Why each one ships, for the reader of the notices file.
-const WHY = {
+const WHY: Record<string, string> = {
   "@fontsource-variable/geist": "the page's text font",
   "@fontsource-variable/geist-mono": "the page's code font",
   "@headlessui/react": "the menus and dialogs",
@@ -48,24 +57,24 @@ const COPIED = [
   },
 ];
 
-const licenseText = (dir) => {
+const licenseText = (dir: string) => {
   const file = readdirSync(dir).find((name) => /^(LICENSE|LICENCE|COPYING)(\.|$)/i.test(name));
   return file ? readFileSync(join(dir, file), "utf8").trim() : null;
 };
-const repositoryUrl = (pkg) => {
+const repositoryUrl = (pkg: PackageJson) => {
   const repo = typeof pkg.repository === "string" ? pkg.repository : pkg.repository?.url;
   return pkg.homepage ?? (repo ? repo.replace(/^git\+/, "").replace(/\.git$/, "").replace(/^git:\/\//, "https://") : null);
 };
 
-const sections = [];
-const missing = [];
+const sections: string[] = [];
+const missing: string[] = [];
 for (const name of packages) {
   const dir = join(modules, name);
   if (!existsSync(join(dir, "package.json"))) {
     missing.push(name);
     continue;
   }
-  const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as PackageJson;
   const text = licenseText(dir);
   if (!text) missing.push(`${name} (no license file)`);
   const link = repositoryUrl(pkg);

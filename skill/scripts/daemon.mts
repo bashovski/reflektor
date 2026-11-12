@@ -12,7 +12,7 @@
 import { execFile } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { connect } from "node:net";
 import { homedir } from "node:os";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
@@ -23,6 +23,104 @@ import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mts";
 import { purgeCache, whoAmI } from "./identity.mts";
 import { readSettings, writeSettings } from "./settings.mts";
 import { replaceFile } from "./repo.mts";
+import type { AgentInfo, Bundle, ChecksRun, CommentKind, CommentTarget, LiveQuestion, PrState, Ref, RepoAvatar, Review, ReviewComment, Tag } from "../schema/types.ts";
+
+// ------------------------------------------------------------------ types
+// The daemon's own records. Report data and review files follow skill/schema/types.ts.
+
+// ~/.pr-report/secrets.json: the page token and the admin token, kept across restarts.
+type Secrets = { pageToken: string; adminToken: string };
+// ~/.pr-report/daemon.json: where review.mts finds this daemon, and the admin token it calls with.
+type DaemonFile = { port: number; pid: number; version: string; adminToken: string; startedAt: string };
+// One entry of ~/.pr-report/reviews.json. Entries from older daemons may lack the avatar, checks file and archive date.
+type RegistryEntry = { id: string; dir: string; title: string; tag: Tag; repo: string; branch: string; avatar?: RepoAvatar | null; checksFile?: string; archived?: string | null };
+// Where a review's current round stands. The inbox adds "merged" on top (statusOf).
+type Phase = "reviewing" | "sent" | "planning" | "working" | "done";
+// One published round: the data file build.mts wrote. Rounds from older daemons name an exported page in `html` instead and may lack builtAt.
+type RoundEntry = { round: number; file?: string; html?: string; builtAt?: string; publishedAt: string; draft?: boolean };
+// The agent's progress on one comment, kept by comment id.
+type CommentStatus = { status: "working" | "fixed" | "answered" | "wontfix" | "noted"; text: string | null; ref?: Ref; at: string };
+// One step of the agent's plan, covering one or more comments. The reviewer may change its kind or skip it.
+type PlanStep = { comments: string[]; where: string; kind: CommentKind | "skip"; action: string };
+// The reviewer's answer to a plan. `kinds` maps a step's index to the kind the reviewer picked for it.
+type PlanDecision = { decision: "approve" | "changes"; note: string | null; kinds: Record<number, PlanStep["kind"]>; at: string };
+// The agent's plan for a round's comments, with the reviewer's decision once there is one.
+type Plan = { round: number; steps: PlanStep[]; note: string | null; createdAt: string; decision: PlanDecision | null };
+// The branch's pull request as last seen. `title` and `base` are null when only its URL is known.
+type LivePr = { number: number; url: string; title: string | null; state: PrState; base: string | null; mergedAt: string | null; checkedAt: string };
+// Code that changed after the round was built (checkDrift): up to 50 files, new commits, and another checked-out branch.
+type Drift = { files: string[]; fileCount: number; commits: number; branch: string | null };
+// A live question as the daemon keeps it. deliveredAt is left out wherever questions leave the daemon.
+type QuestionRecord = LiveQuestion & { deliveredAt?: string | null };
+// What each kind of agent event carries (pushEvent).
+type EventData =
+  | { type: "review-submitted"; round: number; file: string; count: number }
+  | { type: "plan-decision"; decision: PlanDecision }
+  | { type: "question"; questionId: string }
+  | { type: "round-finished"; round: number; count: number }
+  | { type: "refresh"; round: number; files: string[]; commits: number };
+// An event queued for the agent, with when it was delivered and when the agent acted on it.
+type ReviewEvent = EventData & { seq: number; at: string; deliveredAt: string | null; handledAt: string | null };
+// An event as handed to the agent: a question event also carries its question.
+type DeliveredEvent = ReviewEvent & { question?: QuestionRecord };
+// <review folder>/review-state.json as save() writes it. Events saved before handling was tracked have no handledAt.
+type SavedState = Pick<ReviewRecord, "rounds" | "phase" | "statuses" | "plan" | "pr" | "agent" | "lastAgentActivity" | "updatedAt"> & {
+  events: (EventData & { seq: number; at: string; deliveredAt: string | null; handledAt?: string | null })[];
+};
+// The repo and the code a round was built from, read from its data file (roundFacts).
+type RoundFacts = { builtAt?: string; root: string; gitDir: string; branch: string; headSha: string; snapshot: string; host: string | null; owner: string | null; name: string; upstream: { ref: string; ahead: number } | null };
+// What roundFacts keeps when the round's data could not be read: no root, so nothing is checked.
+type NoFacts = { builtAt?: string; root: null; host?: undefined };
+// A review: one branch in one repo, across rounds. The optional fields at the end are kept in memory only.
+type ReviewRecord = {
+  id: string;
+  dir: string;
+  title: string;
+  tag: Tag;
+  avatar: RepoAvatar | null;
+  checksFile: string;
+  repo: string;
+  branch: string;
+  archived: string | null;
+  rounds: RoundEntry[];
+  phase: Phase;
+  statuses: Record<string, CommentStatus>;
+  plan: Plan | null;
+  pr: LivePr | null;
+  agent: AgentInfo | null;
+  events: ReviewEvent[];
+  lastAgentActivity: string | null;
+  updatedAt: string;
+  round: number;
+  questions: QuestionRecord[];
+  checks: ChecksRun | null;
+  facts?: RoundFacts | NoFacts;
+  drift?: Drift | null;
+  checkingDrift?: boolean;
+  checksMtime?: number;
+  prEtag?: string | null;
+  prNextAt?: number;
+  prFailures?: number;
+  prBusy?: boolean;
+};
+// A response. The events route keeps one open per page and notes on it which reviews the page watches.
+type Res = ServerResponse & { watchAll?: boolean; watching?: Set<string> };
+// An agent's long poll for a review's next event (next-event).
+type Waiter = { res: ServerResponse; timer: NodeJS.Timeout };
+// A request body from review.mts to a review's agent routes (answers, plan, status, pr). Each route reads its own fields.
+type AgentBody = { questionId?: string; text?: string; ref?: Ref; steps?: PlanStep[]; note?: string | null; commentId?: string; status?: CommentStatus["status"]; url?: string; title?: string };
+// A request body from a review page to its routes (presence, questions, archive, plan-decision, draft, submit).
+type PageBody = { tab?: string; id?: string; text?: string; target?: CommentTarget; archived?: boolean; decision?: string; note?: string | null; kinds?: PlanDecision["kinds"]; comments?: ReviewComment[]; headSha?: string; snapshot?: string };
+// What the setup page learns about the gh or glab command line on this machine.
+type ToolState = { installed: boolean; version: string | null; loggedIn: boolean; account: string | null; host: string | null };
+// The error execFile rejects with, which carries the command's output.
+type ExecError = Error & { stdout?: string; stderr?: string };
+// A pull request from GitHub's REST API (snake_case) or from gh pr view --json (camelCase). prFrom reads either.
+type GitHubPr = { number: number; url: string; html_url?: string; title?: string | null; state: string; merged_at?: string | null; mergedAt?: string | null; base?: { ref: string }; baseRefName?: string };
+// A failed GitHub request: its HTTP status, and when to try again after a rate limit.
+type GitHubError = Error & { status?: number; retryAfterMs?: number };
+// The name of a Lucide icon in ICONS.
+type IconName = keyof typeof ICONS;
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const FIRST_PORT = Number(process.env.PR_REPORT_PORT ?? 7337);
@@ -37,7 +135,7 @@ const daemonFile = join(HOME, "daemon.json");
 const registryFile = join(HOME, "reviews.json");
 const lockFile = join(HOME, "daemon.lock");
 
-const readJson = (file, fallback) => {
+const readJson = (file: string, fallback: unknown): unknown => {
   try {
     return JSON.parse(readFileSync(file, "utf8"));
   } catch {
@@ -45,14 +143,14 @@ const readJson = (file, fallback) => {
   }
 };
 // The temp file carries the pid, so two processes writing the same file never move each other's.
-const writeJson = (file, value, mode) => {
+const writeJson = (file: string, value: unknown, mode?: number) => {
   const tmp = `${file}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(value, null, 2), mode ? { mode } : undefined);
   replaceFile(tmp, file);
 };
 const now = () => new Date().toISOString();
 const startedAt = now();
-const pidAlive = (pid) => {
+const pidAlive = (pid: number) => {
   try {
     process.kill(pid, 0);
     return true;
@@ -95,24 +193,24 @@ if (!takeLock()) {
 
 // Tokens survive restarts, so tabs left open across a daemon update keep working.
 const secretsFile = join(HOME, "secrets.json");
-const secrets = readJson(secretsFile, null) ?? { pageToken: randomBytes(24).toString("hex"), adminToken: randomBytes(24).toString("hex") };
+const secrets = (readJson(secretsFile, null) as Secrets | null) ?? { pageToken: randomBytes(24).toString("hex"), adminToken: randomBytes(24).toString("hex") };
 writeJson(secretsFile, secrets, 0o600);
 const { pageToken, adminToken } = secrets;
 
 // ------------------------------------------------------------------ reviews
 
 // A review is one branch in one repo, across rounds. Its files live in `dir`.
-const reviews = new Map();
-const registry = readJson(registryFile, []);
+const reviews = new Map<string, ReviewRecord>();
+const registry = readJson(registryFile, []) as RegistryEntry[];
 
-const stateFile = (r) => join(r.dir, "review-state.json");
-const draftFile = (r) => join(r.dir, "review-draft.json");
-const questionsFile = (r, round) => join(r.dir, `questions-${round}.json`);
-const reviewFile = (r, round) => join(r.dir, `review-${round}.json`);
+const stateFile = (r: ReviewRecord) => join(r.dir, "review-state.json");
+const draftFile = (r: ReviewRecord) => join(r.dir, "review-draft.json");
+const questionsFile = (r: ReviewRecord, round: number) => join(r.dir, `questions-${round}.json`);
+const reviewFile = (r: ReviewRecord, round: number) => join(r.dir, `review-${round}.json`);
 
-function loadReview(entry) {
+function loadReview(entry: RegistryEntry) {
   if (!existsSync(entry.dir)) return null;
-  const saved = readJson(join(entry.dir, "review-state.json"), {});
+  const saved = readJson(join(entry.dir, "review-state.json"), {}) as Partial<SavedState>;
   const r = {
     id: entry.id,
     dir: entry.dir,
@@ -133,9 +231,9 @@ function loadReview(entry) {
     events: (saved.events ?? []).map((e) => ("handledAt" in e ? e : { ...e, handledAt: e.deliveredAt })),
     lastAgentActivity: saved.lastAgentActivity ?? null,
     updatedAt: saved.updatedAt ?? now(),
-  };
+  } as ReviewRecord;
   r.round = r.rounds.at(-1)?.round ?? 1;
-  r.questions = readJson(questionsFile(r, r.round), []);
+  r.questions = readJson(questionsFile(r, r.round), []) as QuestionRecord[];
   r.checks = readChecksRun(r.checksFile);
   return r;
 }
@@ -150,7 +248,7 @@ const saveRegistry = () =>
     [...reviews.values()].map(({ id, dir, title, tag, repo, branch, avatar, checksFile, archived }) => ({ id, dir, title, tag, repo, branch, avatar, checksFile, archived })),
   );
 
-function save(r) {
+function save(r: ReviewRecord) {
   r.updatedAt = now();
   writeJson(stateFile(r), {
     rounds: r.rounds,
@@ -169,23 +267,23 @@ function save(r) {
 }
 
 // A round's report data: the JSON file build.mts wrote, or the data inside an exported page.
-const roundFile = (entry) => entry.file ?? entry.html;
-function roundText(file) {
+const roundFile = (entry: RoundEntry) => entry.file ?? entry.html!;
+function roundText(file: string) {
   if (!file || !existsSync(file)) return null;
   const text = readFileSync(file, "utf8");
   if (extname(file) !== ".html") return text;
   return text.match(/<script id="pr-report-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1] ?? null;
 }
 
-const submittedComments = (r) => (r.phase === "reviewing" ? [] : (readJson(reviewFile(r, r.round), {}).comments ?? []));
+const submittedComments = (r: ReviewRecord) => (r.phase === "reviewing" ? [] : ((readJson(reviewFile(r, r.round), {}) as Partial<Review>).comments ?? []));
 
 // A round that changed no code is finished once every comment has a final status: no new round will
 // come to end it. Comments in plan steps the reviewer skipped need no status. A `fixed` comment means
 // new code, so that round ends when the agent publishes the next one.
-function finishIfSettled(r) {
+function finishIfSettled(r: ReviewRecord) {
   if (r.phase !== "working") return false;
   const comments = submittedComments(r);
-  const skipped = new Set((r.plan?.steps ?? []).flatMap((s, i) => ((r.plan.decision?.kinds?.[i] ?? s.kind) === "skip" ? s.comments : [])));
+  const skipped = new Set((r.plan?.steps ?? []).flatMap((s, i) => ((r.plan!.decision?.kinds?.[i] ?? s.kind) === "skip" ? s.comments : [])));
   const statuses = comments.filter((c) => !skipped.has(c.id)).map((c) => r.statuses[c.id]?.status);
   if (!comments.length || statuses.some((s) => !s || s === "working" || s === "fixed")) return false;
   r.phase = "done";
@@ -194,7 +292,7 @@ function finishIfSettled(r) {
 }
 
 // What an open page needs to know, sent on every change.
-const liveState = (r) => ({
+const liveState = (r: ReviewRecord) => ({
   id: r.id,
   title: r.title,
   repo: r.repo,
@@ -226,7 +324,7 @@ const liveState = (r) => ({
 // Every call from review.mts says which agent makes it (agent.mts). The review keeps the last one, so the page
 // names whoever is on the other side now, also after another agent picked the review up. A call that names
 // nobody, such as one typed by hand, changes nothing. True when the agent changed.
-function noteAgent(r, req) {
+function noteAgent(r: ReviewRecord, req: IncomingMessage) {
   const agent = decodeAgent(req.headers[AGENT_HEADER]);
   if (!agent || JSON.stringify(agent) === JSON.stringify(r.agent ?? null)) return false;
   r.agent = agent;
@@ -235,12 +333,12 @@ function noteAgent(r, req) {
 
 // ------------------------------------------------------------------ live stream to pages (SSE)
 
-const streams = new Set();
-const sse = (res, event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+const streams = new Set<Res>();
+const sse = (res: ServerResponse, event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 // What open pages show as the daemon's status: version and uptime, and Node for bug reports.
 const daemonInfo = () => ({ version: VERSION, pid: process.pid, node: process.version, startedAt });
-const watches = (res, id) => res.watchAll || res.watching.has(id);
-function broadcast(r) {
+const watches = (res: Res, id: string) => res.watchAll || res.watching!.has(id);
+function broadcast(r: ReviewRecord) {
   for (const res of streams) if (watches(res, r.id)) sse(res, "state", liveState(r));
 }
 setInterval(() => {
@@ -248,8 +346,8 @@ setInterval(() => {
 }, 20_000).unref();
 // Open report tabs check in every 20 seconds; a tab counts as open for 45 seconds after its last check-in.
 // (Tabs share one event stream, so the stream itself cannot tell which reviews are on screen.)
-const presence = new Map();
-const openTabs = (r) => {
+const presence = new Map<string, Map<string, number>>();
+const openTabs = (r: ReviewRecord) => {
   const tabs = presence.get(r.id);
   if (!tabs) return 0;
   for (const [tab, seen] of tabs) if (Date.now() - seen > 45_000) tabs.delete(tab);
@@ -258,21 +356,21 @@ const openTabs = (r) => {
 
 // ------------------------------------------------------------------ agent events (long poll)
 
-const waiters = new Map(); // review id -> [{ res, timer }]
+const waiters = new Map<string, Waiter[]>(); // review id -> [{ res, timer }]
 // A waiter reconnects right after each long poll ends, so it counts as listening for a short while
 // after it leaves.
-const waiterLeft = new Map(); // review id -> ms
+const waiterLeft = new Map<string, number>(); // review id -> ms
 const LISTEN_GRACE_MS = 30_000;
-const listening = (r) => (waiters.get(r.id)?.length ?? 0) > 0 || Date.now() - (waiterLeft.get(r.id) ?? 0) < LISTEN_GRACE_MS;
-function waiterGone(r) {
+const listening = (r: ReviewRecord) => (waiters.get(r.id)?.length ?? 0) > 0 || Date.now() - (waiterLeft.get(r.id) ?? 0) < LISTEN_GRACE_MS;
+function waiterGone(r: ReviewRecord) {
   waiterLeft.set(r.id, Date.now());
   setTimeout(() => !listening(r) && broadcast(r), LISTEN_GRACE_MS + 500).unref();
 }
 
-const answered = (r, e) => e.type === "question" && Boolean(r.questions.find((q) => q.id === e.questionId)?.answer);
+const answered = (r: ReviewRecord, e: ReviewEvent) => e.type === "question" && Boolean(r.questions.find((q) => q.id === e.questionId)?.answer);
 
-function nextEvent(r) {
-  const ready = (e) => !e.deliveredAt || (e.type === "question" && Date.now() - Date.parse(e.deliveredAt) > REDELIVER_MS);
+function nextEvent(r: ReviewRecord) {
+  const ready = (e: ReviewEvent) => !e.deliveredAt || (e.type === "question" && Date.now() - Date.parse(e.deliveredAt) > REDELIVER_MS);
   for (const e of r.events) {
     if (answered(r, e)) continue;
     if (ready(e)) return e;
@@ -283,17 +381,17 @@ function nextEvent(r) {
 // An event is handled when the agent acts on it: a sent review by a plan or a status, a plan
 // decision by a status or a new plan, a question by its answer. Other events are news, handled once
 // delivered. `resume` hands an agent in a new session the event a lost session never handled.
-const needsAction = (e) => (e.type === "review-submitted" && e.count > 0) || e.type === "plan-decision" || e.type === "question" || e.type === "refresh";
-function markHandled(r, ...types) {
+const needsAction = (e: ReviewEvent) => (e.type === "review-submitted" && e.count > 0) || e.type === "plan-decision" || e.type === "question" || e.type === "refresh";
+function markHandled(r: ReviewRecord, ...types: ReviewEvent["type"][]) {
   for (const e of r.events) if (types.includes(e.type) && !e.handledAt) e.handledAt = now();
 }
-const openEvent = (r) => r.events.find((e) => !e.handledAt && !answered(r, e)) ?? null;
+const openEvent = (r: ReviewRecord) => r.events.find((e) => !e.handledAt && !answered(r, e)) ?? null;
 
-function deliver(r, res, e = nextEvent(r)) {
+function deliver(r: ReviewRecord, res: ServerResponse, e = nextEvent(r)) {
   if (!e) return false;
   e.deliveredAt = now();
   if (!needsAction(e)) e.handledAt = e.deliveredAt;
-  const payload = { ...e };
+  const payload: DeliveredEvent = { ...e };
   if (e.type === "question") payload.question = r.questions.find((q) => q.id === e.questionId);
   send(res, 200, { event: payload, review: { id: r.id, round: r.round, dir: r.dir } });
   r.lastAgentActivity = now();
@@ -301,23 +399,24 @@ function deliver(r, res, e = nextEvent(r)) {
   return true;
 }
 
-function wakeWaiters(r) {
+function wakeWaiters(r: ReviewRecord) {
   const list = waiters.get(r.id) ?? [];
   while (list.length && nextEvent(r)) {
-    const w = list.shift();
+    const w = list.shift()!;
     clearTimeout(w.timer);
     deliver(r, w.res);
   }
 }
 
-function pushEvent(r, type, data) {
-  r.events.push({ seq: (r.events.at(-1)?.seq ?? 0) + 1, type, at: now(), deliveredAt: null, handledAt: null, ...data });
+function pushEvent<T extends EventData["type"]>(r: ReviewRecord, type: T, data: Omit<Extract<EventData, { type: T }>, "type">): void;
+function pushEvent(r: ReviewRecord, type: EventData["type"], data: object) {
+  r.events.push({ seq: (r.events.at(-1)?.seq ?? 0) + 1, type, at: now(), deliveredAt: null, handledAt: null, ...data } as ReviewEvent);
   r.events = r.events.slice(-200);
 }
 
 // ------------------------------------------------------------------ HTTP helpers
 
-const send = (res, status, body, type = "application/json", { framedByOwnPages = false } = {}) => {
+const send = (res: ServerResponse, status: number, body: unknown, type = "application/json", { framedByOwnPages = false } = {}) => {
   // Pages must not be framed by other sites (clickjacking on Send or Fix this). Nothing may frame them at all, with
   // one exception: /panel is made to be shown in a frame by the inbox, so this daemon's own pages may frame it, and
   // still no other site can.
@@ -330,11 +429,11 @@ const send = (res, status, body, type = "application/json", { framedByOwnPages =
   });
   res.end(type === "application/json" ? JSON.stringify(body) : body);
 };
-const readBody = (req) =>
-  new Promise((resolveBody, reject) => {
+const readBody = (req: IncomingMessage) =>
+  new Promise<string>((resolveBody, reject) => {
     let size = 0;
-    const chunks = [];
-    req.on("data", (chunk) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => {
       size += chunk.length;
       if (size > MAX_BODY) {
         reject(new Error("body too large"));
@@ -344,22 +443,22 @@ const readBody = (req) =>
     req.on("end", () => resolveBody(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
-const same = (given, expected) => {
+const same = (given: unknown, expected: string) => {
   const a = Buffer.from(String(given ?? ""));
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
 };
-const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const validTarget = (t) => t && typeof t.type === "string";
-const validComments = (value) =>
+const escapeHtml = (s: string) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as Record<string, string>)[c]);
+const validTarget = (t: CommentTarget | undefined) => t && typeof t.type === "string";
+const validComments = (value: unknown): value is ReviewComment[] =>
   Array.isArray(value) && value.every((c) => c && typeof c.id === "string" && typeof c.text === "string" && validTarget(c.target));
 
-const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+const slug = (s: string) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 
 // ------------------------------------------------------------------ pages
 
 // The repo owner's picture from the report data, or its initials. Checked before it goes into HTML.
-function avatarHtml(avatar) {
+function avatarHtml(avatar: RepoAvatar | null) {
   if (!avatar) return "";
   if (/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(avatar.image ?? "")) return `<img class="av" src="${avatar.image}" alt="">`;
   const color = /^#[0-9a-f]{6}$/i.test(avatar.color ?? "") ? avatar.color : "#71717a";
@@ -367,7 +466,7 @@ function avatarHtml(avatar) {
 }
 
 // Ordered as the status groups show them: the two that wait on you first.
-const PHASES = {
+const PHASES: Record<string, [string, string]> = {
   reviewing: ["Waiting on you", "#b45309"],
   planning: ["Plan ready", "#7c3aed"],
   sent: ["Sent to the agent", "#2563eb"],
@@ -377,12 +476,12 @@ const PHASES = {
 };
 // The status the inbox shows: the review's phase, except that a merged pull request ends the review
 // whatever round it was in. Nothing more will happen to a merged branch.
-const statusOf = (r) => (r.pr?.state === "MERGED" ? "merged" : r.phase);
+const statusOf = (r: ReviewRecord) => (r.pr?.state === "MERGED" ? "merged" : r.phase);
 
 // Pull request states: the colors and icons of PR_STATES in viewer/src/lib/meta.ts. The colors here and in PHASES
 // are picked for a white page; the stylesheet mixes each a little toward the text color (see `--c`), so a status
 // word is darker on a light page and lighter on a dark one.
-const PR_STATES = {
+const PR_STATES: Record<PrState, [string, string, IconName]> = {
   OPEN: ["open", "#059669", "gitPullRequest"],
   MERGED: ["merged", "#7c3aed", "gitMerge"],
   CLOSED: ["closed", "#dc2626", "gitPullRequestClosed"],
@@ -420,12 +519,12 @@ const ICONS = {
   gitMerge: '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
   gitPullRequestClosed: '<circle cx="6" cy="6" r="3"/><path d="M6 9v12"/><path d="m21 3-6 6"/><path d="m21 9-6-6"/><path d="M18 11.5V15"/><circle cx="18" cy="18" r="3"/>',
 };
-const icon = (name) =>
+const icon = (name: IconName) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
 
 // Report tags: the same colors and Lucide icons as TAGS in viewer/src/lib/meta.ts, which draws the review page's
 // pill (TagPill in viewer/src/components/ui.tsx). A change to one list needs the same change to the other.
-const TAGS = {
+const TAGS: Record<string, [string, IconName]> = {
   HOTFIX: ["#dc2626", "flame"],
   SECURITY: ["#be123c", "shieldCheck"],
   FEATURE: ["#7c3aed", "sparkles"],
@@ -434,19 +533,19 @@ const TAGS = {
   REFACTOR: ["#475569", "blocks"],
   CHORE: ["#71717a", "wrench"],
 };
-const tagPill = (tag) => {
+const tagPill = (tag: string) => {
   const [color, name] = TAGS[tag] ?? ["#71717a", null];
   return `<span class="tag" style="background:${color}">${name ? icon(name) : ""}${escapeHtml(tag ?? "")}</span>`;
 };
 // The branch's pull request as a small chip: its number in the state's color, the state and title on hover.
-const prChip = (pr) => {
+const prChip = (pr: LivePr | null) => {
   if (!pr) return "";
   const [label, color, name] = PR_STATES[pr.state] ?? PR_STATES.OPEN;
   return `<span class="pr" data-state="${escapeHtml(pr.state)}" style="--c:${color}" title="Pull request #${Number(pr.number)}, ${label}${pr.title ? `: ${escapeHtml(pr.title)}` : ""}">${icon(name)}#${Number(pr.number)}</span>`;
 };
 
 // The review icon from viewer/src/lib/favicon.ts in gray, with a red dot while a review waits on you.
-const inboxIcon = (dot) =>
+const inboxIcon = (dot: boolean) =>
   `data:image/svg+xml,${encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#52525b"/>` +
       `<path transform="translate(8 8) scale(2)" d="M20 14.5a2 2 0 0 1-2 2H8l-4 3.5V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" fill="none" stroke="white" stroke-width="2.6" stroke-linejoin="round"/>` +
@@ -454,13 +553,13 @@ const inboxIcon = (dot) =>
       `</svg>`,
   )}`;
 
-const megabytes = (bytes) => (bytes < 100_000 ? `${Math.max(1, Math.round(bytes / 1000))} KB` : `${(bytes / 1_000_000).toFixed(1)} MB`);
+const megabytes = (bytes: number) => (bytes < 100_000 ? `${Math.max(1, Math.round(bytes / 1000))} KB` : `${(bytes / 1_000_000).toFixed(1)} MB`);
 
 // "acme-labs" for acme-labs/library, "group/sub" for a GitLab subgroup, "" for a repo without a remote.
-const ownerOf = (repo) => (repo.includes("/") ? repo.slice(0, repo.lastIndexOf("/")) : "");
+const ownerOf = (repo: string) => (repo.includes("/") ? repo.slice(0, repo.lastIndexOf("/")) : "");
 
 // One review. The data attributes are what the page groups, sorts and filters by.
-function inboxRow(r) {
+function inboxRow(r: ReviewRecord) {
   const status = statusOf(r);
   const [phaseLabel, color] = r.archived ? ["Archived", "#71717a"] : (PHASES[status] ?? [status, "#71717a"]);
   // A row names its own agent; the groups and filters above keep the neutral words, since they span agents.
@@ -482,9 +581,9 @@ function inboxRow(r) {
 }
 
 // A toolbar menu: a button that opens a list of radios or checkboxes.
-const menu = (key, iconName, label, body) =>
+const menu = (key: string, iconName: IconName, label: string, body: string) =>
   `<div class="dd"><button type="button" class="tool" aria-haspopup="true" aria-expanded="false">${icon(iconName)}<span class="k">${label}</span><b data-label="${key}"></b>${icon("chevron")}</button><div class="menu" hidden>${body}</div></div>`;
-const choices = (name, legend, options) =>
+const choices = (name: string, legend: string, options: [string, string][]) =>
   `<fieldset><legend>${legend}</legend>${options.map(([value, html]) => `<label><input type="${name === "group" || name === "sort" ? "radio" : "checkbox"}" name="${name}" value="${escapeHtml(value)}">${html}</label>`).join("")}</fieldset>`;
 
 // The inbox. `welcome` is set when the setup page hands over to it, so a first-timer is told they are
@@ -500,7 +599,7 @@ function inboxPage(welcome = false) {
   const tags = Object.keys(TAGS).filter((t) => all.some((r) => r.tag === t));
   // Whose account the top bar shows. A report asks about its own repo; the inbox spans repos, so it asks about the
   // newest review's: the forge account when that host's CLI is logged in, else the repo's git identity.
-  let newest = null;
+  let newest: RoundFacts | null = null;
   for (const r of all) {
     const facts = roundFacts(r);
     if (facts?.root) {
@@ -763,13 +862,13 @@ const FUSE_FILE = [join(here, "../assets/fuse.mjs"), join(here, "../../viewer/no
 const FONT_CSS = (() => {
   const dir = APP_DIR && join(APP_DIR, "assets");
   const files = dir && existsSync(dir) ? readdirSync(dir) : [];
-  const face = (family, prefix) => {
+  const face = (family: string, prefix: string) => {
     const file = files.find((f) => f.startsWith(prefix) && f.endsWith(".woff2"));
     return file ? `@font-face{font-family:"${family}";src:url(/app/assets/${file}) format("woff2");font-weight:100 900;font-display:swap}` : "";
   };
   return face("Geist Variable", "geist-latin-wght-normal-") + face("Geist Mono Variable", "geist-mono-latin-wght-normal-");
 })();
-const ASSET_TYPES = {
+const ASSET_TYPES: Record<string, string> = {
   ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".wasm": "application/wasm",
@@ -781,7 +880,7 @@ const ASSET_TYPES = {
 
 // What an inbox without open reviews shows: how to start, and a greeting when the setup page sent
 // the reader here. Once reviews exist, an empty inbox only points at the archive.
-function emptyState(welcome, archivedCount) {
+function emptyState(welcome: boolean, archivedCount: number) {
   if (archivedCount) return '<div class="empty">Nothing open. The archived reviews are below.</div>';
   return `<div class="empty intro"><h2>${welcome ? "You're all set" : "No reviews yet"}</h2>
 <p>Open your coding agent in a repo, on a branch with changes, and ask it for a PR report. In Claude Code, type <code>/pr-report</code>. The report opens in a new tab, and every review on this machine shows up here.</p>
@@ -791,7 +890,7 @@ function emptyState(welcome, archivedCount) {
 // First-run setup: the viewer at /setup, with the page token so it can ask the daemon about the
 // tools on this machine. The installer opens it after an install.
 function setupPage() {
-  return readFileSync(join(APP_DIR, "index.html"), "utf8")
+  return readFileSync(join(APP_DIR!, "index.html"), "utf8")
     .replace("<title>PR report</title>", () => "<title>Set up Reflektor</title>")
     .replace("</head>", () => `<script>window.__PR_SETUP__=${JSON.stringify({ token: pageToken })}</script></head>`);
 }
@@ -799,25 +898,25 @@ function setupPage() {
 // The report's own dialogs (Settings, Help, the cache purge) for the inbox, which is not built with the viewer and
 // shows this page in a frame over itself. See viewer/src/lib/panel.ts.
 function panelPage() {
-  return readFileSync(join(APP_DIR, "index.html"), "utf8")
+  return readFileSync(join(APP_DIR!, "index.html"), "utf8")
     .replace("<title>PR report</title>", () => "<title>Reflektor</title>")
     .replace("</head>", () => `<script>window.__PR_PANEL__=${JSON.stringify({ token: pageToken })}</script></head>`);
 }
 
-function reviewPage(r, round) {
+function reviewPage(r: ReviewRecord, round: number) {
   const entry = r.rounds.find((x) => x.round === round) ?? r.rounds.at(-1);
   if (!entry || !existsSync(roundFile(entry))) return null;
   const config = { live: true, id: r.id, round: entry.round, token: pageToken, api: `/api/r/${encodeURIComponent(r.id)}`, agent: r.agent ?? null };
   // The page's base title (see viewer/src/lib/tab.ts), so the tab is right before the report loads.
   const title = `${r.branch} · ${r.repo.split("/").at(-1)}${entry.round > 1 ? ` · round ${entry.round}` : ""}`;
-  return readFileSync(join(APP_DIR, "index.html"), "utf8")
+  return readFileSync(join(APP_DIR!, "index.html"), "utf8")
     .replace("<title>PR report</title>", () => `<title>${escapeHtml(title)}</title>`)
     .replace("</head>", () => `<script>window.__PR_REVIEW__=${JSON.stringify(config)}</script></head>`);
 }
 
 // Vite puts a content hash in every asset name, so the browser can keep each one for good.
-function sendAsset(res, parts) {
-  const file = resolve(APP_DIR, ...parts);
+function sendAsset(res: ServerResponse, parts: string[]) {
+  const file = resolve(APP_DIR!, ...parts);
   if (!file.startsWith(APP_DIR + sep) || !existsSync(file) || !statSync(file).isFile()) return send(res, 404, "Not found", "text/plain");
   res.writeHead(200, {
     "content-type": ASSET_TYPES[extname(file)] ?? "application/octet-stream",
@@ -834,7 +933,7 @@ function sendAsset(res, parts) {
 
 const DRIFT_MS = Number(process.env.PR_REPORT_DRIFT_SECONDS ?? 15) * 1000;
 const run = promisify(execFile);
-const gitIn = (cwd, args, env) =>
+const gitIn = (cwd: string, args: string[], env?: NodeJS.ProcessEnv) =>
   // windowsHide: the daemon has no console on Windows, so each git call would flash a window.
   run("git", ["-c", "core.quotePath=false", ...args], { cwd, env: env ?? process.env, maxBuffer: 16 * 1024 * 1024, windowsHide: true }).then((x) => x.stdout.trim(), () => null);
 
@@ -843,15 +942,15 @@ const gitIn = (cwd, args, env) =>
 // The setup page asks which of the GitHub and GitLab command lines are installed and logged in.
 // Each answer is two fixed commands with a short timeout; nothing from the request reaches them.
 // The answer is kept for two seconds, since several tabs may ask at once.
-const tool = async (cmd, args) => {
+const tool = async (cmd: string, args: string[]) => {
   try {
     const { stdout, stderr } = await run(cmd, args, { timeout: 8000, windowsHide: true, env: process.env });
     return { ok: true, text: `${stdout}\n${stderr}` };
   } catch (e) {
-    return { ok: false, text: `${e.stdout ?? ""}\n${e.stderr ?? ""}` };
+    return { ok: false, text: `${(e as ExecError).stdout ?? ""}\n${(e as ExecError).stderr ?? ""}` };
   }
 };
-async function toolState(cmd, accountPattern) {
+async function toolState(cmd: string, accountPattern: RegExp): Promise<ToolState> {
   const version = await tool(cmd, ["--version"]);
   if (!version.ok) return { installed: false, version: null, loggedIn: false, account: null, host: null };
   // "gh version 2.92.0 (2026-04-28)", "glab 1.50.0 (2025-01-01)".
@@ -863,7 +962,7 @@ async function toolState(cmd, accountPattern) {
   const account = auth.text.match(accountPattern)?.[1] ?? null;
   return { installed: true, version: number, loggedIn: auth.ok, account, host };
 }
-let toolsCache = null;
+let toolsCache: { at: number; report: { gh: ToolState; glab: ToolState; checkedAt: string } } | null = null;
 async function toolsReport() {
   if (toolsCache && Date.now() - toolsCache.at < 2000) return toolsCache.report;
   const [gh, glab] = await Promise.all([toolState("gh", /Logged in to \S+ account (\S+)/), toolState("glab", /Logged in to \S+ as (\S+)/)]);
@@ -873,12 +972,12 @@ async function toolsReport() {
 }
 
 // The repo and the code a round was built from, read once from its data file.
-function roundFacts(r) {
+function roundFacts(r: ReviewRecord) {
   const entry = r.rounds.find((x) => x.round === r.round);
   if (!entry) return null;
   if (r.facts?.builtAt === entry.builtAt) return r.facts;
   try {
-    const { diff } = JSON.parse(roundText(roundFile(entry)));
+    const { diff } = JSON.parse(roundText(roundFile(entry)) as string) as Bundle;
     r.facts = {
       builtAt: entry.builtAt,
       root: diff.repo.root,
@@ -899,7 +998,7 @@ function roundFacts(r) {
 }
 
 // The working tree as a git tree, untracked files included, without touching the real index.
-async function workingTree(f) {
+async function workingTree(f: RoundFacts) {
   const index = join(f.gitDir, "pr-report", "drift.index");
   try {
     if (existsSync(join(f.gitDir, "index"))) copyFileSync(join(f.gitDir, "index"), index);
@@ -911,7 +1010,7 @@ async function workingTree(f) {
   }
 }
 
-async function checkDrift(r) {
+async function checkDrift(r: ReviewRecord) {
   const f = roundFacts(r);
   if (!f?.root || !existsSync(f.root) || r.checkingDrift) return;
   r.checkingDrift = true;
@@ -954,7 +1053,7 @@ const PR_QUIET_MS = 30 * 60_000;
 
 // The token comes from gh once per daemon start and stays in memory: never on disk or in the log.
 // Without one (logged out) the daemon asks gh itself for the pull request; without gh it does not poll.
-let githubAuth = null;
+let githubAuth: Promise<{ token: string | null; gh: boolean }> | null = null;
 const githubToken = () =>
   (githubAuth ??= process.env.PR_REPORT_GITHUB_TOKEN
     ? Promise.resolve({ token: process.env.PR_REPORT_GITHUB_TOKEN, gh: true })
@@ -964,7 +1063,7 @@ const githubToken = () =>
       ));
 
 // One shape for a pull request from the REST API (snake_case) and from gh (camelCase).
-const prFrom = (p, checkedAt = now()) => ({
+const prFrom = (p: GitHubPr, checkedAt = now()): LivePr => ({
   number: Number(p.number),
   url: p.html_url ?? p.url,
   title: p.title ?? null,
@@ -975,8 +1074,8 @@ const prFrom = (p, checkedAt = now()) => ({
 });
 
 // The error for an answer that is not 2xx or 304. A rate limit says when to try again.
-function githubError(res) {
-  const e = new Error(`GitHub answered ${res.status}`);
+function githubError(res: Response) {
+  const e: GitHubError = new Error(`GitHub answered ${res.status}`);
   e.status = res.status;
   if (res.status === 403 || res.status === 429) {
     const after = Number(res.headers.get("retry-after"));
@@ -986,7 +1085,7 @@ function githubError(res) {
   return e;
 }
 
-const githubGet = (path, token, etag) =>
+const githubGet = (path: string, token: string, etag?: string | null) =>
   fetch(`${GITHUB_API}${path}`, {
     headers: {
       authorization: `Bearer ${token}`,
@@ -1000,7 +1099,7 @@ const githubGet = (path, token, etag) =>
 
 // The newest pull request from this branch, through the REST API. Returns undefined when nothing
 // changed since the last look (304), null when the branch has none, else the pull request.
-async function restPr(r, f, token) {
+async function restPr(r: ReviewRecord, f: RoundFacts, token: string) {
   const query = new URLSearchParams({ head: `${f.owner}:${f.branch}`, state: "all", per_page: "1" });
   const res = await githubGet(`/repos/${f.owner}/${f.name}/pulls?${query}`, token, r.prEtag);
   if (res.status === 304) return undefined;
@@ -1011,12 +1110,12 @@ async function restPr(r, f, token) {
   }
   if (!res.ok) throw githubError(res);
   r.prEtag = res.headers.get("etag");
-  const [pr] = await res.json();
+  const [pr] = (await res.json()) as GitHubPr[];
   return pr ? prFrom(pr) : null;
 }
 
 // The pull request through gh, for a daemon without a token. `ref` is the branch or the pull request's URL.
-const ghPr = (cwd, ref) =>
+const ghPr = (cwd: string | undefined, ref: string) =>
   run("gh", ["pr", "view", ref, "--json", "number,url,title,state,mergedAt,baseRefName"], { cwd, windowsHide: true, timeout: 15_000 }).then(
     (x) => prFrom(JSON.parse(x.stdout)),
     (e) => {
@@ -1026,13 +1125,13 @@ const ghPr = (cwd, ref) =>
   );
 
 // Keeps what GitHub said, and tells open pages and the inbox when it differs from what they show.
-function setPr(r, pr) {
+function setPr(r: ReviewRecord, pr: LivePr | null) {
   // A pull request does not go away. An empty answer with one known means the lookup missed it
   // (a pull request into another repo, from a fork), so the known one stays.
   if (!pr) return false;
   const shown = r.pr && JSON.stringify([r.pr.number, r.pr.state, r.pr.title, r.pr.mergedAt, r.pr.base]);
   if (shown === JSON.stringify([pr.number, pr.state, pr.title, pr.mergedAt, pr.base])) {
-    r.pr.checkedAt = pr.checkedAt;
+    r.pr!.checkedAt = pr.checkedAt;
     return false;
   }
   r.pr = pr;
@@ -1042,7 +1141,7 @@ function setPr(r, pr) {
 
 // A report built after the pull request exists starts with its state. A state the daemon saw since
 // (a merge) wins over an older build.
-function seedPr(r, bundle) {
+function seedPr(r: ReviewRecord, bundle: Bundle) {
   const frozen = bundle.diff.branch.pr;
   if (!frozen || (r.pr && r.pr.checkedAt > bundle.builtAt)) return;
   setPr(r, { number: Number(frozen.number), url: frozen.url, title: frozen.title ?? null, state: frozen.state ?? "OPEN", base: bundle.diff.branch.base, mergedAt: null, checkedAt: bundle.builtAt });
@@ -1052,7 +1151,7 @@ function seedPr(r, bundle) {
 // the branch is on the remote without a pull request, since one is likely about to be opened.
 // Nothing more once it is merged. On failure it backs off, as far as GitHub says when rate limited,
 // doubling otherwise (offline, logged out) until it goes quiet.
-async function checkPr(r) {
+async function checkPr(r: ReviewRecord) {
   const f = roundFacts(r);
   if (f?.host !== "github.com" || !f.owner || f.branch === "HEAD") return;
   if (r.pr?.state === "MERGED" || r.prBusy || Date.now() < (r.prNextAt ?? 0)) return;
@@ -1069,7 +1168,7 @@ async function checkPr(r) {
     r.prNextAt = Date.now() + (!r.pr && f.upstream ? 0 : PR_POLL_MS);
   } catch (e) {
     r.prFailures = (r.prFailures ?? 0) + 1;
-    r.prNextAt = Date.now() + (e.retryAfterMs ?? Math.min(PR_POLL_MS * 2 ** r.prFailures, PR_QUIET_MS));
+    r.prNextAt = Date.now() + ((e as GitHubError).retryAfterMs ?? Math.min(PR_POLL_MS * 2 ** r.prFailures, PR_QUIET_MS));
   } finally {
     r.prBusy = false;
   }
@@ -1097,8 +1196,8 @@ archiveIdle();
 setInterval(archiveIdle, 3_600_000).unref();
 
 // A branch's own folder goes whole. A folder shared by older reviews keeps what may belong to others.
-const ownFolder = (r) => basename(r.dir) !== "pr-report";
-function reviewFiles(r) {
+const ownFolder = (r: ReviewRecord) => basename(r.dir) !== "pr-report";
+function reviewFiles(r: ReviewRecord) {
   if (ownFolder(r)) return existsSync(r.dir) ? readdirSync(r.dir).map((f) => join(r.dir, f)) : [];
   const rounds = r.rounds.map((x) => x.round);
   return [
@@ -1108,9 +1207,9 @@ function reviewFiles(r) {
     draftFile(r),
   ].filter((f, i, all) => all.indexOf(f) === i && existsSync(f));
 }
-const sizeOf = (r) => reviewFiles(r).reduce((n, f) => n + statSync(f).size, 0);
+const sizeOf = (r: ReviewRecord) => reviewFiles(r).reduce((n, f) => n + statSync(f).size, 0);
 
-async function deleteReview(r) {
+async function deleteReview(r: ReviewRecord) {
   const f = roundFacts(r);
   if (f?.root && existsSync(f.root)) {
     const prefix = `refs/pr-report/rounds/${r.branch.replace(/[^\w.-]+/g, "-")}/`;
@@ -1127,7 +1226,7 @@ async function deleteReview(r) {
 
 let lastActivity = Date.now();
 
-async function handle(req, res, port) {
+async function handle(req: IncomingMessage, res: Res, port: number) {
   const host = String(req.headers.host ?? "");
   if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) return send(res, 403, { error: "wrong host" });
   const origin = req.headers.origin;
@@ -1209,18 +1308,18 @@ async function handle(req, res, port) {
   // Register a report, or publish a new round of an existing review.
   if (parts[1] === "reviews" && req.method === "POST") {
     if (!admin) return send(res, 401, { error: "bad token" });
-    const { report: file } = JSON.parse(await readBody(req));
+    const { report: file } = JSON.parse(await readBody(req)) as { report?: string };
     if (!file || !existsSync(file)) return send(res, 400, { error: "report file not found" });
     const raw = roundText(file);
     if (!raw || !raw.startsWith("{")) return send(res, 400, { error: "the report has no data; build it with build.mts" });
-    const bundle = JSON.parse(raw);
+    const bundle = JSON.parse(raw) as Bundle;
     const dir = dirname(file);
     const repo = [bundle.diff.repo.owner, bundle.diff.repo.name].filter(Boolean).join("/");
     const branch = bundle.diff.branch.head;
     let r = [...reviews.values()].find((x) => x.dir === dir && x.branch === branch);
     if (!r) {
       const id = `${slug(bundle.diff.repo.name)}-${slug(branch)}-${createHash("sha1").update(dir).digest("hex").slice(0, 4)}`;
-      r = { id, dir, repo, branch, rounds: [], phase: "reviewing", statuses: {}, plan: null, pr: null, events: [], lastAgentActivity: null, questions: [], round: bundle.round };
+      r = { id, dir, repo, branch, rounds: [], phase: "reviewing", statuses: {}, plan: null, pr: null, events: [], lastAgentActivity: null, questions: [], round: bundle.round } as unknown as ReviewRecord;
       reviews.set(id, r);
     }
     r.title = bundle.report.title;
@@ -1251,7 +1350,7 @@ async function handle(req, res, port) {
       r.phase = "reviewing";
       r.statuses = {};
       r.plan = null;
-      r.questions = readJson(questionsFile(r, round), []);
+      r.questions = readJson(questionsFile(r, round), []) as QuestionRecord[];
       r.events = r.events.filter((e) => !e.deliveredAt && e.type === "question");
     }
     r.lastAgentActivity = now();
@@ -1273,7 +1372,7 @@ async function handle(req, res, port) {
       const wasListening = listening(r);
       const list = waiters.get(r.id) ?? [];
       waiters.set(r.id, list);
-      const w = {
+      const w: Waiter = {
         res,
         timer: setTimeout(() => {
           list.splice(list.indexOf(w), 1);
@@ -1297,7 +1396,7 @@ async function handle(req, res, port) {
     if (req.method === "GET" && action === "resume") {
       const e = openEvent(r);
       const comments = submittedComments(r);
-      const skipped = new Set((r.plan?.steps ?? []).flatMap((s, i) => ((r.plan.decision?.kinds?.[i] ?? s.kind) === "skip" ? s.comments : [])));
+      const skipped = new Set((r.plan?.steps ?? []).flatMap((s, i) => ((r.plan!.decision?.kinds?.[i] ?? s.kind) === "skip" ? s.comments : [])));
       const open = comments.filter((c) => !skipped.has(c.id) && (!r.statuses[c.id] || r.statuses[c.id].status === "working"));
       const review = { id: r.id, round: r.round, dir: r.dir, phase: r.phase, file: reviewFile(r, r.round), comments: comments.length, open };
       if (!e) return send(res, 200, { event: null, review });
@@ -1307,12 +1406,12 @@ async function handle(req, res, port) {
       if (!needsAction(e)) e.handledAt = e.deliveredAt;
       r.lastAgentActivity = now();
       save(r);
-      const payload = { ...e };
+      const payload: DeliveredEvent = { ...e };
       if (e.type === "question") payload.question = r.questions.find((q) => q.id === e.questionId);
       return send(res, 200, { event: payload, review });
     }
     if (req.method !== "POST") return send(res, 404, { error: "not found" });
-    const body = JSON.parse(await readBody(req));
+    const body = JSON.parse(await readBody(req)) as AgentBody;
     r.lastAgentActivity = now();
 
     if (action === "answers") {
@@ -1346,15 +1445,15 @@ async function handle(req, res, port) {
       if (!m) return send(res, 400, { error: "url must be a pull request on github.com, like https://github.com/owner/repo/pull/12" });
       const [url, owner, name, number] = m;
       const auth = await githubToken();
-      let pr;
+      let pr: LivePr | null | undefined;
       try {
         if (auth.token) {
           const answer = await githubGet(`/repos/${owner}/${name}/pulls/${number}`, auth.token);
           if (!answer.ok) throw githubError(answer);
-          pr = prFrom(await answer.json());
+          pr = prFrom((await answer.json()) as GitHubPr);
         } else if (auth.gh) pr = await ghPr(undefined, url);
       } catch (e) {
-        return send(res, 502, { error: `Could not read the pull request: ${e.message}` });
+        return send(res, 502, { error: `Could not read the pull request: ${(e as Error).message}` });
       }
       // Without gh, what the URL says: a pull request just opened is open.
       pr ??= { number: Number(number), url, title: typeof body.title === "string" ? body.title : null, state: "OPEN", base: null, mergedAt: null, checkedAt: now() };
@@ -1371,7 +1470,7 @@ async function handle(req, res, port) {
   if (!same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
 
   if (req.method === "GET") {
-    if (action === "draft") return send(res, 200, { round: r.round, comments: readJson(draftFile(r), { comments: [] }).comments ?? [] });
+    if (action === "draft") return send(res, 200, { round: r.round, comments: (readJson(draftFile(r), { comments: [] }) as { comments?: ReviewComment[] }).comments ?? [] });
     if (action === "bundle") {
       const entry = r.rounds.find((x) => x.round === Number(url.searchParams.get("round"))) ?? r.rounds.at(-1);
       const raw = entry ? roundText(roundFile(entry)) : null;
@@ -1382,19 +1481,19 @@ async function handle(req, res, port) {
   }
 
   if (req.headers["content-type"] !== "application/json") return send(res, 415, { error: "send JSON" });
-  const body = JSON.parse(await readBody(req));
+  const body = JSON.parse(await readBody(req)) as PageBody;
 
   if (req.method === "POST" && action === "presence") {
     if (typeof body.tab !== "string") return send(res, 400, { error: "tab is required" });
     if (!presence.has(r.id)) presence.set(r.id, new Map());
-    presence.get(r.id).set(body.tab, Date.now());
+    presence.get(r.id)!.set(body.tab, Date.now());
     return send(res, 200, { ok: true });
   }
 
   if (req.method === "POST" && action === "questions") {
     if (typeof body.id !== "string" || !String(body.text ?? "").trim() || !validTarget(body.target)) return send(res, 400, { error: "question is not valid" });
     if (!r.questions.some((q) => q.id === body.id)) {
-      r.questions.push({ id: body.id, target: body.target, text: String(body.text).trim(), askedAt: now(), answer: null });
+      r.questions.push({ id: body.id, target: body.target!, text: String(body.text).trim(), askedAt: now(), answer: null });
       pushEvent(r, "question", { questionId: body.id });
       save(r);
     }
@@ -1444,7 +1543,7 @@ async function handle(req, res, port) {
   if (req.method === "POST" && action === "submit") {
     if (r.phase !== "reviewing") return send(res, 409, { error: "this round was already sent" });
     const bundleHead = r.rounds.find((x) => x.round === r.round);
-    const review = {
+    const review: Review & { report: string | null } = {
       version: 1,
       round: r.round,
       branch: r.branch,
@@ -1473,10 +1572,10 @@ async function handle(req, res, port) {
 // True when something already accepts connections on the port, over IPv4 or IPv6.
 // Binding 127.0.0.1 can succeed even when another program listens on all addresses
 // (Docker and OrbStack do), and the browser may then reach that program over IPv6.
-const answers = (host, port) =>
-  new Promise((resolveAnswer) => {
+const answers = (host: string, port: number) =>
+  new Promise<boolean>((resolveAnswer) => {
     const socket = connect({ host, port });
-    const done = (result) => {
+    const done = (result: boolean) => {
       socket.destroy();
       resolveAnswer(result);
     };
@@ -1488,9 +1587,9 @@ const answers = (host, port) =>
     });
     socket.once("error", () => done(false));
   });
-const portTaken = async (port) => (await answers("127.0.0.1", port)) || (await answers("::1", port));
+const portTaken = async (port: number) => (await answers("127.0.0.1", port)) || (await answers("::1", port));
 
-async function listen(port, attempt = 0) {
+async function listen(port: number, attempt = 0) {
   if (attempt > 20) {
     console.error(`No free port between ${FIRST_PORT} and ${port}.`);
     process.exit(1);
@@ -1505,7 +1604,7 @@ async function listen(port, attempt = 0) {
     }),
   );
   server.on("error", (e) => {
-    if (e.code === "EADDRINUSE") void listen(port + 1, attempt + 1);
+    if ((e as NodeJS.ErrnoException).code === "EADDRINUSE") void listen(port + 1, attempt + 1);
     else {
       console.error(e.message);
       process.exit(1);
@@ -1519,7 +1618,7 @@ async function listen(port, attempt = 0) {
 
 const cleanup = () => {
   if (lockOwner()?.pid === process.pid) rmSync(lockFile, { force: true });
-  const info = readJson(daemonFile, {});
+  const info = readJson(daemonFile, {}) as Partial<DaemonFile>;
   if (info.pid === process.pid) rmSync(daemonFile, { force: true });
 };
 process.on("exit", cleanup);

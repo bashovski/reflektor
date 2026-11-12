@@ -3,20 +3,24 @@
 // ended (killed or crashed), "done" after. Files from older versions have no status: done.
 
 import { readFileSync } from "node:fs";
+import type { ChecksRun, ProjectCheck } from "../schema/types.ts";
 
-const alive = (pid) => {
+// checks.json as checks.mts writes it: pid and checks only while it runs, ranAt only once it is done.
+type ChecksFile = { status?: "running" | "done"; pid?: number; startedAt?: string; ranAt?: string; headSha?: string; checks?: string[]; results?: ProjectCheck[] };
+
+const alive = (pid: number | undefined): boolean => {
   try {
-    process.kill(pid, 0);
+    process.kill(pid!, 0);
     return true;
   } catch {
     return false;
   }
 };
 
-export function readChecksRun(file) {
-  let data;
+export function readChecksRun(file: string): ChecksRun | null {
+  let data: ChecksFile;
   try {
-    data = JSON.parse(readFileSync(file, "utf8"));
+    data = JSON.parse(readFileSync(file, "utf8")) as ChecksFile;
   } catch {
     return null;
   }
