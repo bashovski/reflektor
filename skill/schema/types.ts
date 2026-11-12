@@ -48,8 +48,9 @@ export type FindingKind = "secret" | "migration";
 
 export type Severity = "high" | "medium" | "low";
 
-// A safety check hit from collect.mjs. `preview` shows a masked secret, never the full value.
-export type Finding = { kind: FindingKind; rule: string; severity: Severity; path: string; line: number | null; message: string; preview?: string };
+// A safety check hit from collect.mjs. `preview` shows a masked secret, never the full value. `subject` names what a
+// migration rule hit, as the migration writes it: a table, `table.column`, or `old → new` for a rename.
+export type Finding = { kind: FindingKind; rule: string; severity: Severity; path: string; line: number | null; message: string; preview?: string; subject?: string };
 
 export type CheckStatus = "passed" | "failed" | "timeout";
 
