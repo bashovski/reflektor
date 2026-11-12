@@ -170,6 +170,10 @@ try {
       "",
     ].join("\n"),
   );
+  // Rollback code is not flagged: dbmate's and goose's down sections, and a down file of its own.
+  writeFileSync(join(edgeRepo, "dbmate.sql"), "-- migrate:up\nDROP TABLE old_widgets;\n\n-- migrate:down\nDROP TABLE widgets;\n");
+  writeFileSync(join(edgeRepo, "goose.sql"), "-- +goose Up\nTRUNCATE logs;\n-- +goose Down\nTRUNCATE audit;\n");
+  writeFileSync(join(edgeRepo, "0007_init.down.sql"), "DROP TABLE gizmos;\n");
   // Subagent mode turned on in Settings, for this one run: collect has to say so and name the file with the steps.
   writeFileSync(join(home.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: true }));
   const edgeOut = run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", edgeRepo, "--no-fetch", "--base", "main", "--out", join(tmp, "edge.json")], home);
@@ -189,6 +193,8 @@ try {
   const edgeSubjects = subjects(edgeData);
   for (const expected of expectedSubjects) if (!edgeSubjects.includes(expected)) fail(`a migration finding does not name what it hit: wanted "${expected}", got ${edgeSubjects.join(" | ")}`);
   if (!edgeOut.includes("Drops a table: old_books, legacy_authors")) fail("collect.mts does not print what a migration finding hit");
+  for (const expected of ["Drops a table: old_widgets", "Empties a table: logs"]) if (!edgeSubjects.includes(expected)) fail(`a migration's up section was not checked: wanted "${expected}"`);
+  for (const rollback of ["Drops a table: widgets", "Empties a table: audit", "Drops a table: gizmos"]) if (edgeSubjects.includes(rollback)) fail(`rollback code was flagged: "${rollback}"`);
   if (!edgeData.repo.avatar?.image?.startsWith("data:image/png;base64,") || edgeData.repo.avatar.initials !== "EG")
     fail(`a cached avatar was not used: ${JSON.stringify(edgeData.repo.avatar).slice(0, 120)}`);
   const edge = Object.fromEntries(edgeData.files.map((f): [string, DiffFile] => [f.path, f]));

@@ -718,6 +718,22 @@ const MIGRATION_RULES: [rule: string, severity: Severity, test: RegExp | ((line:
     "Changes or deletes rows without a WHERE clause, so it touches every row.",
     (l) => firstMatch(l, /\bDELETE\s+FROM\s+(?:ONLY\s+)?([\w."`[\]]+)/i, /\bUPDATE\s+(?:ONLY\s+)?([\w."`[\]]+)\s+SET\b/i)?.[0] ?? null],
 ];
+// Rollback code runs only when someone rolls a migration back, so the rules skip it: a whole down file (golang-migrate's
+// .down.sql, Diesel's down.sql, Flyway's U<version>__ undo files), and the down section of a file that holds both
+// directions (dbmate's "-- migrate:down", goose's "-- +goose Down", sql-migrate's "-- +migrate Down").
+const ROLLBACK_FILE = /(^|\/)(down\.sql|[^/]+\.down\.sql|U\d[\w.]*__[^/]*\.sql)$/i;
+const SECTION_MARK = /^\s*--\s*(?:migrate:(up|down)|\+(?:goose|migrate)\s+(up|down))\b/i;
+function rollbackLines(lines: string[]): Set<number> {
+  const down = new Set<number>();
+  let inDown = false;
+  lines.forEach((line, i) => {
+    const mark = line.match(SECTION_MARK);
+    if (mark) inDown = (mark[1] ?? mark[2]).toLowerCase() === "down";
+    else if (inDown) down.add(i + 1);
+  });
+  return down;
+}
+
 const INDEX_RULE = /\bCREATE\s+(UNIQUE\s+)?INDEX\s+(?!CONCURRENTLY)(?:IF\s+NOT\s+EXISTS\s+)?\S+\s+ON\s+(?:ONLY\s+)?["`]?([\w.]+)/i;
 
 const mask = (value: string) => (value.length <= 8 ? "…" : `${value.slice(0, 4)}…(${value.length} characters)`);
@@ -733,7 +749,8 @@ for (const f of files) {
   const lines = f.newContent.split("\n");
   const added = new Set(f.changedLines.added);
   const scanSecrets = !NOT_REAL.test(f.path);
-  const isMigration = MIGRATION_PATH.test(f.path);
+  const isMigration = MIGRATION_PATH.test(f.path) && !ROLLBACK_FILE.test(f.path);
+  const rollback = isMigration ? rollbackLines(lines) : new Set<number>();
   const createdTables = new Set([...f.newContent.matchAll(/\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["`]?([\w.]+)/gi)].map((m) => m[1].toLowerCase()));
 
   for (const n of added) {
@@ -753,7 +770,7 @@ for (const f of files) {
         break;
       }
     }
-    if (!isMigration) continue;
+    if (!isMigration || rollback.has(n)) continue;
     for (const [rule, severity, test, message, subjectOf] of MIGRATION_RULES) {
       const hit = typeof test === "function" ? test(text) : test.test(text);
       if (!hit) continue;
