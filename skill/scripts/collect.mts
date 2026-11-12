@@ -148,9 +148,14 @@ const head = git("rev-parse", "--abbrev-ref", "HEAD").trim();
 const headSha = git("rev-parse", "HEAD").trim();
 
 // The pull request as `gh pr view --json number,url,title,baseRefName,state` prints it.
-type PullRequest = { number: number; url: string; title: string; baseRefName: string; state: PrState };
+// state is left out for a GitLab state that has no word on the page.
+type PullRequest = { number: number; url: string; title: string; baseRefName: string; state?: PrState };
 // The fields read from `glab mr view --output json`.
 type MergeRequest = { iid: number; web_url: string; title: string; target_branch: string; state: string };
+
+// GitLab's merge request states in gh's upper-case words. "locked" is the short state while GitLab merges the request,
+// which is still open until it says "merged".
+const GITLAB_STATES: Record<string, PrState> = { opened: "OPEN", locked: "OPEN", merged: "MERGED", closed: "CLOSED" };
 
 // The branch's pull request through gh (github.com only), or its merge request through glab
 // (GitLab), in any state. An open one sets the base branch; the page links to it either way.
@@ -162,8 +167,8 @@ function findPr(): PullRequest | null {
     }
     if (forge === "gitlab" && hasCommand("glab")) {
       const mr = JSON.parse(run("glab", ["mr", "view", head, "--output", "json"], repoRoot, { timeout: 15_000 })) as MergeRequest;
-      // glab says "opened", "merged" or "closed"; the page expects gh's upper-case words.
-      return { number: mr.iid, url: mr.web_url, title: mr.title, baseRefName: mr.target_branch, state: mr.state === "opened" ? "OPEN" : String(mr.state).toUpperCase() as PrState };
+      const state = GITLAB_STATES[mr.state];
+      return { number: mr.iid, url: mr.web_url, title: mr.title, baseRefName: mr.target_branch, ...(state ? { state } : {}) };
     }
   } catch {
     // No pull request for this branch, or the tool is not logged in.
