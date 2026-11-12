@@ -8,7 +8,7 @@ import { useReport } from "./state";
 // The browser tab follows the review: "feature/x · repo", a prefix when the reviewer has
 // something to do, and an icon per status. When news arrives while the reviewer is in another
 // tab or app, the icon gets a red dot and the title blinks until they come back.
-// The daemon and build.mjs write the same base title into the page, so it is right before this runs.
+// The daemon and build.mts write the same base title into the page, so it is right before this runs.
 
 const BLINK_MS = 1200;
 

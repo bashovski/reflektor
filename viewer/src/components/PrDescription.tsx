@@ -34,7 +34,7 @@ const CopyButton = ({ text, label }: { text: string; label: string }) => {
   );
 };
 
-// The pull request title and body that build.mjs wrote from this report.
+// The pull request title and body that build.mts wrote from this report.
 export const PrDescription = () => {
   const agent = useAgent();
   const { bundle } = useReport();

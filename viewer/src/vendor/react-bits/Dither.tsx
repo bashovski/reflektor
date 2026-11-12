@@ -10,7 +10,7 @@
 //
 // License: MIT with a Commons Clause, in LICENSE.md next to this file. It allows the component as part of a product,
 // paid ones included, and forbids selling or redistributing the component itself. The notice ships in
-// skill/THIRD-PARTY-NOTICES.md, written by scripts/build-notices.mjs.
+// skill/THIRD-PARTY-NOTICES.md, written by scripts/build-notices.mts.
 
 import { type CSSProperties, useEffect, useRef } from 'react';
 

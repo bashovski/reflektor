@@ -16,6 +16,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Bundle, DiffData, DiffFile, PlanItem, PlanStatus, Ref, Review, ReviewLevel, Section, SectionKind, Target } from "../schema/types.js";
 import { detectAgent } from "./agent.mjs";
 import { readChecksRun } from "./checks-run.mjs";
 import { shellPath } from "./repo.mjs";
@@ -23,8 +24,8 @@ import { shellPath } from "./repo.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 
 // Allowed values live only in schema/types.ts: every `export type X = "a" | "b";` union is read here.
-function readUnions(file) {
-  const unions = {};
+function readUnions(file: string): Record<string, string[]> {
+  const unions: Record<string, string[]> = {};
   for (const m of readFileSync(file, "utf8").matchAll(/export type (\w+) =([^;{]+);/g)) {
     const members = m[2].split("|").map((s) => s.trim()).filter(Boolean);
     if (members.length && members.every((s) => /^"[^"]*"$/.test(s))) unions[m[1]] = members.map((s) => s.slice(1, -1));
@@ -32,7 +33,7 @@ function readUnions(file) {
   return unions;
 }
 const unions = readUnions(join(here, "../schema/types.ts"));
-const union = (name) => {
+const union = (name: string): string[] => {
   if (!unions[name]) throw new Error(`schema/types.ts has no string union named ${name}`);
   return unions[name];
 };
@@ -51,8 +52,11 @@ const CONTRACT_KINDS = union("ContractKind");
 const CONTRACT_STATUS = union("ContractStatus");
 const MEMBER_CHANGES = union("MemberChange");
 
-function parseArgs(argv) {
-  const args = { open: false };
+// The command-line options; parseArgs makes sure --diff is there.
+type Args = { diff?: string; report?: string; out?: string; html?: string; viewer?: string; checks?: string; open: boolean; draft?: boolean; agent?: string; agentName?: string };
+
+function parseArgs(argv: string[]): Args {
+  const args: Args = { open: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -73,19 +77,22 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const diff = JSON.parse(readFileSync(args.diff, "utf8"));
+const diff = JSON.parse(readFileSync(args.diff!, "utf8")) as DiffData;
+
+// The report as it leaves this script: the flows section below adds `verified` to every flow step.
+type CheckedReport = Bundle["report"];
 
 // The facts in report form, for the page that opens before the agent's report: every file in one list.
-function draftReport() {
+function draftReport(): CheckedReport {
   const changes = diff.stats.additions + diff.stats.deletions;
-  const section = (kind, title, review, reason, files) => ({ kind, title, review, reason, highlights: [], questions: [], files: files.map((f) => ({ path: f.path, note: "" })) });
+  const section = (kind: SectionKind, title: string, review: ReviewLevel, reason: string, files: DiffFile[]): Section => ({ kind, title, review, reason, highlights: [], questions: [], files: files.map((f) => ({ path: f.path, note: "" })) });
   const generated = diff.files.filter((f) => f.generated);
   return {
     version: 1,
     tag: "CHORE",
     title: diff.branch.pr?.title ?? (diff.commits.length === 1 ? diff.commits[0].subject : diff.branch.head),
     summary: "",
-    targets: [...new Set(diff.files.map((f) => f.target).filter(Boolean))],
+    targets: [...new Set(diff.files.map((f) => f.target).filter((t): t is Target => Boolean(t)))],
     reviewMinutes: Math.max(5, Math.round(changes / 40)),
     beforeMerge: [],
     flows: [],
@@ -95,17 +102,17 @@ function draftReport() {
     ].filter((s) => s.files.length),
   };
 }
-const report = args.report ? JSON.parse(readFileSync(args.report, "utf8")) : draftReport();
+const report: CheckedReport = args.report ? JSON.parse(readFileSync(args.report, "utf8")) : draftReport();
 
-const errors = [];
-const warnings = [];
+const errors: string[] = [];
+const warnings: string[] = [];
 // Warnings from collect.mjs (for example a stale coverage file) need no report change; they print as notes.
 const notes = [...(diff.warnings ?? [])];
 
 const filesByPath = new Map(diff.files.map((f) => [f.path, f]));
-const lineCount = (text) => (text == null ? 0 : text.split("\n").length - (text.endsWith("\n") ? 1 : 0));
+const lineCount = (text: string | null): number => (text == null ? 0 : text.split("\n").length - (text.endsWith("\n") ? 1 : 0));
 
-function readRepoFile(path) {
+function readRepoFile(path: string): string | null {
   const full = join(diff.repo.root, path);
   if (existsSync(full)) return readFileSync(full, "utf8");
   try {
@@ -115,17 +122,17 @@ function readRepoFile(path) {
   }
 }
 
-function contentFor(path, side = "new") {
+function contentFor(path: string, side: "new" | "old" = "new"): string | null {
   const f = filesByPath.get(path);
   if (f) return side === "old" ? f.oldContent : f.newContent ?? f.oldContent;
   return readRepoFile(path);
 }
 
-function oneOf(value, allowed, where) {
+function oneOf(value: string, allowed: string[], where: string): void {
   if (!allowed.includes(value)) errors.push(`${where}: "${value}" is not one of ${allowed.join(", ")}`);
 }
 
-function checkRef(ref, where, { mustBeInDiff = false } = {}) {
+function checkRef(ref: Ref | undefined, where: string, { mustBeInDiff = false }: { mustBeInDiff?: boolean } = {}): Ref | undefined {
   if (!ref) return ref;
   if (typeof ref.path !== "string") {
     warnings.push(`${where}: ref has no path, dropped`);
@@ -164,7 +171,7 @@ report.beforeMerge = (report.beforeMerge ?? []).map((b, i) => {
 
 // ------------------------------------------------------------------ sections
 
-const assigned = new Map();
+const assigned = new Map<string, SectionKind>();
 report.sections = (report.sections ?? []).map((s, si) => {
   const where = `sections[${si}] (${s.kind})`;
   oneOf(s.kind, SECTIONS, `${where}.kind`);
@@ -188,7 +195,7 @@ report.sections = (report.sections ?? []).map((s, si) => {
     assigned.set(f.path, s.kind);
     return true;
   }).map((f) => {
-    const diffFile = filesByPath.get(f.path);
+    const diffFile = filesByPath.get(f.path)!;
     const lineNotes = (f.lineNotes ?? []).filter((n) => {
       const content = n.side === "old" ? diffFile.oldContent : diffFile.newContent;
       const ok = content != null && n.line >= 1 && n.line <= lineCount(content);
@@ -245,7 +252,7 @@ if (report.schema) {
 // ------------------------------------------------------------------ safety findings
 // Every high or medium finding from collect.mjs must show up in a highlight or a before-merge item.
 
-const mentioned = [...report.sections.flatMap((s) => s.highlights.map((h) => h.ref)), ...report.beforeMerge.map((b) => b.ref)].filter(Boolean);
+const mentioned = [...report.sections.flatMap((s) => s.highlights.map((h) => h.ref)), ...report.beforeMerge.map((b) => b.ref)].filter((r): r is Ref => Boolean(r));
 for (const f of args.draft ? [] : (diff.findings ?? [])) {
   if (f.severity === "low") continue;
   const covered = mentioned.some((r) => r.path === f.path && (f.line == null || r.line == null || Math.abs(r.line - f.line) <= 3));
@@ -254,8 +261,8 @@ for (const f of args.draft ? [] : (diff.findings ?? [])) {
 
 // ------------------------------------------------------------------ flows
 
-const contextFiles = {};
-const lastIdentifier = (symbol) => {
+const contextFiles: Record<string, string> = {};
+const lastIdentifier = (symbol: string): string => {
   const tokens = symbol.match(/\/[\w/:{}.-]+|[A-Za-z_$][\w$-]*/g) ?? [];
   return tokens.at(-1) ?? symbol;
 };
@@ -288,7 +295,7 @@ report.flows = (report.flows ?? []).map((flow, fi) => ({
 // Every name must be in the changed file its ref points at: the new version, or the old one for
 // anything removed. A misspelled or made-up name is dropped with a warning.
 
-const hasWord = (text, word) =>
+const hasWord = (text: string | null, word: string): boolean =>
   text != null && word !== "" && new RegExp(`(^|[^\\w$])${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\w$])`).test(text);
 
 report.contracts = (report.contracts ?? []).flatMap((c, ci) => {
@@ -323,14 +330,17 @@ if (errors.length) {
 // ------------------------------------------------------------------ file icons
 // assets/file-icons.json comes from atom-material-icons (MIT). Only the icons this report's files use are embedded.
 
-function pickFileIcons(paths) {
+// assets/file-icons.json: [file name pattern, icon, color] rules, and the SVG of each icon.
+type IconSet = { rules: [string, string, string][]; icons: Record<string, string> };
+
+function pickFileIcons(paths: string[]): Bundle["fileIcons"] {
   const file = join(here, "../assets/file-icons.json");
   if (!existsSync(file)) return null;
-  const set = JSON.parse(readFileSync(file, "utf8"));
+  const set = JSON.parse(readFileSync(file, "utf8")) as IconSet;
   // Angular naming rules (*.service.ts, *.component.ts) would mislabel files in other projects.
   const angular = existsSync(join(diff.repo.root, "angular.json"));
-  const rules = set.rules.filter(([, icon]) => angular || !icon.startsWith("angular")).map(([pattern, icon, color]) => [new RegExp(pattern), icon, color]);
-  const result = { icons: {}, byPath: {} };
+  const rules = set.rules.filter(([, icon]) => angular || !icon.startsWith("angular")).map(([pattern, icon, color]): [RegExp, string, string] => [new RegExp(pattern), icon, color]);
+  const result: NonNullable<Bundle["fileIcons"]> = { icons: {}, byPath: {} };
   for (const path of paths) {
     const [, icon, color] = rules.find(([re]) => re.test(basename(path))) ?? [null, "default", null];
     const key = color ? `${icon}-${color}` : icon;
@@ -352,7 +362,7 @@ const fileIcons = pickFileIcons([...diff.files.map((f) => f.path), ...Object.key
 // The daemon writes review-<round>.json next to the report. report.review answers one of them.
 
 // Report files live next to diff.json (see reportDir in repo.mjs), unless --out puts them elsewhere.
-const dataDir = dirname(resolve(args.diff));
+const dataDir = dirname(resolve(args.diff!));
 const reviewDir = args.out ? dirname(resolve(args.out)) : dataDir;
 const rounds = existsSync(reviewDir)
   ? readdirSync(reviewDir)
@@ -362,17 +372,17 @@ const rounds = existsSync(reviewDir)
   : [];
 const round = rounds.length ? Math.max(...rounds) + 1 : 1;
 
-let previousReview = null;
+let previousReview: Review | null = null;
 if (report.review) {
   const file = join(reviewDir, `review-${report.review.round}.json`);
   if (!existsSync(file)) {
     warnings.push(`review: ${file} does not exist, so the replies cannot be shown`);
   } else {
-    previousReview = JSON.parse(readFileSync(file, "utf8"));
+    previousReview = JSON.parse(readFileSync(file, "utf8")) as Review;
     const ids = new Set(previousReview.comments.map((c) => c.id));
     report.review.replies = (report.review.replies ?? []).filter((r, i) => {
       oneOf(r.status, REPLY_STATUS, `review.replies[${i}].status`);
-      if (!ids.has(r.commentId)) warnings.push(`review.replies[${i}]: no comment with id ${r.commentId} in round ${report.review.round}, removed`);
+      if (!ids.has(r.commentId)) warnings.push(`review.replies[${i}]: no comment with id ${r.commentId} in round ${report.review!.round}, removed`);
       return ids.has(r.commentId);
     }).map((r, i) => ({ ...r, ref: checkRef(r.ref, `review.replies[${i}]`) }));
     const answered = new Set(report.review.replies.map((r) => r.commentId));
@@ -389,12 +399,12 @@ if (errors.length) {
 
 // The checks may still be running: the report is built anyway, and the daemon streams their
 // progress from `file` to the page.
-function loadProjectChecks() {
-  const file = resolve(args.checks ?? join(dirname(resolve(args.diff)), "checks.json"));
+function loadProjectChecks(): Bundle["projectChecks"] {
+  const file = resolve(args.checks ?? join(dirname(resolve(args.diff!)), "checks.json"));
   const run = readChecksRun(file);
   if (!run) return null;
   if (run.status === "stopped") notes.push("Project checks stopped before they finished; the report shows the ones that did.");
-  const since = Date.parse(run.ranAt ?? run.startedAt);
+  const since = Date.parse(run.ranAt ?? run.startedAt!);
   // Stale when a commit or an uncommitted file is newer than the run.
   const newestCommit = Math.max(0, ...diff.commits.map((c) => Date.parse(c.date)));
   const newestFile = Math.max(
@@ -414,20 +424,20 @@ const projectChecks = loadProjectChecks();
 // ------------------------------------------------------------------ PR description
 // Markdown for the pull request, built only from the checked report. Written next to the HTML and embedded in it.
 
-const TARGET_LABELS = { backend: "Backend", frontend: "Frontend", database: "Database", infrastructure: "Infrastructure", cicd: "CI/CD", misc: "Misc" };
-const SECTION_LABELS = {
+const TARGET_LABELS: Record<Target, string> = { backend: "Backend", frontend: "Frontend", database: "Database", infrastructure: "Infrastructure", cicd: "CI/CD", misc: "Misc" };
+const SECTION_LABELS: Record<SectionKind, string> = {
   database: "Database", infrastructure: "Infrastructure", config: "Config", dependencies: "Dependencies", backend: "Backend",
   frontend: "Frontend", cicd: "CI/CD", tests: "Tests", refactors: "Refactors", generated: "Generated", other: "Other",
 };
 // Report text may hold short lists; a PR bullet needs one line.
-const oneLine = (text) =>
+const oneLine = (text: string): string =>
   text
     .split("\n")
     .map((l) => l.trim().replace(/^([-*•]|\d+[.)])\s+/, ""))
     .filter(Boolean)
     .join("; ")
     .replace(/:;/g, ":");
-const refText = (ref) => (ref ? ` (\`${ref.path}${ref.line ? `:${ref.line}` : ""}\`)` : "");
+const refText = (ref: Ref | undefined): string => (ref ? ` (\`${ref.path}${ref.line ? `:${ref.line}` : ""}\`)` : "");
 
 function prDescription() {
   const title = `[${report.tag}] ${report.title}`;
@@ -460,9 +470,9 @@ function prDescription() {
     lines.push("");
   }
 
-  if (report.contracts.length) {
+  if (report.contracts!.length) {
     lines.push("## Types and contracts", "");
-    for (const c of report.contracts) {
+    for (const c of report.contracts!) {
       const value =
         c.kind !== "constant" ? "" : c.was && c.value ? `: \`${c.was}\` → \`${c.value}\`` : c.value ? `: \`${c.value}\`` : c.was ? `: was \`${c.was}\`` : "";
       lines.push(`- **${c.name}** (${c.kind}, ${c.status}${c.generated ? ", generated" : ""})${value}${c.note ? `. ${oneLine(c.note)}` : ""}${refText(c.ref)}`);
@@ -474,7 +484,7 @@ function prDescription() {
     const planned = report.plan.items.filter((i) => i.status !== "extra");
     const done = planned.filter((i) => i.status === "done").length;
     lines.push("## Plan", "", `${done} of ${planned.length} planned items done (${report.plan.source}).`);
-    for (const i of report.plan.items.filter((i) => i.status !== "done")) {
+    for (const i of report.plan.items.filter((i): i is PlanItem & { status: Exclude<PlanStatus, "done"> } => i.status !== "done")) {
       const label = { partial: "Partly done", missing: "Not done", extra: "Not in the plan" }[i.status];
       lines.push(`- ${label}: ${oneLine(i.text)}${i.note ? `. ${oneLine(i.note)}` : ""}`);
     }
@@ -515,7 +525,7 @@ const prText = partial || args.draft ? null : prDescription();
 const slug = diff.branch.head.replace(/[^\w.-]+/g, "-");
 const out = resolve(args.out ?? join(dataDir, `${slug}-${diff.branch.headSha.slice(0, 7)}-r${round}.json`));
 
-const bundle = {
+const bundle: Bundle = {
   diff,
   report,
   contextFiles,
@@ -536,15 +546,15 @@ writeFileSync(out, JSON.stringify(bundle));
 // The standalone page: the viewer with this report's data inside, for keeping or sending.
 const htmlOut = args.html ? resolve(args.html) : args.open ? out.replace(/\.json$/, ".html") : null;
 if (htmlOut) {
-  // Installed skill ships assets/viewer.html; the source checkout uses the Vite build output.
-  const viewerPath = args.viewer ?? [join(here, "../assets/viewer.html"), join(here, "../../viewer/dist/standalone/index.html")].find(existsSync);
+  // The package ships the standalone page as assets/viewer.html (scripts/build-skill.mts in the pr-report repo).
+  const viewerPath = args.viewer ?? [join(here, "../assets/viewer.html")].find(existsSync);
   if (!viewerPath) throw new Error("Viewer not found. Build it with `pnpm build` or pass --viewer.");
   const html = readFileSync(viewerPath, "utf8");
   if (!html.includes("__PR_REPORT_DATA__")) throw new Error(`${viewerPath} has no data placeholder`);
   // The page's base title (see viewer/src/lib/tab.ts), so the tab is right while the page loads.
   const title = `${diff.branch.head} · ${diff.repo.name}${round > 1 ? ` · round ${round}` : ""}`.replace(
     /[&<>]/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c],
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c as "&" | "<" | ">"],
   );
   mkdirSync(dirname(htmlOut), { recursive: true });
   writeFileSync(
@@ -591,5 +601,5 @@ for (const w of warnings) console.log(`warning: ${w}`);
 
 if (args.open) {
   const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
-  spawn(opener, [htmlOut], { detached: true, stdio: "ignore" }).unref();
+  spawn(opener, [htmlOut!], { detached: true, stdio: "ignore" }).unref();
 }

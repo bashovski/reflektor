@@ -23,7 +23,7 @@
 - Project checks ask first when the branch has commits by someone else
 - Speed: diffs render only near the screen, code colored with WebAssembly lexers, the daemon serves the viewer as cached files and each report is only its data (44-file change: 2.4 s frozen and 161 MB before, under 0.3 s and 37 MB after)
 - Any agent, by name: the page and the inbox name the agent on the other side (`skill/agents.json`, worked out in the agent's shell and sent with every call) and say "your agent" when nobody told them
-- Installs for agents other than Claude Code: `install.mjs --target agents` puts a copy with its own `SKILL.md` in `~/.agents/skills`, the folder Codex reads
+- Installs for agents other than Claude Code: `pnpm run deploy --target agents` puts a copy with its own `SKILL.md` in `~/.agents/skills`, the folder Codex reads
 - Hooks: `preRun`, `postRun` and `onApproved` commands in `.pr-report.json`, run by the scripts with `PR_REPORT_*` variables, and held back like the checks while the branch has commits by authors not yet trusted
 
 ## Later (remind)
@@ -35,7 +35,7 @@
 - **A neutral `PR_REPORT_BASH`:** `gitBash()` reads only `CLAUDE_CODE_GIT_BASH_PATH` before it searches for Git Bash on Windows.
 - **Before/after screenshots** of changed UI pages, when Playwright and a dev server are available.
 - **Tests on other stacks:** fake repos in Go, Python and Rust run by `pnpm check`, to prove the skill works for any stack.
-- **Smaller exported pages:** `build.mjs --html` still writes about 11 MB, almost all of it Shiki grammars kept as a fallback for browsers without WebAssembly. Drop them, or embed only the languages the diff uses. Reports opened through the daemon are not affected.
+- **Smaller exported pages:** `build.mts --html` still writes about 11 MB, almost all of it Shiki grammars kept as a fallback for browsers without WebAssembly. Drop them, or embed only the languages the diff uses. Reports opened through the daemon are not affected.
 
 ## Open decisions
 

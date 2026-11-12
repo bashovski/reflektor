@@ -24,12 +24,24 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import type { CheckStatus, ProjectCheck, RepoConfig } from "../schema/types.js";
 import { globToRegExp, replaceFile, repoHome, reportDir, runShell, shellPath, untrustedAuthors } from "./repo.mjs";
 
 const TAIL_LINES = 80;
 
-function parseArgs(argv) {
-  const args = { repo: ".", runs: [], when: {}, from: [], source: null, base: null, timeout: 600, out: null, mode: "run", trust: false };
+// One project check, as --run, .pr-report.json and the saved checks give it.
+type Check = NonNullable<RepoConfig["checks"]>[number];
+// The command-line options. `mode` is "run" or the flag that picked another one ("wait", "plan", ...).
+type Args = { repo: string; runs: Check[]; when: Record<string, string[]>; from: string[]; source: string | null; base: string | null; timeout: number; out: string | null; mode: string; trust: boolean };
+// checks.json as this script writes it: pid and checks only while it runs, ranAt only once it is done.
+type ChecksFile = { version: 1; status: "running" | "done"; pid?: number; startedAt: string; ranAt?: string; headSha: string; checks?: string[]; results: ProjectCheck[] };
+// The checks saved for this repo by --save; `broken` is set when one of them could not run.
+type SavedChecks = { version: 1; savedAt: string; source: string | null; from: Record<string, string | null>; checks: Check[]; broken?: { check: string; reason: string; at: string } };
+// trust.json: the commit authors the user trusted for this repo with --trust.
+type TrustFile = { version: 1; authors: string[] };
+
+function parseArgs(argv: string[]): Args {
+  const args: Args = { repo: ".", runs: [], when: {}, from: [], source: null, base: null, timeout: 600, out: null, mode: "run", trust: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -57,30 +69,30 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const git = (...argv) => execFileSync("git", argv, { cwd: resolve(args.repo), encoding: "utf8" }).trim();
+const git = (...argv: string[]): string => execFileSync("git", argv, { cwd: resolve(args.repo), encoding: "utf8" }).trim();
 const root = git("rev-parse", "--show-toplevel");
 const gitDir = resolve(root, git("rev-parse", "--git-dir"));
 const out = resolve(args.out ?? join(reportDir(gitDir, git("rev-parse", "--abbrev-ref", "HEAD")), "checks.json"));
 
-const readRun = () => {
+const readRun = (): ChecksFile | null => {
   try {
-    return JSON.parse(readFileSync(out, "utf8"));
+    return JSON.parse(readFileSync(out, "utf8")) as ChecksFile;
   } catch {
     return null;
   }
 };
-const alive = (pid) => {
+const alive = (pid: number | undefined): boolean => {
   try {
-    process.kill(pid, 0);
+    process.kill(pid!, 0);
     return true;
   } catch {
     return false;
   }
 };
-const running = (run) => run?.status === "running" && alive(run.pid);
+const running = (run: ChecksFile | null): boolean => run?.status === "running" && alive(run.pid);
 
-function printResults(results) {
-  const count = (s) => results.filter((r) => r.status === s).length;
+function printResults(results: ProjectCheck[]): void {
+  const count = (s: CheckStatus): number => results.filter((r) => r.status === s).length;
   console.log(`\nProject checks: ${count("passed")} passed, ${count("failed")} failed, ${count("timeout")} timed out`);
   console.log(`Wrote ${shellPath(out)}`);
   for (const r of results.filter((r) => r.status !== "passed")) {
@@ -95,7 +107,7 @@ const WAIT_LIMIT_MS = 9 * 60_000;
 if (args.mode === "wait") {
   let run = readRun();
   const started = Date.now();
-  if (running(run)) console.log(`Waiting for: ${run.checks.filter((name) => !run.results.some((r) => r.name === name)).join(", ")}`);
+  if (running(run)) console.log(`Waiting for: ${run!.checks!.filter((name) => !run!.results.some((r) => r.name === name)).join(", ")}`);
   while (running(run)) {
     if (Date.now() - started > WAIT_LIMIT_MS) {
       console.log("The checks are still running after 9 minutes. Run --wait again.");
@@ -116,7 +128,7 @@ if (args.mode === "wait") {
 
 // ------------------------------------------------------------------ where the commands come from
 
-const quietGit = (...argv) => {
+const quietGit = (...argv: string[]): string | null => {
   try {
     return execFileSync("git", argv, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch {
@@ -126,32 +138,32 @@ const quietGit = (...argv) => {
 const savedFile = join(repoHome(root), "checks.json");
 const trustFile = join(repoHome(root), "trust.json");
 const configFile = join(root, ".pr-report.json");
-const readJson = (file) => {
+const readJson = <T,>(file: string): T | null => {
   try {
-    return JSON.parse(readFileSync(file, "utf8"));
+    return JSON.parse(readFileSync(file, "utf8")) as T;
   } catch {
     return null;
   }
 };
-const writeJson = (file, value) => {
+const writeJson = (file: string, value: unknown): void => {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 };
 // Fingerprint of a file the saved commands came from; null when it is gone.
-const hashOf = (file) => {
+const hashOf = (file: string): string | null => {
   try {
     return createHash("sha1").update(readFileSync(join(root, file))).digest("hex");
   } catch {
     return null;
   }
 };
-const withWhen = (c) => (args.when[c.name] ? { ...c, when: args.when[c.name] } : c);
+const withWhen = (c: Check): Check => (args.when[c.name] ? { ...c, when: args.when[c.name] } : c);
 
 function pickChecks() {
   if (args.runs.length) return { source: "--run", checks: args.runs.map(withWhen) };
-  const config = readJson(configFile);
+  const config = readJson<RepoConfig>(configFile);
   if (config?.checks?.length) return { source: ".pr-report.json", checks: config.checks };
-  const saved = readJson(savedFile);
+  const saved = readJson<SavedChecks>(savedFile);
   if (saved?.checks?.length) {
     const changed = Object.entries(saved.from ?? {}).filter(([file, hash]) => hashOf(file) !== hash).map(([file]) => file);
     return { source: `saved for this repo on ${new Date(saved.savedAt).toLocaleDateString("en-CA")}${saved.source ? `, ${saved.source}` : ""}`, checks: saved.checks, saved, changed };
@@ -160,7 +172,7 @@ function pickChecks() {
 }
 
 // Where this branch starts: the merge base with --base or the remote's default branch.
-const baseRefs = [args.base, "origin/HEAD", "origin/main", "origin/master", "main", "master"].filter(Boolean);
+const baseRefs = [args.base, "origin/HEAD", "origin/main", "origin/master", "main", "master"].filter((r): r is string => Boolean(r));
 function baseCommit() {
   for (const ref of baseRefs) {
     const base = quietGit("merge-base", "HEAD", ref);
@@ -177,14 +189,14 @@ function changedFiles() {
   return [...(quietGit("diff", "--name-only", base) ?? "").split("\n"), ...(quietGit("ls-files", "--others", "--exclude-standard") ?? "").split("\n")].filter(Boolean);
 }
 
-function select(checks) {
+function select(checks: Check[]) {
   const changed = checks.some((c) => c.when?.length) ? changedFiles() : null;
-  const applies = (c) => !c.when?.length || !changed || changed.some((file) => c.when.some((glob) => globToRegExp(glob).test(file)));
+  const applies = (c: Check): boolean => !c.when?.length || !changed || changed.some((file) => c.when!.some((glob) => globToRegExp(glob).test(file)));
   return { run: checks.filter(applies), skipped: checks.filter((c) => !applies(c)) };
 }
 
-const plural = (n) => `${n} ${n === 1 ? "check" : "checks"}`;
-const describe = (c) => `${c.name}: ${c.command}${c.when?.length ? `  (only when ${c.when.join(", ")} changed)` : ""}`;
+const plural = (n: number): string => `${n} ${n === 1 ? "check" : "checks"}`;
+const describe = (c: Check): string => `${c.name}: ${c.command}${c.when?.length ? `  (only when ${c.when.join(", ")} changed)` : ""}`;
 
 if (args.mode === "save") {
   if (!args.runs.length) throw new Error('--save needs at least one --run "name=command"');
@@ -207,12 +219,12 @@ if (args.mode === "forget") {
 }
 
 if (args.mode === "share") {
-  const saved = readJson(savedFile);
+  const saved = readJson<SavedChecks>(savedFile);
   if (!saved?.checks?.length) {
     console.log("No checks are saved for this repo.");
     process.exit(0);
   }
-  writeJson(configFile, { ...(readJson(configFile) ?? {}), checks: saved.checks });
+  writeJson(configFile, { ...(readJson<RepoConfig>(configFile) ?? {}), checks: saved.checks });
   console.log(`Copied ${plural(saved.checks.length)} into ${configFile}. Commit it to share them; it now comes before the saved ones.`);
   process.exit(0);
 }
@@ -252,13 +264,13 @@ if (strangers.length && !args.trust) {
   process.exit(4);
 }
 if (strangers.length) {
-  const authors = [...new Set([...(readJson(trustFile)?.authors ?? []), ...strangers.map((a) => a.email)])];
+  const authors = [...new Set([...(readJson<TrustFile>(trustFile)?.authors ?? []), ...strangers.map((a) => a.email)])];
   writeJson(trustFile, { version: 1, authors });
   console.log(`Trusting for this repo from now on: ${strangers.map((a) => a.label).join(", ")} (--forget removes this)`);
 }
 
 if (running(readRun())) {
-  console.log(`Checks are already running for this repo (pid ${readRun().pid}). Wait for them with --wait.`);
+  console.log(`Checks are already running for this repo (pid ${readRun()!.pid}). Wait for them with --wait.`);
   process.exit(0);
 }
 
@@ -271,9 +283,9 @@ console.log(`Checks from ${picked.source}`);
 for (const c of skipped) console.log(`Skipping ${c.name}: nothing it covers changed`);
 if (picked.changed?.length) console.log(`warning: ${picked.changed.join(", ")} changed since these checks were saved; they may be out of date`);
 
-const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
+const stripAnsi = (text: string): string => text.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
 
-async function runCheck({ name, command, timeout }) {
+async function runCheck({ name, command, timeout }: Check): Promise<ProjectCheck> {
   const r = await runShell(command, { cwd: root, env: { ...process.env, CI: "1", FORCE_COLOR: "0" }, timeoutMs: (timeout ?? args.timeout) * 1000 });
   if (r.error) return { name, command, status: "failed", exitCode: null, durationMs: r.durationMs, outputTail: r.error };
   const lines = stripAnsi(r.output).trimEnd().split(/\r?\n/);
@@ -290,8 +302,8 @@ async function runCheck({ name, command, timeout }) {
 // Written after every check, so --wait and build.mjs see the run's progress.
 const headSha = git("rev-parse", "HEAD");
 const startedAt = new Date().toISOString();
-const results = [];
-const save = (status) => {
+const results: ProjectCheck[] = [];
+const save = (status: ChecksFile["status"]): void => {
   const run =
     status === "running"
       ? { version: 1, status, pid: process.pid, startedAt, headSha, checks: checks.map((c) => c.name), results }

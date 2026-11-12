@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import type { RepoAvatar } from "../schema/types.js";
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const MAX_BYTES = 256 * 1024;
@@ -14,7 +15,7 @@ const TIMEOUT_MS = 3000;
 const COLORS = ["#2563eb", "#7c3aed", "#db2777", "#dc2626", "#c2410c", "#b45309", "#15803d", "#0f766e", "#0e7490", "#4f46e5", "#a21caf", "#475569"];
 
 // "RnD-Labz" -> "RL", "monorepo" -> "M". A GitLab subgroup path uses its top group.
-const initialsOf = (owner) =>
+const initialsOf = (owner: string): string =>
   owner
     .split("/")[0]
     .split(/[\s._-]+/)
@@ -23,7 +24,7 @@ const initialsOf = (owner) =>
     .map((word) => word[0].toUpperCase())
     .join("") || "?";
 
-function imageType(bytes) {
+function imageType(bytes: Buffer): string | null {
   if (bytes[0] === 0x89 && bytes.subarray(1, 4).toString("latin1") === "PNG") return "image/png";
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
   if (bytes.subarray(0, 3).toString("latin1") === "GIF") return "image/gif";
@@ -33,7 +34,7 @@ function imageType(bytes) {
 
 // null when the host answers that there is no picture. Throws when it cannot answer (offline, a
 // server error), so that the next run tries again.
-async function get(url, signal) {
+async function get(url: string | null | undefined, signal: AbortSignal): Promise<Response | null> {
   if (!url || new URL(url).protocol !== "https:") return null;
   const res = await fetch(url, { signal });
   if (res.status === 404) return null;
@@ -41,17 +42,17 @@ async function get(url, signal) {
   return res;
 }
 
-async function download(host, owner, signal) {
-  let url;
+async function download(host: string, owner: string, signal: AbortSignal): Promise<Buffer | null> {
+  let url: string | null | undefined;
   if (host === "github.com") {
     url = `https://github.com/${encodeURIComponent(owner)}.png?size=64`;
   } else {
     // GitLab has no picture URL by name, so ask its public API: a group first, then a user.
     const group = await get(`https://gitlab.com/api/v4/groups/${encodeURIComponent(owner)}?with_projects=false`, signal);
-    url = group && (await group.json()).avatar_url;
+    url = group && ((await group.json()) as { avatar_url?: string | null }).avatar_url;
     if (!url && !owner.includes("/")) {
       const users = await get(`https://gitlab.com/api/v4/users?username=${encodeURIComponent(owner)}`, signal);
-      url = users && (await users.json())[0]?.avatar_url;
+      url = users && ((await users.json()) as { avatar_url?: string | null }[])[0]?.avatar_url;
     }
   }
   const res = await get(url, signal);
@@ -60,14 +61,17 @@ async function download(host, owner, signal) {
   return bytes.length <= MAX_BYTES && imageType(bytes) ? bytes : null;
 }
 
-export async function ownerAvatar({ host, owner, name }, { allowDownload = true } = {}) {
+export async function ownerAvatar(
+  { host, owner, name }: { host: string | null; owner: string | null; name: string },
+  { allowDownload = true }: { allowDownload?: boolean } = {},
+): Promise<RepoAvatar> {
   const initials = initialsOf(owner ?? name);
-  const avatar = { image: null, initials, color: COLORS[initials.charCodeAt(0) % COLORS.length] };
+  const avatar: RepoAvatar = { image: null, initials, color: COLORS[initials.charCodeAt(0) % COLORS.length] };
   if (!owner || (host !== "github.com" && host !== "gitlab.com")) return avatar;
 
   // One file per owner. An empty file means the host has no picture for it.
   const file = join(HOME, "cache", "avatars", host, owner.toLowerCase().replace(/[^a-z0-9-]+/g, "_"));
-  let bytes = existsSync(file) ? readFileSync(file) : null;
+  let bytes: Buffer | null = existsSync(file) ? readFileSync(file) : null;
   if (!bytes && allowDownload) {
     try {
       bytes = (await download(host, owner, AbortSignal.timeout(TIMEOUT_MS))) ?? Buffer.alloc(0);
@@ -78,6 +82,6 @@ export async function ownerAvatar({ host, owner, name }, { allowDownload = true 
     }
   }
   const type = bytes?.length ? imageType(bytes) : null;
-  if (type) avatar.image = `data:${type};base64,${bytes.toString("base64")}`;
+  if (type) avatar.image = `data:${type};base64,${bytes!.toString("base64")}`;
   return avatar;
 }

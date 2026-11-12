@@ -3,7 +3,7 @@ import { useLive } from "./live";
 import { useReport } from "./state";
 
 // The words the page uses for the coding agent on the other side of the review. They come from whoever
-// called last (the daemon keeps it per review, see skill/scripts/agent.mjs), else from the build, and
+// called last (the daemon keeps it per review, see skill/scripts/agent.mts), else from the build, and
 // when nobody said, the page speaks of "your agent".
 export type Agent = {
   known: boolean;

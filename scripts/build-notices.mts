@@ -1,26 +1,34 @@
 #!/usr/bin/env node
 // Writes skill/THIRD-PARTY-NOTICES.md: the license of every package that ships inside pr-report, with its
-// text. The viewer bundles its runtime dependencies into skill/assets, the file icons come from
+// text. The viewer bundles its runtime dependencies into assets/, the file icons come from
 // atom-material-icons, and Tailwind generates the stylesheet, so all of those are covered. Apache-2.0,
 // MIT, ISC and OFL all ask for their license text to travel with the code.
 //
 // Source that was copied into viewer/src/vendor instead of installed is covered too, from the license file kept
 // next to it.
 //
-// Run it after changing viewer/package.json or viewer/src/vendor; scripts/check.mjs fails when a runtime dependency
+// Run it after changing viewer/package.json or viewer/src/vendor; scripts/check.mts fails when a runtime dependency
 // or a vendor folder is missing here.
-// Usage: node scripts/build-notices.mjs
+// Usage: pnpm run notices
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { root } from "./paths.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const modules = join(root, "viewer", "node_modules");
-const viewer = JSON.parse(readFileSync(join(root, "viewer", "package.json"), "utf8"));
+// The fields of a package.json read here.
+type PackageJson = {
+  version: string;
+  license?: string;
+  homepage?: string;
+  repository?: string | { url?: string };
+  dependencies: Record<string, string>;
+};
+
+const viewer = JSON.parse(readFileSync(join(root, "viewer", "package.json"), "utf8")) as PackageJson;
 
 // Why each one ships, for the reader of the notices file.
-const WHY = {
+const WHY: Record<string, string> = {
   "@fontsource-variable/geist": "the page's text font",
   "@fontsource-variable/geist-mono": "the page's code font",
   "@headlessui/react": "the menus and dialogs",
@@ -31,7 +39,7 @@ const WHY = {
   "react-dom": "the page",
   shiki: "the code highlighting themes",
   tailwindcss: "generated the page's stylesheet at build time",
-  "atom-material-icons": "the file type icons in skill/assets/file-icons.json",
+  "atom-material-icons": "the file type icons in assets/file-icons.json",
 };
 
 const packages = [...Object.keys(viewer.dependencies), "tailwindcss", "atom-material-icons"];
@@ -48,24 +56,24 @@ const COPIED = [
   },
 ];
 
-const licenseText = (dir) => {
+const licenseText = (dir: string) => {
   const file = readdirSync(dir).find((name) => /^(LICENSE|LICENCE|COPYING)(\.|$)/i.test(name));
   return file ? readFileSync(join(dir, file), "utf8").trim() : null;
 };
-const repositoryUrl = (pkg) => {
+const repositoryUrl = (pkg: PackageJson) => {
   const repo = typeof pkg.repository === "string" ? pkg.repository : pkg.repository?.url;
   return pkg.homepage ?? (repo ? repo.replace(/^git\+/, "").replace(/\.git$/, "").replace(/^git:\/\//, "https://") : null);
 };
 
-const sections = [];
-const missing = [];
+const sections: string[] = [];
+const missing: string[] = [];
 for (const name of packages) {
   const dir = join(modules, name);
   if (!existsSync(join(dir, "package.json"))) {
     missing.push(name);
     continue;
   }
-  const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as PackageJson;
   const text = licenseText(dir);
   if (!text) missing.push(`${name} (no license file)`);
   const link = repositoryUrl(pkg);
@@ -93,10 +101,10 @@ if (missing.length) {
 
 const header =
   `# Third-party notices\n\n` +
-  `pr-report ships the open source packages below inside the skill: the viewer bundles its dependencies into \`skill/assets\`, ` +
+  `pr-report ships the open source packages below inside the skill: the viewer bundles its dependencies into \`assets/\`, ` +
   `the inbox serves Fuse.js, the file type icons come from atom-material-icons, Tailwind CSS generated the stylesheet, ` +
   `and the setup wizard's background is source copied from React Bits. ` +
-  `Each one's license follows. This file is written by \`scripts/build-notices.mjs\` from the installed packages and from \`viewer/src/vendor\`.\n\n`;
+  `Each one's license follows. This file is written by \`scripts/build-notices.mts\` from the installed packages and from \`viewer/src/vendor\`.\n\n`;
 const out = join(root, "skill", "THIRD-PARTY-NOTICES.md");
 writeFileSync(out, header + sections.join("\n"));
 console.log(`Wrote ${out}: ${sections.length} sections.`);

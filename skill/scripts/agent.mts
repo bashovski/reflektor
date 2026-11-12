@@ -21,12 +21,18 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { AgentInfo } from "../schema/types.js";
 
-const TABLE = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "agents.json"), "utf8"));
+// One entry of ../agents.json.
+type AgentEntry = { name: string; product: string; resume?: string; aliases?: string[]; env?: string[]; paths?: string[] };
+// An agent as detected here: the words the page shows, and which source said so.
+export type DetectedAgent = AgentInfo & { id: string; source: "flag" | "env" | "path" | "self" };
+
+const TABLE = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "agents.json"), "utf8")) as Record<string, AgentEntry>;
 const MAX = 40;
 
 // Names end up in the page and in a request header: one line, no control characters, not long.
-const clean = (value) =>
+const clean = (value: unknown): string =>
   typeof value === "string"
     ? value
         .replace(/[\u0000-\u001f\u007f]/g, " ")
@@ -35,9 +41,9 @@ const clean = (value) =>
         .slice(0, MAX)
     : "";
 // "Claude Code", "claude_code" and "claude-code" are the same thing to look up.
-const key = (text) => clean(text).toLowerCase().replace(/[\s_]+/g, "-");
+const key = (text: unknown): string => clean(text).toLowerCase().replace(/[\s_]+/g, "-");
 
-function lookup(text) {
+function lookup(text: unknown): string | null {
   const wanted = key(text);
   if (!wanted) return null;
   for (const [id, entry] of Object.entries(TABLE)) {
@@ -52,14 +58,14 @@ function lookup(text) {
 }
 
 // "some-agent" -> "Some Agent", for an agent the table does not know.
-const tidy = (id) =>
+const tidy = (id: string): string =>
   clean(id)
     .split(/[-_\s]+/)
     .filter(Boolean)
     .map((word) => word[0].toUpperCase() + word.slice(1))
     .join(" ");
 
-function describe(id, source, version = null) {
+function describe(id: string, source: DetectedAgent["source"], version: string | null = null): DetectedAgent | null {
   const known = lookup(id);
   if (known) {
     const entry = TABLE[known];
@@ -70,12 +76,12 @@ function describe(id, source, version = null) {
 }
 
 // "claude-code_2-1-321_agent" -> ["claude-code", "2.1.321"]. Other shapes give the first word and no version.
-function parseAiAgent(value) {
+function parseAiAgent(value: unknown): [string, string | null] {
   const [product, version] = clean(value).split(/[_/@\s]+/);
   return [product ?? "", version && /^\d+([-.]\d+)*$/.test(version) ? version.replace(/-/g, ".") : null];
 }
 
-export function detectAgent({ env = process.env, launchPath = process.argv[1], id, name } = {}) {
+export function detectAgent({ env = process.env, launchPath = process.argv[1], id, name }: { env?: NodeJS.ProcessEnv; launchPath?: string; id?: string; name?: string } = {}): DetectedAgent | null {
   const said = clean(id) || clean(env.PR_REPORT_AGENT);
   if (said) return describe(said, "flag");
 
@@ -103,23 +109,24 @@ export function detectAgent({ env = process.env, launchPath = process.argv[1], i
 }
 
 // What a caller sent, checked before the daemon keeps it and shows it: the right fields, cleaned, or null.
-export function cleanAgent(value) {
+export function cleanAgent(value: unknown): AgentInfo | null {
   if (!value || typeof value !== "object") return null;
-  const name = clean(value.name);
+  const sent = value as Record<string, unknown>;
+  const name = clean(sent.name);
   if (!name) return null;
   return {
-    id: key(value.id) || null,
+    id: key(sent.id) || null,
     name,
-    product: clean(value.product) || name,
-    resume: clean(value.resume) || null,
-    version: clean(value.version) || null,
+    product: clean(sent.product) || name,
+    resume: clean(sent.resume) || null,
+    version: clean(sent.version) || null,
   };
 }
 
 // The agent travels with each call in a header, as JSON made safe for one.
 export const AGENT_HEADER = "x-pr-report-agent";
-export const encodeAgent = (agent) => encodeURIComponent(JSON.stringify(agent));
-export function decodeAgent(header) {
+export const encodeAgent = (agent: Partial<AgentInfo>): string => encodeURIComponent(JSON.stringify(agent));
+export function decodeAgent(header: unknown): AgentInfo | null {
   try {
     return cleanAgent(JSON.parse(decodeURIComponent(String(header ?? ""))));
   } catch {

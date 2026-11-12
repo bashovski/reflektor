@@ -22,13 +22,14 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { DiffData, HookName, RepoConfig } from "../schema/types.js";
 import { remoteOf, runShell, untrustedAuthors } from "./repo.mjs";
 
 // Code generation in preRun can be slow; the others should be quick. PR_REPORT_HOOK_SECONDS overrides
 // all three, for tests.
-const LIMIT_SECONDS = { preRun: 300, postRun: 120, onApproved: 120 };
+const LIMIT_SECONDS: Record<HookName, number> = { preRun: 300, postRun: 120, onApproved: 120 };
 
-const readJson = (file) => {
+const readJson = (file: string): unknown => {
   try {
     return JSON.parse(readFileSync(file, "utf8"));
   } catch {
@@ -37,14 +38,24 @@ const readJson = (file) => {
 };
 
 // The commands for one hook: a string or a list of strings in "hooks" of .pr-report.json.
-export function hookCommands(config, name) {
+export function hookCommands(config: RepoConfig | null | undefined, name: HookName): string[] {
   const value = config?.hooks?.[name];
-  return (Array.isArray(value) ? value : [value]).filter((c) => typeof c === "string" && c.trim());
+  return (Array.isArray(value) ? value : [value]).filter((c): c is string => typeof c === "string" && Boolean(c.trim()));
 }
 
 // Runs one hook's commands and prints a line for each, followed by what it printed.
 // Returns { ran, failed }: how many commands ran, and whether one failed or timed out.
-export async function runHooks(name, { root, branch, base, config = readJson(join(root, ".pr-report.json")), env = {}, log = console.log }) {
+export async function runHooks(
+  name: HookName,
+  {
+    root,
+    branch,
+    base,
+    config = readJson(join(root, ".pr-report.json")) as RepoConfig | null,
+    env = {},
+    log = console.log,
+  }: { root: string; branch: string | null; base: string | null | undefined; config?: RepoConfig | null; env?: Record<string, string>; log?: (text: string) => void },
+): Promise<{ ran: number; failed: boolean }> {
   const commands = hookCommands(config, name);
   if (!commands.length) return { ran: 0, failed: false };
 
@@ -63,7 +74,7 @@ export async function runHooks(name, { root, branch, base, config = readJson(joi
   }
 
   const seconds = Number(process.env.PR_REPORT_HOOK_SECONDS) || LIMIT_SECONDS[name];
-  const hookEnv = { ...process.env, PR_REPORT_HOOK: name, PR_REPORT_BRANCH: branch ?? "", PR_REPORT_BASE: base, ...env };
+  const hookEnv = { ...process.env, PR_REPORT_HOOK: name, PR_REPORT_BRANCH: branch ?? "", PR_REPORT_BASE: base!, ...env };
   let ran = 0;
   for (const command of commands) {
     const r = await runShell(command, { cwd: root, env: hookEnv, timeoutMs: seconds * 1000 });
@@ -79,9 +90,12 @@ export async function runHooks(name, { root, branch, base, config = readJson(joi
 
 // A hook for a published round, handed the report's files. The repo, branch and base come from the
 // diff.json in the report folder the daemon names.
-export async function runReportHooks(name, { dir, round, url, log }) {
+export async function runReportHooks(
+  name: HookName,
+  { dir, round, url, log }: { dir: string; round: number; url: string; log?: (text: string) => void },
+): Promise<{ ran: number; failed: boolean }> {
   const diffFile = join(dir, "diff.json");
-  const diff = readJson(diffFile);
+  const diff = readJson(diffFile) as DiffData | null;
   if (!diff?.repo?.root) return { ran: 0, failed: false };
   const prText = join(dir, "pr-description.md");
   return runHooks(name, {

@@ -114,7 +114,7 @@ export const Kbd = ({ name, className }: { name: string; className?: string }) =
   </kbd>
 );
 
-// The PR type, drawn the same way as in the inbox (tagPill in skill/scripts/daemon.mjs): a colored tag with a white icon.
+// The PR type, drawn the same way as in the inbox (tagPill in skill/scripts/daemon.mts): a colored tag with a white icon.
 export const TagPill = ({ tag, className }: { tag: Tag; className?: string }) => {
   const { color, icon: Icon } = TAGS[tag];
   return (

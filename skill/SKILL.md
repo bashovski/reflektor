@@ -334,7 +334,7 @@ It finds this branch's review (or pass `--id`) and prints what waits for you, th
 
 - **Wording or grouping changes:** edit report.json and run build.mjs again. No need to collect again.
 - **After code changes:** run collect.mjs with `--update`, update the carried report.json for what changed, build, and publish again. Use `--since last` only when the user wants a report about just the new changes.
-- **"Viewer not found" from build.mjs:** tell the user to run `install.sh` in the pr-report repo.
+- **"Viewer not found" from build.mjs:** tell the user to run `pnpm build`, then `pnpm run deploy`, in the pr-report repo.
 
 ## Repo config (optional)
 

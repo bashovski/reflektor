@@ -51,7 +51,7 @@ export type LiveState = {
   drift: { files: string[]; fileCount: number; commits: number; branch: string | null } | null;
   // Null when the daemon knows of no pull request; missing in states from an older daemon.
   pr?: LivePr | null;
-  // An agent waits for this review's events (review.mjs wait), and since when the oldest one waits.
+  // An agent waits for this review's events (review.mts wait), and since when the oldest one waits.
   // The agent that called the daemon last for this review; null until one has said who it is.
   agent: AgentInfo | null;
   listening: boolean;
