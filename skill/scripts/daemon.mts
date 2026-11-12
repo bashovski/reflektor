@@ -23,7 +23,7 @@ import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mts";
 import { purgeCache, whoAmI } from "./identity.mts";
 import { readSettings, writeSettings } from "./settings.mts";
 import { replaceFile } from "./repo.mts";
-import type { AgentInfo, Bundle, ChecksRun, CommentKind, CommentTarget, LiveQuestion, PrState, Ref, RepoAvatar, Review, ReviewComment, Tag } from "../schema/types.ts";
+import type { AgentInfo, Bundle, ChecksRun, CommentKind, CommentTarget, InboxData, LiveQuestion, PrState, Ref, RepoAvatar, Review, ReviewComment, Tag } from "../schema/types.ts";
 
 // ------------------------------------------------------------------ types
 // The daemon's own records. Report data and review files follow skill/schema/types.ts.
@@ -623,11 +623,20 @@ function inboxPage(welcome = false) {
         `<label class="search">${icon("search")}<input type="text" name="q" placeholder="Search title, repo or branch" aria-label="Search reviews" autocomplete="off" spellcheck="false"></label>${choices("phase", "Status", phases.map((p) => [p, `<span class="dot" style="background:${PHASES[p][1]}"></span>${PHASES[p][0]}`]))}${choices("tag", "Type", tags.map((t) => [t, tagPill(t)]))}<button type="button" class="clear">Clear filters</button>`,
       )}</div></div>`
     : "";
-  // The theme the review page saved (pr-report:theme, the same script as viewer/index.html) is applied before the
-  // first paint, so the inbox and the review page agree even when the system is set the other way. "system" follows
-  // the OS and changes with it, and a theme picked in a review page tab reaches an open inbox through the storage event.
+  // The inbox's script needs these from here (InboxData), in a JSON block before it.
+  const inboxData: InboxData = {
+    phases: PHASES,
+    tags: Object.keys(TAGS),
+    folderIcon: icon("folder"),
+    shown: Object.fromEntries(all.map((r) => [r.id, r.updatedAt])),
+    token: pageToken,
+    me,
+    daemon: { version: VERSION, node: process.version, startedAt },
+  };
+  // The inbox's two scripts are TypeScript in viewer/src/inbox/, compiled with the viewer (appScript). The theme the
+  // review page saved is applied in the head, before the first paint; the page's script runs at the end of the body.
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<script>(()=>{let saved="system";const read=(v)=>{try{saved=JSON.parse(v??'"system"')}catch{saved="system"}};read(localStorage.getItem("pr-report:theme"));const mq=matchMedia("(prefers-color-scheme: dark)");const apply=()=>{document.documentElement.dataset.theme=saved==="dark"||saved==="light"?saved:mq.matches?"dark":"light"};apply();mq.addEventListener("change",apply);addEventListener("storage",(e)=>{if(e.key==="pr-report:theme"){read(e.newValue);apply()}})})()</script>
+${inlineScript(appScript("inbox-theme.js"))}
 <title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}Reflektor</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}">${FUSE_FILE ? '<link rel="modulepreload" href="/fuse.mjs">' : ""}<style>
 ${FONT_CSS}
 :root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--faint:#83838c;--lead:#52525b;--accent:#18181b;--hover:color-mix(in srgb,var(--text) 5%,transparent);--hover-2:color-mix(in oklab,oklch(55.2% .016 285.938) 10%,transparent);color-scheme:light}
@@ -704,146 +713,8 @@ code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospa
 ${toolbar}<div id="active" data-rows>${active.length ? `<div class="list">${active.map(inboxRow).join("")}</div>` : `<div class="list">${emptyState(welcome, archived.length)}</div>`}</div>
 ${archived.length ? `<details><summary>Archived (${archived.length}): finished reviews after 3 quiet days, others after 14</summary><div class="archived" data-rows><div class="list">${archived.map(inboxRow).join("")}</div></div></details>` : ""}
 </main>
-<script>
-// A browser that never saw the setup page (see viewer/src/lib/setup.ts) is offered it once, here and above a report.
-try{const hint=document.getElementById("setup-hint");if(!localStorage.getItem("pr-report:setup")){hint.hidden=false;document.getElementById("setup-dismiss").onclick=()=>{localStorage.setItem("pr-report:setup",JSON.stringify({at:new Date().toISOString()}));hint.hidden=true}}}catch{}
-const ago=(t)=>{const s=(Date.now()-Date.parse(t))/1000;return s<60?"now":s<3600?Math.round(s/60)+" min ago":s<86400?Math.round(s/3600)+" h ago":Math.round(s/86400)+" d ago"};
-for(const el of document.querySelectorAll("time"))el.textContent=ago(el.dataset.at);
-const PHASES=${JSON.stringify(PHASES)},TAGS=${JSON.stringify(Object.keys(TAGS))},WAITING=["reviewing","planning"],FOLDER=${JSON.stringify(icon("folder"))};
-const LABELS={group:{owner:"Owner",repo:"Repo",status:"Status",type:"Type",none:"None"},sort:{activity:"Recent activity",waiting:"Waiting on you",title:"Title"}};
-// Group, sort and filter happen here, on the rows the server sent. The choice is remembered in this browser.
-let prefs={group:"owner",sort:"activity",phase:[],tag:[]};
-try{const saved=JSON.parse(localStorage.getItem("pr-report-inbox")||"{}");if(LABELS.group[saved.group])prefs.group=saved.group;if(LABELS.sort[saved.sort])prefs.sort=saved.sort;
-for(const k of ["phase","tag"])if(Array.isArray(saved[k]))prefs[k]=saved[k]}catch{}
-// A saved filter for a status or tag no review has any more would hide everything with nothing to untick.
-for(const k of ["phase","tag"]){const offered=[...document.querySelectorAll("input[name="+k+"]")].map((i)=>i.value);prefs[k]=prefs[k].filter((v)=>offered.includes(v))}
-const save=()=>{try{localStorage.setItem("pr-report-inbox",JSON.stringify(prefs))}catch{}};
-// The search lasts for this tab, through the reloads that new events cause, but not into the next visit.
-let query="";try{query=sessionStorage.getItem("pr-report-inbox-q")||""}catch{}
-const searchBox=document.querySelector("input[name=q]");if(searchBox)searchBox.value=query;
-const make=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
-const boxes=[...document.querySelectorAll("[data-rows]")].map((box)=>({box,rows:[...box.querySelectorAll(".row")]}));
-const at=(r)=>r.dataset.updated,rank=(list,k)=>{const i=list.indexOf(k);return i<0?list.length:i};
-const SORTS={activity:(a,b)=>at(b).localeCompare(at(a)),waiting:(a,b)=>WAITING.includes(b.dataset.phase)-WAITING.includes(a.dataset.phase)||at(b).localeCompare(at(a)),title:(a,b)=>a.dataset.title.localeCompare(b.dataset.title,undefined,{sensitivity:"base"})};
-const KEYS={owner:(r)=>r.dataset.owner,repo:(r)=>r.dataset.repo,status:(r)=>r.dataset.phase,type:(r)=>r.dataset.tag,none:()=>""};
-const nameOf=(k)=>prefs.group==="owner"&&!k?"Local repos":k;
-// Fuzzy search with Fuse.js over title, repo and branch. Until it loads, or if it cannot, a plain substring match.
-const items=boxes.flatMap((b)=>b.rows).map((row)=>({row,title:row.dataset.title,repo:row.dataset.repo,branch:row.dataset.branch}));
-let fuse=null,hits=null;
-const search=()=>{const q=query.trim();hits=!q?null:new Set(fuse?fuse.search(q).map((x)=>x.item.row):items.filter((i)=>(i.title+" "+i.repo+" "+i.branch).toLowerCase().includes(q.toLowerCase())).map((i)=>i.row))};
-// "View All Reports for <owner>" on a review page links here with ?owner=, to show only that owner's reviews.
-const onlyOwner=new URLSearchParams(location.search).get("owner");
-const left=document.querySelector(".bar .left");
-// It starts a fresh look at that owner, so a search left from earlier in this tab does not hide their reviews.
-if(onlyOwner!==null){query="";try{sessionStorage.removeItem("pr-report-inbox-q")}catch{}if(searchBox)searchBox.value=""}
-if(onlyOwner!==null&&left){const chip=make("span","only","Owner: "+(onlyOwner||"Local repos")),x=make("a","","\u00d7");x.href="/";x.title="Show every owner";x.setAttribute("aria-label","Show every owner");chip.append(x);left.append(chip)}
-const matches=(r)=>(onlyOwner===null||r.dataset.owner===onlyOwner)&&(!prefs.phase.length||prefs.phase.includes(r.dataset.phase))&&(!prefs.tag.length||prefs.tag.includes(r.dataset.tag))&&(!hits||hits.has(r));
-function heading(key,first,count){
-  const h=make("h2","gh");
-  if(prefs.group==="owner"||prefs.group==="repo"){
-    let av=first.querySelector(".av")?.cloneNode(true);
-    if(prefs.group==="owner"&&!key){av=make("span","av local");av.innerHTML=FOLDER}
-    if(av)h.append(av);h.append(make("span","",nameOf(key)));
-  }else if(prefs.group==="status"){const dot=make("span","dot");dot.style.background=(PHASES[key]??[])[1]??"#71717a";h.append(dot,(PHASES[key]??[key])[0])}
-  else h.append(first.querySelector(".tag").cloneNode(true));
-  h.append(make("span","count",String(count)));return h;
-}
-function render(){
-  document.body.dataset.group=prefs.group;
-  for(const {box,rows} of boxes){
-    if(!rows.length)continue;
-    const kept=rows.filter(matches).sort(SORTS[prefs.sort]),groups=new Map();
-    for(const r of kept){const k=KEYS[prefs.group](r);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r)}
-    const order=[...groups.keys()];
-    if(prefs.group==="status")order.sort((a,b)=>rank(Object.keys(PHASES),a)-rank(Object.keys(PHASES),b));
-    else if(prefs.group==="type")order.sort((a,b)=>rank(TAGS,a)-rank(TAGS,b));
-    else if(prefs.sort==="title")order.sort((a,b)=>nameOf(a).localeCompare(nameOf(b),undefined,{sensitivity:"base"}));
-    box.replaceChildren(...order.map((k)=>{const section=make("section","group"),list=make("div","list");if(prefs.group!=="none")section.append(heading(k,groups.get(k)[0],groups.get(k).length));list.append(...groups.get(k));section.append(list);return section}));
-    if(!kept.length){const list=make("div","list"),empty=make("div","empty","No reviews match these filters."),clear=make("button","clear-all","Clear filters");clear.type="button";empty.append(clear);list.append(empty);box.append(list)}
-  }
-  const active=boxes[0].rows,visible=active.filter(matches),shown=visible.length,waiting=visible.filter((r)=>WAITING.includes(r.dataset.phase)).length;
-  const summary=document.getElementById("summary");
-  if(summary)summary.textContent=(shown===active.length?active.length+" "+(active.length===1?"review":"reviews"):shown+" of "+active.length+" reviews")+(waiting?", "+waiting+" waiting on you":"");
-  for(const i of document.querySelectorAll(".menu input[type=radio],.menu input[type=checkbox]"))i.checked=i.type==="radio"?prefs[i.name]===i.value:prefs[i.name].includes(i.value);
-  for(const k of ["group","sort"]){const b=document.querySelector("[data-label="+k+"]");if(b)b.textContent=LABELS[k][prefs[k]]}
-  const n=prefs.phase.length+prefs.tag.length+(query.trim()?1:0),f=document.querySelector("[data-label=filter]");
-  if(f){f.textContent=n?String(n):"";f.className=n?"badge":""}
-}
-search();render();
-import("/fuse.mjs").then(({default:Fuse})=>{fuse=new Fuse(items,{keys:[{name:"title",weight:2},"repo","branch"],threshold:0.35,ignoreLocation:true});search();render()}).catch(()=>{});
-const setQuery=(q)=>{query=q;try{sessionStorage.setItem("pr-report-inbox-q",q)}catch{}search();render()};
-document.addEventListener("input",(e)=>{if(e.target===searchBox)setQuery(searchBox.value)});
-// Menus: one open at a time; a click outside or Escape closes them.
-const dds=[...document.querySelectorAll(".dd")],openMenu=()=>dds.find((d)=>!d.querySelector(".menu").hidden);
-const toggle=(dd,open)=>{dd.querySelector(".menu").hidden=!open;dd.querySelector("[aria-haspopup]").setAttribute("aria-expanded",String(open));if(open&&dd.contains(searchBox))searchBox.focus()};
-let reloadLater=false;
-document.addEventListener("click",(e)=>{
-  const dd=e.target.closest(".dd");for(const d of dds)if(d!==dd)toggle(d,false);
-  if(dd&&e.target.closest("[aria-haspopup]"))toggle(dd,dd.querySelector(".menu").hidden);
-  if(e.target.closest(".clear,.clear-all")){prefs.phase=[];prefs.tag=[];save();if(searchBox)searchBox.value="";setQuery("")}
-  if(reloadLater&&!openMenu())location.reload();
-});
-// "/" opens the filter menu at the search box, as on GitHub.
-document.addEventListener("keydown",(e)=>{if(e.key!=="/"||e.metaKey||e.ctrlKey||e.altKey||e.target.closest("input,textarea")||!searchBox)return;e.preventDefault();for(const d of dds)toggle(d,d.contains(searchBox))});
-document.addEventListener("keydown",(e)=>{const d=openMenu();if(e.key==="Escape"&&d){toggle(d,false);d.querySelector("[aria-haspopup]").focus();if(reloadLater)location.reload()}});
-document.addEventListener("change",(e)=>{const i=e.target;if(!(i.name in prefs))return;
-  if(i.type==="radio"){prefs[i.name]=i.value;toggle(i.closest(".dd"),false)}else prefs[i.name]=[...document.querySelectorAll("input[name="+i.name+"]:checked")].map((x)=>x.value);
-  save();render()});
-// The stream starts with every review's current state, so reload only for a review that changed or is new.
-const shown=${JSON.stringify(Object.fromEntries(all.map((r) => [r.id, r.updatedAt]))).replace(/</g, "\\u003c")};
-const es=new EventSource("/api/events?token=${pageToken}&watch=*");let t;
-es.addEventListener("state",(e)=>{const s=JSON.parse(e.data);if(shown[s.id]===s.updatedAt)return;clearTimeout(t);t=setTimeout(()=>openMenu()?(reloadLater=true):location.reload(),400)});
-document.addEventListener("click",async(e)=>{const b=e.target.closest("button[data-act]");if(!b)return;
-if(b.dataset.act==="delete"&&!confirm("Delete this review's files ("+b.dataset.size+") and its saved rounds? This cannot be undone. Your code and branches are not touched."))return;
-const act=b.dataset.act==="delete"?"delete":"archive";
-const res=await fetch("/api/r/"+encodeURIComponent(b.dataset.id)+"/"+act,{method:"POST",headers:{"x-review-token":"${pageToken}","content-type":"application/json"},body:JSON.stringify({archived:b.dataset.act!=="restore"})});
-if(!res.ok)alert((await res.json().catch(()=>({}))).error||"Could not do that");location.reload()});
-// The reader's menu in the top bar, with the options a report's menu has (viewer/src/components/UserMenu.tsx): who is
-// reading, the profile, Settings, Help, a bug report, the cache purge and the daemon. A change to one menu needs the
-// same change to the other.
-const ME=${JSON.stringify(me).replace(/</g, "\\u003c")},DAEMON=${JSON.stringify({ version: VERSION, node: process.version, startedAt })};
-const SOURCES={gh:"via the GitHub CLI",glab:"via the GitLab CLI",git:"from git config",none:"no identity found"};
-// Draws an avatar into the element with this id, as a picture or as initials on a color, whichever it was before.
-const paint=(id,a)=>{let el=document.getElementById(id);if(!el||!a)return;const swap=(tag)=>{if(el.tagName===tag)return;const n=document.createElement(tag);n.id=id;n.className=el.className;el.replaceWith(n);el=n};
-  if(String(a.image||"").startsWith("data:image/")){swap("IMG");el.alt="";el.src=a.image;return}
-  swap("SPAN");el.style.background=/^#[0-9a-f]{6}$/i.test(a.color||"")?a.color:"#71717a";el.textContent=String(a.initials||"").slice(0,2)};
-const showMe=(who)=>{
-  document.getElementById("me-name").textContent=who.name||who.login||who.email||"Unknown";
-  document.getElementById("me-sub").textContent=(who.login?"@"+who.login:who.email||"")+(who.login||who.email?" · ":"")+SOURCES[who.source];
-  for(const id of ["me-face","me-face-big"])paint(id,who.avatar);
-  if(who.url){const p=document.getElementById("me-profile"),forge={github:"GitHub ",gitlab:"GitLab "}[ME.forge]||"";p.href=who.url;p.querySelector("span").textContent="Open "+forge+"profile";p.hidden=false}
-};
-// The last answer is kept in the browser and drawn at once, so the avatar is there at the first paint and does not
-// pop in a moment later on every page. A report keeps and reads the same entry (viewer/src/lib/identity.ts).
-const ME_KEY=ME.host+"|"+ME.forge+"|"+ME.root;
-try{const kept=JSON.parse(localStorage.getItem("pr-report:me")||"null");if(kept&&kept.key===ME_KEY&&kept.who)showMe(kept.who)}catch{}
-fetch("/api/me?"+new URLSearchParams(ME),{headers:{"x-review-token":"${pageToken}"}}).then((r)=>r.ok?r.json():null).catch(()=>null).then((who)=>{
-  if(!who){if(document.getElementById("me-name").textContent==="Looking you up…")document.getElementById("me-name").textContent="Unknown";return}
-  showMe(who);try{localStorage.setItem("pr-report:me",JSON.stringify({key:ME_KEY,who}))}catch{}
-});
-document.getElementById("me-bug").href+="?"+new URLSearchParams({body:["<"+"!-- What happened, and what you expected --"+">","","","---","Reflektor daemon "+DAEMON.version+", Node "+DAEMON.node,"Browser: "+navigator.userAgent].join("\\n")});
-// Settings, Help and the cache purge are the report's own dialogs. They are not written a second time here: the page
-// at /panel holds them, and it is loaded in a see-through frame over the window (viewer/src/lib/panel.ts). The frame
-// is fetched when the menu first opens, so a dialog is there at once when it is asked for. A theme picked in Settings
-// reaches this page through the storage event the script in the head listens to.
-let panel=null,panelReady=false,wanted=null;
-const loadPanel=()=>{if(panel)return;panel=document.createElement("iframe");panel.className="panel";panel.title="Settings, help and the cache";panel.hidden=true;panel.src="/panel";document.body.append(panel)};
-const showPanel=()=>{if(!panelReady||!wanted)return;panel.hidden=false;panel.contentWindow.postMessage({open:wanted},location.origin);panel.focus()};
-const openPanel=(name)=>{wanted=name;loadPanel();showPanel()};
-addEventListener("message",(e)=>{if(!panel||e.origin!==location.origin||e.source!==panel.contentWindow||!e.data)return;
-  if(e.data.panel==="ready"){panelReady=true;showPanel()}
-  if(e.data.panel==="closed"&&!panel.hidden){panel.hidden=true;wanted=null;document.querySelector(".who").focus()}});
-document.querySelector(".who").addEventListener("click",loadPanel);
-document.addEventListener("click",(e)=>{const b=e.target.closest("[data-panel]");if(!b)return;toggle(b.closest(".dd"),false);openPanel(b.dataset.panel)});
-// "?" opens Settings, as in a report.
-document.addEventListener("keydown",(e)=>{if(e.key!=="?"||e.metaKey||e.ctrlKey||e.altKey||e.target.closest("input,textarea"))return;e.preventDefault();openPanel("settings")});
-// How long the daemon has run, worded as in the report's menu: its two largest units, never rounded up.
-const upFor=(since)=>{const s=(Date.now()-Date.parse(since))/1000;if(s<90)return "just started";const m=Math.floor(s/60),d=Math.floor(m/1440),h=Math.floor(m%1440/60),min=m%60;return "up "+(d?[d+"d",h>0&&h+"h"]:h?[h+"h",min>0&&min+"min"]:[min+"min"]).filter(Boolean).join(" ")};
-const status=document.getElementById("me-status");let daemonUp=true;
-const showStatus=()=>{status.classList.toggle("down",!daemonUp);status.lastElementChild.textContent=daemonUp?"Daemon up · "+DAEMON.version.slice(0,7)+" · "+upFor(DAEMON.startedAt):"Daemon unavailable"};
-showStatus();es.addEventListener("open",()=>{daemonUp=true;showStatus()});es.addEventListener("error",()=>{daemonUp=false;showStatus()});
-document.querySelector(".who").addEventListener("click",showStatus);
-</script></body></html>`;
+<script id="inbox-data" type="application/json">${JSON.stringify(inboxData).replace(/</g, "\\u003c")}</script>
+${inlineScript(appScript("inbox.js"))}</body></html>`;
 }
 
 // The viewer's app build. Every review page is the same app; it loads its round's data from the API.
@@ -856,6 +727,14 @@ const APP_DIR = [join(here, "../assets/app"), join(here, "../../viewer/dist/app"
 // Fuse.js for the inbox search: copied next to the app by install.mts, or read from the viewer's
 // packages in a checkout that is not built. Without it the inbox falls back to a plain substring match.
 const FUSE_FILE = [join(here, "../assets/fuse.mjs"), join(here, "../../viewer/node_modules/fuse.js/dist/fuse.basic.min.mjs")].find((f) => existsSync(f));
+// A plain script the viewer build compiles into the app folder (viewer/vite.config.ts), read each time a page needs it,
+// so a new build shows without a daemon restart. Empty without a build: the inbox then lists the reviews without its
+// menus, search and live updates.
+const appScript = (name: string): string => {
+  const file = APP_DIR && join(APP_DIR, name);
+  return file && existsSync(file) ? readFileSync(file, "utf8") : "";
+};
+const inlineScript = (code: string): string => (code ? `<script>${code}</script>` : "");
 
 // The inbox uses the page's fonts, Geist and Geist Mono, from the font files in the viewer build; without a build it
 // falls back to the system fonts the way it always did.

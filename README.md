@@ -78,7 +78,7 @@ The report data is written to `<git folder>/pr-report/<branch>/` (usually `.git/
 | `skill/style-guide.md` | How report text is written |
 | `skill/schema/types.ts` | The data contract, and the only list of allowed values |
 | `skill/scripts/` | `collect.mts`, `checks.mts`, `build.mts`, `review.mts` (agent CLI), `agent.mts` (which agent is calling) and `daemon.mts` (review server). TypeScript that Node runs as it is, with no dependencies. `tsconfig.scripts.json` typechecks them. |
-| `viewer/` | React source of the report page |
+| `viewer/` | React source of the report page, and the inbox's scripts in `viewer/src/inbox/`, which the daemon puts into the inbox page |
 | `fixtures/make-books-repo.sh` | Builds a fake repo with a "books" feature branch |
 | `samples/report.json` | A hand-written report for that fake repo |
 | `scripts/check.mts` | End-to-end test on the fake repo |

@@ -346,6 +346,19 @@ export type FlowStepChecked = FlowStep & { verified: boolean };
 // they type there to pick a review up. Worked out by scripts/agent.mts from skill/agents.json.
 export type AgentInfo = { id: string | null; name: string; product: string; resume: string | null; version: string | null };
 
+// What the daemon hands the inbox page's script (viewer/src/inbox/inbox.ts), in a JSON block before it: the status
+// labels and colors, the order of the types, when each listed review last changed, the page token, what /api/me is
+// asked about, and the daemon for the status line in the reader's menu.
+export type InboxData = {
+  phases: Record<string, [label: string, color: string]>;
+  tags: string[];
+  folderIcon: string;
+  shown: Record<string, string>;
+  token: string;
+  me: { host: string; forge: string; root: string };
+  daemon: { version: string; node: string; startedAt: string };
+};
+
 export type Bundle = {
   diff: DiffData;
   report: Omit<Report, "flows"> & { flows: (Omit<Flow, "steps"> & { steps: FlowStepChecked[] })[] };

@@ -17,7 +17,7 @@ type Params = { host: string | null; forge: string | null; root: string };
 
 // The last answer is kept in the browser and shown at once, so the avatar is there at the first paint and does not
 // pop in a moment later on every page. The inbox keeps and reads the same entry (the reader's menu in
-// skill/scripts/daemon.mts), under the same key, so going from one to the other shows no change either.
+// src/inbox/inbox.ts), under the same key, so going from one to the other shows no change either.
 const KEPT = "pr-report:me";
 const keyOf = (p: Params) => `${p.host ?? ""}|${p.forge ?? ""}|${p.root}`;
 const kept = (key: string): Identity | null => {

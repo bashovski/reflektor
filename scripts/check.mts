@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
-import type { AgentInfo, Bundle, ChecksRun, DiffData, DiffFile, HookName, LiveQuestion, PrState, Report, RepoConfig } from "../skill/schema/types.ts";
+import type { AgentInfo, Bundle, ChecksRun, DiffData, DiffFile, HookName, InboxData, LiveQuestion, PrState, Report, RepoConfig } from "../skill/schema/types.ts";
 import { gitBash } from "../skill/scripts/repo.mts";
 import { githubPr, startGithubStub } from "./github-stub.mts";
 
@@ -426,7 +426,7 @@ async function daemonFlow() {
 
     // The inbox reloads on state events; the first one on connect must match what it shows, or it reloads forever.
     const inbox = await (await fetch(`${base}/`)).text();
-    const shown = JSON.parse(inbox.match(/const shown=(\{.*?\});/)?.[1] ?? "{}") as Record<string, string>;
+    const { shown } = JSON.parse(inbox.match(/<script id="inbox-data" type="application\/json">(.*?)<\/script>/)?.[1] ?? '{"shown":{}}') as InboxData;
     if (shown[id] !== (await state()).updatedAt) fail("the inbox would reload on the stream's first state event (reload loop)");
     if ((await state()).listening) fail("a review with no waiter counts as listened to");
     if (!/<span class="av" style="background:#[0-9a-f]{6}">AL<\/span>/.test(inbox)) fail("the inbox does not show the owner's initials");
