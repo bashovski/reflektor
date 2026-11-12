@@ -22,6 +22,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AGENT_HEADER, detectAgent, encodeAgent } from "./agent.mjs";
+import { runReportHooks } from "./hooks.mjs";
 import { shellPath } from "./repo.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -143,7 +144,6 @@ function explain(event, review) {
     console.log("Then run wait again in the background.");
   } else if (event.type === "review-submitted" && event.count === 0) {
     console.log(`The reviewer finished round ${event.round} of ${review.id} with no comments. The review is done.`);
-    console.log("Offer to open the PR (ask first).");
   } else if (event.type === "review-submitted") {
     console.log(`Review for round ${event.round} of ${review.id} was sent with ${event.count} comments: ${shellPath(event.file)}`);
     console.log(`\nNext: read the file, then post your plan: ${self} plan --id ${review.id} --file <plan.json>`);
@@ -157,7 +157,6 @@ function explain(event, review) {
     console.log(`Then collect --update, update the carried report.json and add review.replies, build, and publish: ${self} open --report <new json>`);
   } else if (event.type === "round-finished") {
     console.log(`Round ${event.round} of ${review.id} is finished: all ${event.count} comments are handled and no code changed. The review is done.`);
-    console.log("Offer to open the PR (ask first).");
   } else if (event.type === "refresh") {
     const files = event.files.length ? `: ${event.files.slice(0, 10).join(", ")}${event.files.length > 10 ? ", ..." : ""}` : "";
     console.log(`The reviewer asked for an updated report: the code changed after round ${event.round} of ${review.id} was built${event.commits ? ` (${event.commits} new commits)` : ""}${files}.`);
@@ -170,6 +169,22 @@ function explain(event, review) {
   } else {
     console.log(JSON.stringify(event, null, 2));
   }
+}
+
+// The two events that end a review: sent with no comments, or a round whose comments are all handled
+// without a code change.
+const reviewDone = (event) => (event.type === "review-submitted" && event.count === 0) || event.type === "round-finished";
+
+// Tells the agent what the reviewer did. A finished review runs the project's onApproved hook first
+// (hooks.mjs), and the agent offers to open the pull request unless the hook took care of it.
+async function handOver(event, review, info) {
+  explain(event, review);
+  if (!reviewDone(event)) return;
+  const hooks = await runReportHooks("onApproved", { dir: review.dir, round: event.round, url: `http://127.0.0.1:${info.port}/r/${review.id}` });
+  if (hooks.failed) console.log("warning: the onApproved hook in .pr-report.json failed; tell the user what it printed.");
+  if (hooks.ran && !hooks.failed)
+    console.log("The project's onApproved hook ran; its output is above. Tell the user what it did. If it opened a pull request, tell the review page with the pr command; if not, offer to open the PR (ask first).");
+  else console.log("Offer to open the PR (ask first).");
 }
 
 // ------------------------------------------------------------------ commands
@@ -195,6 +210,11 @@ async function main() {
           ? `Open in ${data.tabs} tab(s); a reload shows this build.`
           : `Already open in ${data.tabs} tab(s); they show a banner for the new round.`,
       );
+    }
+    // The project's postRun hook, once a round: at its first build that is not a draft (hooks.mjs).
+    if (data.firstReal) {
+      const hooks = await runReportHooks("postRun", { dir: data.dir, round: data.round, url: data.url });
+      if (hooks.failed) console.log("warning: the postRun hook in .pr-report.json failed. The report is published; tell the user what the hook printed.");
     }
     // Nothing in this shell says which agent this is, so the page speaks of "your agent" until it is told.
     if (!agent) console.log(`note: the page does not know which agent you are. Add --agent-name "<the product you run in>" to review.mjs commands so it can say.`);
@@ -229,7 +249,7 @@ async function main() {
         continue;
       }
       if (result.status === 204) continue;
-      explain(result.data.event, result.data.review);
+      await handOver(result.data.event, result.data.review, info);
       return;
     }
   } else if (command === "resume") {
@@ -251,7 +271,7 @@ async function main() {
     const { data } = await api(info, "GET", `/api/r/${encodeURIComponent(id)}/resume`);
     const { event, review } = data;
     console.log(`Picking up review ${review.id}, round ${review.round}: http://127.0.0.1:${info.port}/r/${review.id}\n`);
-    if (event) explain(event, review);
+    if (event) await handOver(event, review, info);
     else if (review.phase === "working" && review.open.length) {
       console.log(`The fix loop for round ${review.round} was cut off: ${review.comments - review.open.length} of ${review.comments} comments are handled. Review file: ${shellPath(review.file)}`);
       console.log("Still open:");

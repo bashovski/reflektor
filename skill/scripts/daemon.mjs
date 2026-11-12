@@ -1232,8 +1232,13 @@ async function handle(req, res, port) {
     const round = bundle.round ?? r.round;
     // Publishing a round again (a rebuild, or an agent reconnecting) only swaps its data file.
     // Comments, plan and progress belong to the round and stay.
-    const republished = r.rounds.some((x) => x.round === round);
-    r.rounds = [...r.rounds.filter((x) => x.round !== round), { round, file, builtAt: bundle.builtAt, publishedAt: now() }].sort((a, b) => a.round - b.round);
+    const before = r.rounds.find((x) => x.round === round);
+    const republished = Boolean(before);
+    // The round's first build that is not a draft. The project's postRun hook runs for it only, so once a round.
+    const firstReal = !bundle.draft && (!before || before.draft === true);
+    r.rounds = [...r.rounds.filter((x) => x.round !== round), { round, file, builtAt: bundle.builtAt, publishedAt: now(), ...(bundle.draft ? { draft: true } : {}) }].sort(
+      (a, b) => a.round - b.round,
+    );
     // A new build matches the code again; a rebuild answers the reviewer's request for one.
     r.drift = null;
     markHandled(r, "refresh");
@@ -1252,7 +1257,7 @@ async function handle(req, res, port) {
     r.lastAgentActivity = now();
     saveRegistry();
     save(r);
-    return send(res, 200, { id: r.id, round, republished, url: `http://127.0.0.1:${port}/r/${r.id}`, tabs: openTabs(r), dir });
+    return send(res, 200, { id: r.id, round, republished, firstReal, url: `http://127.0.0.1:${port}/r/${r.id}`, tabs: openTabs(r), dir });
   }
 
   // ---------- per review
@@ -1297,6 +1302,9 @@ async function handle(req, res, port) {
       const review = { id: r.id, round: r.round, dir: r.dir, phase: r.phase, file: reviewFile(r, r.round), comments: comments.length, open };
       if (!e) return send(res, 200, { event: null, review });
       e.deliveredAt = now();
+      // As in deliver(): an event that asks nothing of the agent is handed over once. A second resume
+      // must not end the review again, which would run the onApproved hook twice.
+      if (!needsAction(e)) e.handledAt = e.deliveredAt;
       r.lastAgentActivity = now();
       save(r);
       const payload = { ...e };

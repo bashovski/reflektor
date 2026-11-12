@@ -24,10 +24,14 @@
 - Speed: diffs render only near the screen, code colored with WebAssembly lexers, the daemon serves the viewer as cached files and each report is only its data (44-file change: 2.4 s frozen and 161 MB before, under 0.3 s and 37 MB after)
 - Any agent, by name: the page and the inbox name the agent on the other side (`skill/agents.json`, worked out in the agent's shell and sent with every call) and say "your agent" when nobody told them
 - Installs for agents other than Claude Code: `install.mjs --target agents` puts a copy with its own `SKILL.md` in `~/.agents/skills`, the folder Codex reads
+- Hooks: `preRun`, `postRun` and `onApproved` commands in `.pr-report.json`, run by the scripts with `PR_REPORT_*` variables, and held back like the checks while the branch has commits by authors not yet trusted
 
 ## Later (remind)
 
 - **A whole review with a second agent:** run one end to end with Codex, then add its detection markers to `skill/agents.json`. Only Claude Code's are checked against the real tool so far.
+- **LGTM opens the pull request** as a setting, for everyone without an `onApproved` hook.
+- **More hook points when someone needs them:** `postCollect`, `onChecksDone`, `onReviewSent`, and personal hooks in `~/.pr-report` for all of a user's repos.
+- **Checks without a base:** when no base branch is found, `untrustedAuthors()` cannot tell whose commits are on the branch. Hooks then do not run; the checks still do.
 - **A neutral `PR_REPORT_BASH`:** `gitBash()` reads only `CLAUDE_CODE_GIT_BASH_PATH` before it searches for Git Bash on Windows.
 - **Before/after screenshots** of changed UI pages, when Playwright and a dev server are available.
 - **Tests on other stacks:** fake repos in Go, Python and Rust run by `pnpm check`, to prove the skill works for any stack.
@@ -46,4 +50,4 @@
 ## Before selling
 
 - Add a third-party notices file. The page bundles @pierre/diffs (Apache-2.0), the inbox serves Fuse.js (Apache-2.0), React, Headless UI, Tailwind and atom-material-icons (MIT), Lucide (ISC) and the Geist fonts (OFL-1.1). Apache-2.0 and MIT require shipping their license texts.
-- Let users plug in their own hooks. Shell commands named in `.pr-report.json`, run with JSON on stdin at `afterCollect`, `beforePublish` (can block with a message), `afterPublish`, `onReviewSent` and `onRoundDone`, so a team gets them by cloning. With them: user-defined safety rules (pattern, severity, message) next to the fixed secret and migration checks, and an instructions file appended to the style guide. No code plugin API until report.json, the bundle and the daemon API stop changing, and third-party code never runs inside the daemon or the viewer.
+- User-defined safety rules (pattern, severity, message) next to the fixed secret and migration checks, and an instructions file appended to the style guide. No code plugin API until report.json, the bundle and the daemon API stop changing, and third-party code never runs inside the daemon or the viewer.

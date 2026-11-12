@@ -118,7 +118,66 @@ Off by default. Turned on in the setup wizard or in Settings, it tells the agent
 
 ## Per-repo settings
 
-An optional `.pr-report.json` in a repo's root sets the base branch, which paths belong to which target, extra generated files, and where coverage files are. See the end of `skill/SKILL.md` for an example.
+An optional `.pr-report.json` in a repo's root sets the base branch, which paths belong to which target, extra generated files, where coverage files are, the project checks and the hooks. See the end of `skill/SKILL.md` for an example.
+
+### Hooks
+
+Hooks are a team's own commands, run at fixed points of a report. They live in `.pr-report.json`, so everyone who clones the repo gets them, and the scripts run them, so they run every time and with any agent.
+
+| Hook | Run by | When | A failure |
+|---|---|---|---|
+| `preRun` | `collect.mjs` | Before it fetches and reads the changes | Stops the report |
+| `postRun` | `review.mjs open` | Once a round, when its report (not the draft) is first published | Prints a warning |
+| `onApproved` | `review.mjs wait` or `resume` | The reviewer finishes with nothing left to fix | Prints a warning |
+
+```json
+{
+  "hooks": {
+    "preRun": ["pnpm codegen", "bash tools/ticket.sh"],
+    "onApproved": "bash tools/open-pr.sh"
+  }
+}
+```
+
+A hook is one command or a list, run one after another in the repo's root: in sh on macOS and Linux, in Git Bash on Windows, as the project checks are. A failing command ends its list. `preRun` may take 5 minutes and the others 2; a hook that runs longer is stopped and counts as failed. What a hook prints goes to the agent, which is how `preRun` can hand over a ticket's text.
+
+Each hook gets these variables:
+
+| Variable | Holds | Set for |
+|---|---|---|
+| `PR_REPORT_HOOK` | The hook's name | All |
+| `PR_REPORT_BRANCH`, `PR_REPORT_BASE` | The branch and its base | All |
+| `PR_REPORT_ROUND` | The round number | `postRun`, `onApproved` |
+| `PR_REPORT_DIFF` | Path of `diff.json`: the git facts, with full file contents | `postRun`, `onApproved` |
+| `PR_REPORT_REPORT` | Path of `report.json`: what the agent wrote | `postRun`, `onApproved` |
+| `PR_REPORT_URL` | The review page | `postRun`, `onApproved` |
+| `PR_REPORT_PR_TEXT` | Path of `pr-description.md` (title line, blank line, body), when there is one | `postRun`, `onApproved` |
+
+The two files' shapes are `DiffData` and `Report` in `skill/schema/types.ts`. They can change between versions; the variables are the stable part.
+
+Two examples. `tools/ticket.sh` prints the GitHub issue named in the branch (`feat/123-save-books`), so the agent knows why the change was made:
+
+```bash
+n=$(grep -oE '[0-9]+' <<<"$PR_REPORT_BRANCH" | head -1)
+[ -n "$n" ] && gh issue view "$n" --json title,body --jq '.title + "\n\n" + .body'
+exit 0
+```
+
+`tools/open-pr.sh` pushes the branch and opens the pull request with the text the build wrote, once the reviewer approves:
+
+```bash
+set -e
+[ -n "$PR_REPORT_PR_TEXT" ] || { echo "No PR description yet: build a whole-branch report first."; exit 0; }
+git push -u origin "$PR_REPORT_BRANCH"
+gh pr create --base "$PR_REPORT_BASE" --title "$(head -1 "$PR_REPORT_PR_TEXT")" --body "$(tail -n +3 "$PR_REPORT_PR_TEXT")"
+```
+
+Things to know:
+
+- **No sandbox.** A hook runs as you and can do whatever you can in a terminal.
+- **The checks' trust rule.** A teammate's branch can change `.pr-report.json`, so hooks do not run while the branch has commits by someone you have not trusted for this repo, and they do not run when the base branch cannot be found. `checks.mjs --trust` records the trust; `--forget` removes it.
+- **Code leaves with `diff.json`.** It holds full file contents, so a hook that uploads it uploads the code.
+- **`onApproved` needs a listener.** It runs in the agent's waiter, or in `/pr-report resume` when no waiter was running. The daemon and the page never run a command.
 
 ## Credits
 

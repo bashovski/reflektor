@@ -20,14 +20,12 @@
 // The checks run the branch's own code. When the branch has commits by someone else, --plan says to
 // ask the user first and a run refuses to start; --trust records the user's yes for those authors.
 
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { gitBash, globToRegExp, parseRemote, replaceFile, repoKey, reportDir, shellPath } from "./repo.mjs";
+import { globToRegExp, replaceFile, repoHome, reportDir, runShell, shellPath, untrustedAuthors } from "./repo.mjs";
 
-const MAX_OUTPUT = 400 * 1024;
 const TAIL_LINES = 80;
 
 function parseArgs(argv) {
@@ -118,7 +116,6 @@ if (args.mode === "wait") {
 
 // ------------------------------------------------------------------ where the commands come from
 
-const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const quietGit = (...argv) => {
   try {
     return execFileSync("git", argv, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -126,11 +123,8 @@ const quietGit = (...argv) => {
     return null;
   }
 };
-const remotes = (quietGit("remote") ?? "").split("\n").filter(Boolean);
-const remote = remotes.includes("origin") ? "origin" : remotes[0];
-const repoHome = join(HOME, "repos", ...repoKey(parseRemote(remote ? quietGit("remote", "get-url", remote) : null), root));
-const savedFile = join(repoHome, "checks.json");
-const trustFile = join(repoHome, "trust.json");
+const savedFile = join(repoHome(root), "checks.json");
+const trustFile = join(repoHome(root), "trust.json");
 const configFile = join(root, ".pr-report.json");
 const readJson = (file) => {
   try {
@@ -166,8 +160,9 @@ function pickChecks() {
 }
 
 // Where this branch starts: the merge base with --base or the remote's default branch.
+const baseRefs = [args.base, "origin/HEAD", "origin/main", "origin/master", "main", "master"].filter(Boolean);
 function baseCommit() {
-  for (const ref of [args.base, "origin/HEAD", "origin/main", "origin/master", "main", "master"].filter(Boolean)) {
+  for (const ref of baseRefs) {
     const base = quietGit("merge-base", "HEAD", ref);
     if (base) return base;
   }
@@ -180,21 +175,6 @@ function changedFiles() {
   const base = baseCommit();
   if (!base) return null;
   return [...(quietGit("diff", "--name-only", base) ?? "").split("\n"), ...(quietGit("ls-files", "--others", "--exclude-standard") ?? "").split("\n")].filter(Boolean);
-}
-
-// Authors of this branch's commits other than the user and the authors trusted earlier for this repo.
-// Their code (tests, scripts, config) runs when the checks run.
-function untrustedAuthors() {
-  const base = baseCommit();
-  if (!base) return [];
-  const me = (quietGit("config", "user.email") ?? "").toLowerCase();
-  const trusted = new Set((readJson(trustFile)?.authors ?? []).map((a) => a.toLowerCase()));
-  const found = new Map();
-  for (const line of (quietGit("log", "--format=%ae%x09%an", `${base}..HEAD`) ?? "").split("\n").filter(Boolean)) {
-    const [email, name] = line.split("\t");
-    if (email.toLowerCase() !== me && !trusted.has(email.toLowerCase())) found.set(email.toLowerCase(), `${name} <${email}>`);
-  }
-  return [...found].map(([email, label]) => ({ email, label }));
 }
 
 function select(checks) {
@@ -238,7 +218,8 @@ if (args.mode === "share") {
 }
 
 const picked = pickChecks();
-const strangers = untrustedAuthors();
+// Without a base, every author counts as trusted here and the checks run. Hooks do not run then (hooks.mjs).
+const strangers = untrustedAuthors(root, baseRefs) ?? [];
 const strangerText = () => `this branch has commits by ${strangers.map((a) => a.label).join(", ")}, and the checks run their code (tests, scripts, config)`;
 
 if (args.mode === "plan") {
@@ -292,54 +273,18 @@ if (picked.changed?.length) console.log(`warning: ${picked.changed.join(", ")} c
 
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
 
-// An agent on Windows runs its commands in Git Bash (Claude Code does), so the checks it saves are bash commands: they run
-// in that bash, or in cmd.exe when there is none. Elsewhere they run in sh, in a process group of their
-// own so a timeout can stop everything they started.
-const windows = process.platform === "win32";
-const shell = windows ? (gitBash() ?? true) : true;
-
-function runCheck({ name, command, timeout }) {
-  const limit = (timeout ?? args.timeout) * 1000;
-  const started = Date.now();
-  return new Promise((done) => {
-    const child = spawn(command, { shell, cwd: root, env: { ...process.env, CI: "1", FORCE_COLOR: "0" }, detached: !windows, windowsHide: true });
-    let output = "";
-    const collect = (chunk) => {
-      output += chunk.toString("utf8");
-      if (output.length > MAX_OUTPUT) output = output.slice(-MAX_OUTPUT);
-    };
-    child.stdout.on("data", collect);
-    child.stderr.on("data", collect);
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      // On Windows only taskkill /T reaches the whole tree: the shell, the package manager and the test runner under it.
-      if (windows) spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore", windowsHide: true });
-      else {
-        try {
-          process.kill(-child.pid, "SIGKILL");
-        } catch {
-          child.kill("SIGKILL");
-        }
-      }
-    }, limit);
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      const lines = stripAnsi(output).trimEnd().split(/\r?\n/);
-      done({
-        name,
-        command,
-        status: timedOut ? "timeout" : code === 0 ? "passed" : "failed",
-        exitCode: timedOut ? null : code,
-        durationMs: Date.now() - started,
-        outputTail: lines.slice(-TAIL_LINES).join("\n"),
-      });
-    });
-    child.on("error", (e) => {
-      clearTimeout(timer);
-      done({ name, command, status: "failed", exitCode: null, durationMs: Date.now() - started, outputTail: e.message });
-    });
-  });
+async function runCheck({ name, command, timeout }) {
+  const r = await runShell(command, { cwd: root, env: { ...process.env, CI: "1", FORCE_COLOR: "0" }, timeoutMs: (timeout ?? args.timeout) * 1000 });
+  if (r.error) return { name, command, status: "failed", exitCode: null, durationMs: r.durationMs, outputTail: r.error };
+  const lines = stripAnsi(r.output).trimEnd().split(/\r?\n/);
+  return {
+    name,
+    command,
+    status: r.timedOut ? "timeout" : r.code === 0 ? "passed" : "failed",
+    exitCode: r.timedOut ? null : r.code,
+    durationMs: r.durationMs,
+    outputTail: lines.slice(-TAIL_LINES).join("\n"),
+  };
 }
 
 // Written after every check, so --wait and build.mjs see the run's progress.
