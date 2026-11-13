@@ -12,6 +12,14 @@
 //   setup   [--no-open]                   open the first-run setup page (tools, light or dark, code theme)
 //   stop                                  stop the daemon
 //
+// Reflektor, where an organization reads its members' reports (reflektor.mjs):
+//
+//   login   [--no-open]                   sign in in the browser (device flow); the token goes to ~/.pr-report/reflektor.json
+//   logout                                sign out here: deletes that file and nothing else
+//   whoami                                the account this machine publishes as
+//   publish [--id <review>] [--repo .] [--org <slug>]   this branch's newest finished round, now. With an open pull
+//                                         request the daemon does it by itself (see daemon.mjs)
+//
 // Every command tells the daemon which agent is calling, worked out from the shell it runs in (agent.mjs).
 // --agent <id> says it outright; --agent-name "<product>" is the agent's own answer when nothing else is known.
 
@@ -20,11 +28,14 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import type { CommentTarget, LiveQuestion, PrState, ReviewComment } from "../schema/types.js";
 import { AGENT_HEADER, detectAgent, encodeAgent } from "./agent.mjs";
 import { runReportHooks } from "./hooks.mjs";
+import { finishDeviceLogin, forgetLogin, LOGIN_FILE, type Organization, readLogin, reflektorConfig, saveLogin, startDeviceLogin, whoami } from "./reflektor.mjs";
 import { shellPath } from "./repo.mjs";
+import { readSettings } from "./settings.mjs";
 
 // daemon.json, which the daemon writes when it starts: where it listens and its admin token.
 type DaemonInfo = { port: number; pid: number; version: string; adminToken: string; startedAt: string };
@@ -59,6 +70,8 @@ type StatusSet = { ok: true; finished: boolean; round: number };
 type PrSet = { pr: FollowedPr };
 // The plan file the agent wrote; only its steps are counted here.
 type PlanFile = { steps: unknown[] };
+// What POST /api/r/<id>/reflektor answers (PublishAnswer in daemon.mjs).
+type PublishAnswer = { ok: boolean; reason: string | null; message: string; round: number | null; url: string | null; organization: string | null; organizations?: Organization[]; already?: boolean };
 
 const here = dirname(fileURLToPath(import.meta.url));
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
@@ -171,6 +184,32 @@ const describe = (t: CommentTarget) => {
 };
 
 const self = `node "${shellPath(join(here, "review.mjs"))}"`;
+
+// This branch's review: the newest one whose files are in this repo's git folder (--repo, else the working folder).
+// Prints why when there is none.
+async function branchReview(info: DaemonInfo): Promise<string | null> {
+  const git = (...a: string[]) => execFileSync("git", a, { cwd: resolve(typeof args.repo === "string" ? args.repo : "."), encoding: "utf8" }).trim();
+  const gitDir = resolve(git("rev-parse", "--show-toplevel"), git("rev-parse", "--git-dir"));
+  const branch = git("rev-parse", "--abbrev-ref", "HEAD");
+  const { data } = await api<ReviewList>(info, "GET", "/api/reviews");
+  const mine = data.reviews.filter((r) => r.branch === branch && (r.dir === join(gitDir, "pr-report") || r.dir.startsWith(gitDir)));
+  const id = mine.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id;
+  if (!id) console.log(`No review of ${branch} is open. Run /pr-report to start one.`);
+  return id ?? null;
+}
+
+// The organization to publish to, asked in the terminal. null when the answer names none of them.
+async function chooseOrganization(organizations: Organization[]): Promise<string | null> {
+  console.log("Several of your organizations approve this repository:");
+  organizations.forEach((o, i) => console.log(`  ${i + 1}. ${o.name} (${o.slug})`));
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = (await prompt.question("Publish to which one? Its number or slug: ")).trim();
+    return (organizations[Number(answer) - 1] ?? organizations.find((o) => o.slug.toLowerCase() === answer.toLowerCase()))?.slug ?? null;
+  } finally {
+    prompt.close();
+  }
+}
 
 // What the reviewer did, and what the agent runs next. Printed by wait and resume.
 function explain(event: ReviewEvent, review: EventReview) {
@@ -295,20 +334,8 @@ async function main() {
     }
   } else if (command === "resume") {
     const info = await ensureDaemon();
-    let id = typeof args.id === "string" ? args.id : null;
-    if (!id) {
-      // This branch's review: the newest one whose files are in this repo's git folder.
-      const git = (...a: string[]) => execFileSync("git", a, { cwd: resolve(typeof args.repo === "string" ? args.repo : "."), encoding: "utf8" }).trim();
-      const gitDir = resolve(git("rev-parse", "--show-toplevel"), git("rev-parse", "--git-dir"));
-      const branch = git("rev-parse", "--abbrev-ref", "HEAD");
-      const { data } = await api<ReviewList>(info, "GET", "/api/reviews");
-      const mine = data.reviews.filter((r) => r.branch === branch && (r.dir === join(gitDir, "pr-report") || r.dir.startsWith(gitDir)));
-      id = mine.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id;
-      if (!id) {
-        console.log(`No review of ${branch} is open. Run /pr-report to start one.`);
-        return;
-      }
-    }
+    const id = typeof args.id === "string" ? args.id : await branchReview(info);
+    if (!id) return;
     const { data } = await api<Resumed>(info, "GET", `/api/r/${encodeURIComponent(id)}/resume`);
     const { event, review } = data;
     console.log(`Picking up review ${review.id}, round ${review.round}: http://127.0.0.1:${info.port}/r/${review.id}\n`);
@@ -365,6 +392,67 @@ async function main() {
     if (!data.reviews.length) console.log("No reviews yet.");
     for (const r of data.reviews) console.log(`${r.id.padEnd(36)} round ${String(r.round).padEnd(3)} ${(r.pr?.state === "MERGED" ? "merged" : r.phase).padEnd(10)} ${r.url}`);
     console.log(`\nInbox: http://127.0.0.1:${info.port}/`);
+  } else if (command === "login") {
+    // The device flow: the browser approves this machine, and the token is saved for the daemon and this script.
+    const config = reflektorConfig();
+    const before = readLogin();
+    const start = await startDeviceLogin(config);
+    console.log(`To sign in to Reflektor, open ${start.verificationUriComplete} and check that it shows the code ${start.userCode}.`);
+    if (!args["no-open"]) {
+      openInBrowser(start.verificationUriComplete);
+      console.log("Opened it in your browser.");
+    }
+    console.log("Waiting for you to approve it there...");
+    const login = await finishDeviceLogin(config, start);
+    // Signing in again as the same person keeps the organizations picked per repository.
+    const same = before && before.apiUrl === login.apiUrl && before.user.id === login.user.id;
+    saveLogin({ ...login, organizations: same ? before.organizations : {} });
+    console.log(`Signed in to Reflektor as ${login.user.name ? `${login.user.name} <${login.user.email}>` : login.user.email}. The token is in ${shellPath(LOGIN_FILE)}, readable by you only.`);
+    if (readSettings().reflektorAutoPublish)
+      console.log("A branch's report now goes to your organization on Reflektor while its pull request is open, once an admin approved the repository. Turn that off in the report page's Settings.");
+  } else if (command === "logout") {
+    const login = readLogin();
+    if (!forgetLogin()) console.log("Not signed in to Reflektor.");
+    else console.log(`Signed out of Reflektor: deleted ${shellPath(LOGIN_FILE)}.${login ? ` To end the token on Reflektor's side too, revoke it on ${login.appUrl}/account.` : ""}`);
+  } else if (command === "whoami") {
+    const login = readLogin();
+    if (!login) {
+      console.log(`Not signed in to Reflektor. Sign in with: ${self} login`);
+      return;
+    }
+    try {
+      const user = await whoami(login);
+      console.log(`Signed in to Reflektor (${login.apiUrl}) as ${user.name ? `${user.name} <${user.email}>` : user.email}.`);
+    } catch (e) {
+      const error = e as Error & { code?: string };
+      console.log(error.message);
+      if (error.code === "unauthorized") console.log(`Sign in again with: ${self} login`);
+      else console.log(`Saved login: ${login.user.email} on ${login.apiUrl}.`);
+      process.exitCode = 1;
+    }
+  } else if (command === "publish") {
+    // Through the daemon, which keeps what went up so nothing is sent twice, and shows it in the page.
+    if (!readLogin()) {
+      console.log(`Not signed in to Reflektor. Sign in first: ${self} login`);
+      process.exitCode = 1;
+      return;
+    }
+    const info = await ensureDaemon();
+    const id = typeof args.id === "string" ? args.id : await branchReview(info);
+    if (!id) return;
+    const send = (organization: string | null) => api<PublishAnswer>(info, "POST", `/api/r/${encodeURIComponent(id)}/reflektor`, { organization });
+    let { data } = await send(typeof args.org === "string" ? args.org : null);
+    // Several organizations approve the repo and none was picked for it yet: ask, when someone is at the terminal.
+    if (data.reason === "organization_required" && data.organizations?.length && process.stdin.isTTY) {
+      const picked = await chooseOrganization(data.organizations);
+      if (picked) ({ data } = await send(picked));
+    }
+    console.log(data.message);
+    if (data.ok) return;
+    if (data.reason === "organization_required" || data.reason === "unknown_organization")
+      console.log(`Publish to one of them with: ${self} publish --id ${id} --org ${data.organizations?.[0]?.slug ?? "<slug>"}`);
+    if (data.reason === "unauthorized" || data.reason === "signed_out") console.log(`Sign in again with: ${self} login`);
+    process.exitCode = 1;
   } else if (command === "stop") {
     const info = readJson(daemonFile) as DaemonInfo | null;
     if (!info || !existsSync(daemonFile)) console.log("The daemon is not running.");
@@ -373,7 +461,7 @@ async function main() {
       console.log("Stopped the daemon.");
     }
   } else {
-    console.log("Usage: review.mjs open|wait|resume|answer|plan|status|pr|list|setup|stop (see the top of this file)");
+    console.log("Usage: review.mjs open|wait|resume|answer|plan|status|pr|list|setup|stop|login|logout|whoami|publish (see the top of this file)");
     process.exit(2);
   }
 }

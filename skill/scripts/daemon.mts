@@ -7,6 +7,9 @@
 // Each repo's review folder (<git folder>/pr-report) stays the source of truth: the daemon only keeps
 // a list of those folders in ~/.pr-report/reviews.json, so a restart loses nothing.
 //
+// Once the reader is signed in to Reflektor, it also publishes each branch's report there while its pull request is
+// open (see "Reflektor" below).
+//
 // Started by review.mjs when needed. Stops itself after 4 hours without activity.
 
 import { execFile } from "node:child_process";
@@ -21,6 +24,7 @@ import { promisify } from "node:util";
 import { readChecksRun } from "./checks-run.mjs";
 import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mjs";
 import { purgeCache, whoAmI } from "./identity.mjs";
+import { finishDeviceLogin, forgetLogin, type Organization, publishBundle, readLogin, reflektorConfig, rememberOrganization, repositoryOf, saveLogin, startDeviceLogin } from "./reflektor.mjs";
 import { readSettings, writeSettings } from "./settings.mjs";
 import { replaceFile } from "./repo.mjs";
 import type { AgentInfo, Bundle, ChecksRun, CommentKind, CommentTarget, InboxData, LiveQuestion, PrState, Ref, RepoAvatar, Review, ReviewComment, Tag } from "../schema/types.js";
@@ -52,6 +56,12 @@ type LivePr = { number: number; url: string; title: string | null; state: PrStat
 type Drift = { files: string[]; fileCount: number; commits: number; branch: string | null };
 // A live question as the daemon keeps it. deliveredAt is left out wherever questions leave the daemon.
 type QuestionRecord = LiveQuestion & { deliveredAt?: string | null };
+// One round sent to Reflektor. A review keeps them, so the same snapshot is never sent twice.
+type Upload = { round: number; snapshot: string; organization: string; url: string; created: boolean; at: string };
+// The last publish to Reflektor that did not work, for the page's menu. `reason` is reflektor.mjs's code for it.
+type PublishError = { reason: string; message: string; round: number; at: string };
+// What a publish answers to review.mjs and to the page. `message` is for the reader in either.
+type PublishAnswer = { ok: boolean; reason: string | null; message: string; round: number | null; url: string | null; organization: string | null; organizations?: Organization[]; already?: boolean };
 // What each kind of agent event carries (pushEvent).
 type EventData =
   | { type: "review-submitted"; round: number; file: string; count: number }
@@ -64,7 +74,7 @@ type ReviewEvent = EventData & { seq: number; at: string; deliveredAt: string | 
 // An event as handed to the agent: a question event also carries its question.
 type DeliveredEvent = ReviewEvent & { question?: QuestionRecord };
 // <review folder>/review-state.json as save() writes it. Events saved before handling was tracked have no handledAt.
-type SavedState = Pick<ReviewRecord, "rounds" | "phase" | "statuses" | "plan" | "pr" | "agent" | "lastAgentActivity" | "updatedAt"> & {
+type SavedState = Pick<ReviewRecord, "rounds" | "phase" | "statuses" | "plan" | "pr" | "agent" | "uploads" | "lastAgentActivity" | "updatedAt"> & {
   events: (EventData & { seq: number; at: string; deliveredAt: string | null; handledAt?: string | null })[];
 };
 // The repo and the code a round was built from, read from its data file (roundFacts).
@@ -88,6 +98,7 @@ type ReviewRecord = {
   plan: Plan | null;
   pr: LivePr | null;
   agent: AgentInfo | null;
+  uploads: Upload[];
   events: ReviewEvent[];
   lastAgentActivity: string | null;
   updatedAt: string;
@@ -102,15 +113,20 @@ type ReviewRecord = {
   prNextAt?: number;
   prFailures?: number;
   prBusy?: boolean;
+  publishing?: boolean;
+  publishError?: PublishError | null;
+  publishRetryAt?: number;
+  publishTried?: string;
+  publishQueue?: Promise<unknown>;
 };
 // A response. The events route keeps one open per page and notes on it which reviews the page watches.
 type Res = ServerResponse & { watchAll?: boolean; watching?: Set<string> };
 // An agent's long poll for a review's next event (next-event).
 type Waiter = { res: ServerResponse; timer: NodeJS.Timeout };
-// A request body from review.mjs to a review's agent routes (answers, plan, status, pr). Each route reads its own fields.
-type AgentBody = { questionId?: string; text?: string; ref?: Ref; steps?: PlanStep[]; note?: string | null; commentId?: string; status?: CommentStatus["status"]; url?: string; title?: string };
-// A request body from a review page to its routes (presence, questions, archive, plan-decision, draft, submit).
-type PageBody = { tab?: string; id?: string; text?: string; target?: CommentTarget; archived?: boolean; decision?: string; note?: string | null; kinds?: PlanDecision["kinds"]; comments?: ReviewComment[]; headSha?: string; snapshot?: string };
+// A request body from review.mjs to a review's agent routes (answers, plan, status, pr, reflektor). Each route reads its own fields.
+type AgentBody = { questionId?: string; text?: string; ref?: Ref; steps?: PlanStep[]; note?: string | null; commentId?: string; status?: CommentStatus["status"]; url?: string; title?: string; organization?: string };
+// A request body from a review page to its routes (presence, questions, archive, plan-decision, draft, submit, reflektor).
+type PageBody = { tab?: string; id?: string; text?: string; target?: CommentTarget; archived?: boolean; decision?: string; note?: string | null; kinds?: PlanDecision["kinds"]; comments?: ReviewComment[]; headSha?: string; snapshot?: string; organization?: string };
 // What the setup page learns about the gh or glab command line on this machine.
 type ToolState = { installed: boolean; version: string | null; loggedIn: boolean; account: string | null; host: string | null };
 // The error execFile rejects with, which carries the command's output.
@@ -227,6 +243,7 @@ function loadReview(entry: RegistryEntry) {
     plan: saved.plan ?? null,
     pr: saved.pr ?? null,
     agent: cleanAgent(saved.agent),
+    uploads: saved.uploads ?? [],
     // Events saved before handling was tracked count as handled once delivered.
     events: (saved.events ?? []).map((e) => ("handledAt" in e ? e : { ...e, handledAt: e.deliveredAt })),
     lastAgentActivity: saved.lastAgentActivity ?? null,
@@ -257,6 +274,7 @@ function save(r: ReviewRecord) {
     plan: r.plan,
     pr: r.pr ?? null,
     agent: r.agent ?? null,
+    uploads: r.uploads,
     events: r.events,
     lastAgentActivity: r.lastAgentActivity,
     updatedAt: r.updatedAt,
@@ -314,6 +332,8 @@ const liveState = (r: ReviewRecord) => ({
   pr: r.pr ?? null,
   // The agent that called last, in the words the page shows; null until one has said who it is.
   agent: r.agent ?? null,
+  // Reflektor: where this branch's report went last, the last publish that did not work, and whether one runs now.
+  reflektor: { published: r.uploads.at(-1) ?? null, error: r.publishError ?? null, publishing: Boolean(r.publishing) },
   // Whether an agent waits for this review's events, and since when the oldest event waits for one.
   // The page warns when nobody picks up what the reviewer sent.
   listening: listening(r),
@@ -914,6 +934,7 @@ setInterval(() => {
     if (r.phase === "reviewing" || r.phase === "done") void checkDrift(r);
     // Not awaited: a slow network must not hold up the git check.
     void checkPr(r);
+    autoPublish(r);
   }
 }, DRIFT_MS).unref();
 
@@ -1015,6 +1036,7 @@ function setPr(r: ReviewRecord, pr: LivePr | null) {
   }
   r.pr = pr;
   save(r);
+  if (pr.state === "OPEN") autoPublish(r);
   return true;
 }
 
@@ -1051,6 +1073,134 @@ async function checkPr(r: ReviewRecord) {
   } finally {
     r.prBusy = false;
   }
+}
+
+// ------------------------------------------------------------------ Reflektor
+// Publishing reports to Reflektor (reflektor.mjs), where the reader's organization reads them. Once the reader is
+// signed in, a branch's report goes up while its pull request is open: the newest finished round when the daemon sees
+// the pull request open, then each round built after it. A review keeps what went up (uploads, by snapshot), so the
+// same code is never sent twice, also across restarts. It all runs in the background: a failure is logged, shown in the
+// page's menu and tried again later, and never holds up a request. The reader can also publish by hand, from the page's
+// menu or with review.mjs publish, and sign in from the page.
+
+// When an automatic publish that did not work is tried again: soon after a network problem or a server error, later
+// after a refusal (the repository not approved yet, an organization to choose), which only a person can change.
+const PUBLISH_RETRY_MS = 5 * 60_000;
+const PUBLISH_QUIET_MS = 60 * 60_000;
+const TRANSIENT = new Set(["network", "http", "rate_limited", "bad_answer"]);
+// A pull request the daemon has not seen open for this long does not start a publish on its own: the review may have
+// been left alone for weeks, and its pull request merged since.
+const PR_FRESH_MS = 10 * 60_000;
+
+// The newest round that is not a draft: the one to publish.
+const finalRound = (r: ReviewRecord) => r.rounds.filter((x) => !x.draft).at(-1) ?? null;
+
+// Publishes a review's newest finished round, after any publish of it still running. `auto` is the daemon's own
+// publish. By hand, a snapshot sent before answers with where it went instead of going again, unless another
+// organization is asked for.
+function publish(r: ReviewRecord, options: { organization?: string | null; auto?: boolean } = {}): Promise<PublishAnswer> {
+  const next = (r.publishQueue ?? Promise.resolve()).then(() => publishNow(r, options));
+  r.publishQueue = next.catch(() => {});
+  return next;
+}
+
+async function publishNow(r: ReviewRecord, { organization = null, auto = false }: { organization?: string | null; auto?: boolean }): Promise<PublishAnswer> {
+  const answer = (ok: boolean, reason: string | null, message: string, extra: Partial<PublishAnswer> = {}): PublishAnswer => ({ ok, reason, message, round: null, url: null, organization: null, ...extra });
+  const login = readLogin();
+  if (!login) return answer(false, "signed_out", "Not signed in to Reflektor.");
+  const entry = finalRound(r);
+  if (!entry) return answer(false, "draft", "This review has no finished round yet: the agent is still writing the report.");
+  let bundle: Bundle;
+  try {
+    bundle = JSON.parse(roundText(roundFile(entry)) ?? "") as Bundle;
+  } catch {
+    return answer(false, "no_data", `The report data of round ${entry.round} could not be read.`, { round: entry.round });
+  }
+  const snapshot = bundle.diff.branch.snapshot;
+  const sent = r.uploads.find((u) => u.snapshot === snapshot && (!organization || u.organization.toLowerCase() === organization.toLowerCase()));
+  if (sent) return answer(true, null, `Round ${entry.round} is on Reflektor already: ${sent.url}`, { round: entry.round, url: sent.url, organization: sent.organization, already: true });
+
+  r.publishing = true;
+  broadcast(r);
+  const outcome = await publishBundle(login, bundle, { organization });
+  r.publishing = false;
+  if (outcome.ok) {
+    r.uploads = [...r.uploads, { round: entry.round, snapshot, organization: outcome.organization, url: outcome.report.url, created: outcome.created, at: now() }].slice(-50);
+    r.publishError = null;
+    r.publishRetryAt = 0;
+    // An organization asked for by name is the one for this repository from now on.
+    const repository = repositoryOf(bundle);
+    if (organization && repository) rememberOrganization(repository, outcome.organization);
+    console.log(`Reflektor: published ${r.id} round ${entry.round} to ${outcome.organization} (its round ${outcome.round}): ${outcome.report.url}`);
+    save(r);
+    return answer(true, null, `Published round ${entry.round} to Reflektor (${outcome.organization}): ${outcome.report.url}`, { round: entry.round, url: outcome.report.url, organization: outcome.organization });
+  }
+  r.publishError = { reason: outcome.reason, message: outcome.message, round: entry.round, at: now() };
+  if (auto) r.publishRetryAt = Date.now() + (outcome.retryAfterMs ?? (TRANSIENT.has(outcome.reason) ? PUBLISH_RETRY_MS : PUBLISH_QUIET_MS));
+  console.log(`Reflektor: publishing ${r.id} round ${entry.round}${auto ? "" : " by hand"} did not work (${outcome.reason}): ${outcome.message}`);
+  // Not saved: a failure is not activity, and must not keep the review out of the archive.
+  broadcast(r);
+  return answer(false, outcome.reason, outcome.message, { round: entry.round, organizations: outcome.organizations });
+}
+
+// Starts the daemon's own publish when one is due: signed in, the setting on, the pull request open as of a recent
+// look, and a finished round not tried yet. Cheap enough for every tick: it reads two small files, and a round's data
+// only when it publishes. Publishes of a review run one after the other (publish), so one still running holds
+// nothing up here.
+function autoPublish(r: ReviewRecord) {
+  if (r.archived || r.pr?.state !== "OPEN" || Date.now() - Date.parse(r.pr.checkedAt) > PR_FRESH_MS) return;
+  if (!readSettings().reflektorAutoPublish) return;
+  const login = readLogin();
+  const entry = finalRound(r);
+  if (!login || !entry) return;
+  // Once per build of a round and per login. A try that did not work goes again when its retry time has come; a new
+  // build or a new login goes at once.
+  const tried = `${entry.round}|${entry.builtAt ?? entry.publishedAt}|${login.savedAt}`;
+  if (r.publishTried === tried && (!r.publishRetryAt || Date.now() < r.publishRetryAt)) return;
+  r.publishTried = tried;
+  r.publishRetryAt = 0;
+  void publish(r, { auto: true });
+}
+
+// A sign-in started from a page: the code the reader approves in the browser, while the daemon waits for the token.
+// review.mjs login does the same in the terminal.
+type SignIn = { userCode: string; verificationUri: string; verificationUriComplete: string; expiresAt: string; error: string | null };
+let signIn: SignIn | null = null;
+
+async function startSignIn() {
+  if (signIn && !signIn.error && Date.parse(signIn.expiresAt) > Date.now()) return;
+  const config = reflektorConfig();
+  const start = await startDeviceLogin(config);
+  const pending: SignIn = {
+    userCode: start.userCode,
+    verificationUri: start.verificationUri,
+    verificationUriComplete: start.verificationUriComplete,
+    expiresAt: new Date(Date.now() + (start.expiresIn || 600) * 1000).toISOString(),
+    error: null,
+  };
+  signIn = pending;
+  finishDeviceLogin(config, start).then(
+    (login) => {
+      saveLogin(login);
+      if (signIn === pending) signIn = null;
+      console.log(`Reflektor: signed in as ${login.user.email}`);
+    },
+    (e) => {
+      pending.error = (e as Error).message;
+    },
+  );
+}
+
+// What the page's menu shows: who is signed in, the app to link to, the setting, and a sign-in waiting for approval.
+function reflektorStatus() {
+  const login = readLogin();
+  let appUrl = login?.appUrl ?? null;
+  try {
+    appUrl ??= reflektorConfig().appUrl;
+  } catch {
+    // A setting that is not a usable URL: no link, and signing in says why.
+  }
+  return { signedIn: Boolean(login), user: login ? { name: login.user.name, email: login.user.email } : null, appUrl, autoPublish: readSettings().reflektorAutoPublish, signIn };
 }
 
 // ------------------------------------------------------------------ archive
@@ -1165,8 +1315,8 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     return;
   }
 
-  // ---------- page API without a review: who is reading, the daemon's cache, and the settings the agent reads
-  if (parts[1] === "me" || parts[1] === "cache" || parts[1] === "settings") {
+  // ---------- page API without a review: who is reading, the daemon's cache, the settings the agent reads, Reflektor
+  if (parts[1] === "me" || parts[1] === "cache" || parts[1] === "settings" || parts[1] === "reflektor") {
     if (!same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
     // The page shows and changes the settings here; the scripts read the file (settings.mjs).
     if (req.method === "GET" && parts[1] === "settings") return send(res, 200, readSettings());
@@ -1176,6 +1326,20 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
       return send(res, 200, who);
     }
     if (req.method === "POST" && parts[1] === "cache" && parts[2] === "purge") return send(res, 200, { ok: true, removed: purgeCache() });
+    if (req.method === "GET" && parts[1] === "reflektor" && !parts[2]) return send(res, 200, reflektorStatus());
+    if (req.method === "POST" && parts[1] === "reflektor" && parts[2] === "login") {
+      try {
+        await startSignIn();
+      } catch (e) {
+        return send(res, 502, { error: (e as Error).message });
+      }
+      return send(res, 200, reflektorStatus());
+    }
+    if (req.method === "POST" && parts[1] === "reflektor" && parts[2] === "logout") {
+      forgetLogin();
+      signIn = null;
+      return send(res, 200, reflektorStatus());
+    }
     return send(res, 404, { error: "not found" });
   }
 
@@ -1198,7 +1362,7 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     let r = [...reviews.values()].find((x) => x.dir === dir && x.branch === branch);
     if (!r) {
       const id = `${slug(bundle.diff.repo.name)}-${slug(branch)}-${createHash("sha1").update(dir).digest("hex").slice(0, 4)}`;
-      r = { id, dir, repo, branch, rounds: [], phase: "reviewing", statuses: {}, plan: null, pr: null, events: [], lastAgentActivity: null, questions: [], round: bundle.round } as unknown as ReviewRecord;
+      r = { id, dir, repo, branch, rounds: [], phase: "reviewing", statuses: {}, plan: null, pr: null, uploads: [], events: [], lastAgentActivity: null, questions: [], round: bundle.round } as unknown as ReviewRecord;
       reviews.set(id, r);
     }
     r.title = bundle.report.title;
@@ -1235,6 +1399,8 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     r.lastAgentActivity = now();
     saveRegistry();
     save(r);
+    // A round built while the pull request is open goes up to Reflektor too.
+    autoPublish(r);
     return send(res, 200, { id: r.id, round, republished, firstReal, url: `http://127.0.0.1:${port}/r/${r.id}`, tabs: openTabs(r), dir });
   }
 
@@ -1340,8 +1506,12 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
       // The next poll must answer in full, not with "nothing changed" since the look before this one.
       r.prEtag = null;
       r.prNextAt = 0;
+      // An open pull request publishes the report to Reflektor, also when the daemon knew of it already.
+      autoPublish(r);
       return send(res, 200, { pr: r.pr });
     }
+    // review.mjs publish: this branch's report to Reflektor, now.
+    if (action === "reflektor") return send(res, 200, await publish(r, { organization: typeof body.organization === "string" ? body.organization : null }));
     return send(res, 404, { error: "not found" });
   }
 
@@ -1400,6 +1570,9 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     }
     return send(res, 200, { ok: true });
   }
+
+  // "Publish to Reflektor" in the page's menu.
+  if (req.method === "POST" && action === "reflektor") return send(res, 200, await publish(r, { organization: typeof body.organization === "string" ? body.organization : null }));
 
   if (req.method === "POST" && action === "plan-decision") {
     if (!r.plan || r.phase !== "planning") return send(res, 409, { error: "no plan is waiting for a decision" });

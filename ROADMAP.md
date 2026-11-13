@@ -25,6 +25,7 @@
 - Any agent, by name: the page and the inbox name the agent on the other side (`skill/agents.json`, worked out in the agent's shell and sent with every call) and say "your agent" when nobody told them
 - Installs for agents other than Claude Code: `pnpm run deploy --target agents` puts a copy with its own `SKILL.md` in `~/.agents/skills`, the folder Codex reads
 - Hooks: `preRun`, `postRun` and `onApproved` commands in `.pr-report.json`, run by the scripts with `PR_REPORT_*` variables, and held back like the checks while the branch has commits by authors not yet trusted
+- Publish to Reflektor: sign in with the device flow (`review.mjs login`, or the reader's menu), the token in `~/.pr-report/reflektor.json` for the user only; publish by hand (`review.mjs publish`, the menu) or by itself while the pull request is open, once per snapshot, never a draft, and only after the preflight names an organization that approves the repo (`docs/reflektor.md`)
 
 ## Later (remind)
 
@@ -35,6 +36,8 @@
 - **A neutral `PR_REPORT_BASH`:** `gitBash()` reads only `CLAUDE_CODE_GIT_BASH_PATH` before it searches for Git Bash on Windows.
 - **Before/after screenshots** of changed UI pages, when Playwright and a dev server are available.
 - **Tests on other stacks:** fake repos in Go, Python and Rust run by `pnpm check`, to prove the skill works for any stack.
+- **Reflektor in the inbox's menu:** signing in and publishing are in a report's menu, and the account in Settings. The inbox's hand-written menu has no Reflektor block yet.
+- **Auto-publish for reviews not on screen:** the daemon follows a pull request only while its review is open in a tab, or when the agent tells it (`review.mjs pr`). A pull request opened elsewhere publishes once a tab of its review is open.
 - **Smaller exported pages:** `build.mts --html` still writes about 11 MB, almost all of it Shiki grammars kept as a fallback for browsers without WebAssembly. Drop them, or embed only the languages the diff uses. Reports opened through the daemon are not affected.
 
 ## Open decisions
