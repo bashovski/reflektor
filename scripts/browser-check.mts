@@ -182,6 +182,30 @@ try {
   await expectVisible(page.getByText(/Removed \d+ cached/), "the purge result");
   await page.getByRole("button", { name: "Close" }).click();
 
+  // Settings, signed out of Reflektor: the API URL can change for a self-hosted one, a plain http address off this
+  // machine is refused with a reason, and Reset to default goes back to Reflektor's own.
+  const savedApiUrl = () => (JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "settings.json"), "utf8")) as { reflektorApiUrl?: string }).reflektorApiUrl;
+  await page.keyboard.press("?");
+  const apiUrl = page.getByRole("textbox", { name: "API URL" });
+  await expectVisible(apiUrl, "the Reflektor API URL in Settings while signed out");
+  if ((await apiUrl.inputValue()) !== "https://api.reflektor.dev") fail(`the API URL does not start at Reflektor's own: ${await apiUrl.inputValue()}`);
+  if (await page.getByRole("button", { name: "Reset to default" }).isEnabled()) fail("Reset to default is offered while the API URL is the default");
+  await apiUrl.fill("http://reflektor.example.test");
+  const errorsBefore = errors.length;
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expectVisible(page.getByRole("alert").filter({ hasText: /https/ }), "the reason a plain http API URL is refused");
+  // The daemon's 400 is the refusal itself, which the browser also logs; anything else stays an error.
+  const refusal = errors.findIndex((e, i) => i >= errorsBefore && /status of 400/.test(e));
+  if (refusal >= 0) errors.splice(refusal, 1);
+  await apiUrl.fill("https://reflektor.corp.example.test/");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expectVisible(page.getByText(/Saved\. Signing in uses this address/), "the saved API URL");
+  if (savedApiUrl() !== "https://reflektor.corp.example.test") fail(`the API URL was not saved to settings.json as a base URL: ${savedApiUrl()}`);
+  await page.getByRole("button", { name: "Reset to default" }).click();
+  await expectVisible(page.getByText(/Back to Reflektor's own address/), "the API URL reset to the default");
+  if (savedApiUrl() !== "" || (await apiUrl.inputValue()) !== "https://api.reflektor.dev") fail("Reset to default did not go back to Reflektor's own API URL");
+  await page.keyboard.press("Escape");
+
   // Reflektor from the same menu: signing in shows the code and waits for the approval in the browser, then the menu
   // publishes this review and links to it.
   reflektor.device([{ status: 400, body: { error: "authorization_pending" } }], { interval: 1 });
@@ -333,6 +357,7 @@ try {
   await expectVisible(panel.getByRole("heading", { name: "Settings" }), "Settings, opened from the inbox's menu");
   await expectVisible(panel.getByRole("switch", { name: /Subagentic Mode/, checked: true }), "subagent mode in Settings, as it was set in the wizard");
   await expectVisible(panel.getByRole("switch", { name: /Publish while the pull request is open/, checked: true }), "Reflektor's auto-publish in Settings, once signed in");
+  await expectVisible(panel.getByText("Sign out to use another address."), "the API URL as read-only while signed in");
   await panel.getByRole("button", { name: /^Close/ }).click();
   await page
     .locator("iframe.panel")
@@ -343,7 +368,7 @@ try {
   const unexpected = errors.filter((e) => !/favicon/.test(e));
   if (unexpected.length) fail(`errors in the page:\n${unexpected.join("\n")}`);
   console.log(
-    "browser: setup page, draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, user menu, Reflektor sign-in and publish, agent name, changed-code warning, pull request opened and merged, inbox grouping and search, and the setup offer all worked",
+    "browser: setup page, draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, user menu, Reflektor sign-in and publish, agent name, changed-code warning, pull request opened and merged, inbox grouping and search, the Reflektor API URL in Settings, and the setup offer all worked",
   );
 } catch (error) {
   const e = error as ExecError;

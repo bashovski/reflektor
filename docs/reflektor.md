@@ -112,12 +112,16 @@ In `~/.pr-report/settings.json`, beside the other settings the scripts read (`sk
 | Key | Default | Means |
 | --- | --- | --- |
 | `reflektorAutoPublish` | `true` | Publish while the pull request is open. Does nothing until you sign in. |
-| `reflektorApiUrl` | `""` | The API to sign in with. Empty means `https://api.reflektor.dev`. |
-| `reflektorAppUrl` | `""` | The app. Empty means `https://reflektor.dev`. |
+| `reflektorApiUrl` | `""` | The API to sign in with. Empty means `https://api.reflektor.dev`. Changed in Settings too. |
+| `reflektorAppUrl` | `""` | The app. Empty means the one the API's sign-in page is on, which is `https://reflektor.dev` for Reflektor's own. |
 
 The variables `REFLEKTOR_API_URL` and `REFLEKTOR_APP_URL` win over the two URL settings. Only `login` reads them: a
 saved login keeps the URLs it was made with. Both must be `https://`, except on this machine (`localhost`,
 `127.0.0.1`, `[::1]`), so a token never travels in the clear.
+
+For a self-hosted Reflektor, change the API URL in Settings, under **Reflektor**, while signed out. The daemon checks
+it before saving it, and **Reset to default** goes back to `https://api.reflektor.dev`. When no app URL is named, a
+login takes the app from the sign-in page the API sends, so links and the account page point at the same Reflektor.
 
 ## What can go wrong
 

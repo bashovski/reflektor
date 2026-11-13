@@ -8,6 +8,8 @@ export type AgentSettings = {
   subagents: boolean;
   // Publish a branch's report to Reflektor while its pull request is open, once the reader is signed in there.
   reflektorAutoPublish: boolean;
+  // The Reflektor API to sign in with, for a self-hosted Reflektor. Empty means Reflektor's own.
+  reflektorApiUrl: string;
 };
 
 // The settings as the daemon has them, and a way to change one. `settings` is null until the daemon has answered,
@@ -40,5 +42,15 @@ export function useAgentSettings(shown = true) {
       .then(setSettings);
   };
 
-  return { settings, change };
+  // For a value the daemon may refuse, such as a URL: nothing changes on the page until it is saved, and a refusal
+  // throws with the daemon's reason for the caller to show.
+  const save = async (patch: Partial<AgentSettings>) => {
+    const res = await fetch("/api/settings", { method: "POST", headers: { "x-review-token": pageToken(), "content-type": "application/json" }, body: JSON.stringify(patch) });
+    const data = (await res.json().catch(() => null)) as (AgentSettings & { error?: string }) | null;
+    if (!res.ok || !data) throw new Error(data?.error ?? "The daemon did not save it.");
+    setSettings(data);
+    return data;
+  };
+
+  return { settings, change, save };
 }

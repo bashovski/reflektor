@@ -26,7 +26,9 @@ export type ReflektorUser = { id: string; email: string; name: string | null };
 // the user picked when several of theirs approve it, so the next publish does not ask again.
 export type ReflektorLogin = { apiUrl: string; appUrl: string; token: string; user: ReflektorUser; savedAt: string; organizations?: Record<string, string> };
 // Where to sign in: the API, and the app whose pages the reader opens.
-export type ReflektorConfig = { apiUrl: string; appUrl: string };
+// `appUrlSet` is false when the app URL is Reflektor's own only because nothing named another: a login then takes the
+// app from the sign-in page the API sends.
+export type ReflektorConfig = { apiUrl: string; appUrl: string; appUrlSet?: boolean };
 export type Organization = { slug: string; name: string };
 // A repository as preflight asks about it: the bundle's diff.repo.
 export type Repository = { host: string; owner: string; name: string };
@@ -48,6 +50,7 @@ const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 export const LOGIN_FILE = join(HOME, "reflektor.json");
 const DEFAULT_API = "https://api.reflektor.dev";
 const DEFAULT_APP = "https://reflektor.dev";
+export const DEFAULT_REFLEKTOR_API = DEFAULT_API;
 // The upload carries the whole bundle, up to 25 MB gzipped; the other calls are small.
 const CALL_MS = 15_000;
 const UPLOAD_MS = 120_000;
@@ -83,7 +86,27 @@ export function reflektorConfig(settings: Settings = readSettings(), env: NodeJS
   return {
     apiUrl: baseUrl(env.REFLEKTOR_API_URL || settings.reflektorApiUrl || DEFAULT_API, "API"),
     appUrl: baseUrl(env.REFLEKTOR_APP_URL || settings.reflektorAppUrl || DEFAULT_APP, "app"),
+    appUrlSet: Boolean(env.REFLEKTOR_APP_URL || settings.reflektorAppUrl),
   };
+}
+
+// The API URL as the reader typed it in Settings, ready for settings.json: empty for Reflektor's own (so it follows
+// the default), otherwise the base URL. Throws bad_url for one that is not a URL, or plain http off this machine.
+export function settingApiUrl(value: string): string {
+  const typed = value.trim();
+  if (!typed) return "";
+  const url = baseUrl(typed, "API");
+  return url === DEFAULT_API ? "" : url;
+}
+
+// The app a sign-in page belongs to: Reflektor sends its own (<app>/device), so a self-hosted one links to itself
+// without a second setting. null when the page is not a usable base URL.
+function appOf(start: DeviceStart): string | null {
+  try {
+    return baseUrl(new URL(start.verificationUri ?? start.verificationUriComplete).origin, "app");
+  } catch {
+    return null;
+  }
 }
 
 // ------------------------------------------------------------------ the login file
@@ -255,7 +278,8 @@ export async function finishDeviceLogin(
       const answer = await call<{ accessToken?: unknown; user?: unknown }>(config.apiUrl, "/auth/device/token", { method: "POST", json: { deviceCode: start.deviceCode } });
       if (typeof answer?.accessToken !== "string" || !isUser(answer.user)) throw failure("bad_answer", null, "Reflektor approved the sign-in but sent no token.");
       const user = answer.user;
-      return { apiUrl: config.apiUrl, appUrl: config.appUrl, token: answer.accessToken, user: { id: user.id, email: user.email, name: user.name ?? null }, savedAt: new Date(now()).toISOString(), organizations: {} };
+      const appUrl = config.appUrlSet === false ? (appOf(start) ?? config.appUrl) : config.appUrl;
+      return { apiUrl: config.apiUrl, appUrl, token: answer.accessToken, user: { id: user.id, email: user.email, name: user.name ?? null }, savedAt: new Date(now()).toISOString(), organizations: {} };
     } catch (e) {
       const code = (e as ReflektorError).code;
       if (code === "slow_down") interval += 5;

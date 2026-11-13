@@ -8,7 +8,18 @@ import { pageToken } from "./panel";
 // A sign-in waiting for the reader to approve the code in the browser.
 export type SignIn = { userCode: string; verificationUri: string; verificationUriComplete: string; expiresAt: string; error: string | null };
 // What GET /api/reflektor answers.
-export type ReflektorStatus = { signedIn: boolean; user: { name: string | null; email: string } | null; appUrl: string | null; autoPublish: boolean; signIn: SignIn | null };
+// `apiUrl` is the API in use (the login's, or the one a sign-in would use), and `apiUrlFromEnv` says REFLEKTOR_API_URL
+// is set for the daemon, which wins over the setting.
+export type ReflektorStatus = {
+  signedIn: boolean;
+  user: { name: string | null; email: string } | null;
+  appUrl: string | null;
+  apiUrl: string | null;
+  defaultApiUrl: string;
+  apiUrlFromEnv: boolean;
+  autoPublish: boolean;
+  signIn: SignIn | null;
+};
 // What a publish answers. `organizations` comes with organization_required: the ones to choose from.
 export type PublishAnswer = { ok: boolean; reason: string | null; message: string; round: number | null; url: string | null; organization: string | null; organizations?: { slug: string; name: string }[]; already?: boolean };
 
