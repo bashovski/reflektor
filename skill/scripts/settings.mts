@@ -1,8 +1,9 @@
 // The reader's settings that the agent has to know about.
 //
 // How the page looks (theme, code theme, diff view) is kept in the browser, where only the page needs it. These are
-// kept on disk, in ~/.pr-report/settings.json, because the scripts read them: the page writes them through the
-// daemon (/api/settings), and collect.mjs tells the agent what they say.
+// kept on disk, in ~/.pr-report/settings.json, because the scripts and the daemon read them: the page writes them
+// through the daemon (/api/settings), collect.mjs tells the agent what they say, and the daemon and review.mjs read
+// the Reflektor ones (reflektor.mjs).
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -14,12 +15,19 @@ const FILE = join(HOME, "settings.json");
 
 // Every setting with the value it has until someone changes it. A key that is not listed here is never read or
 // written, and a value of the wrong type counts as not set.
-export type Settings = { subagents: boolean };
+export type Settings = { subagents: boolean; reflektorAutoPublish: boolean; reflektorApiUrl: string; reflektorAppUrl: string };
 
 const DEFAULTS: Settings = {
   // Split the reading and writing of a report between subagents that work at the same time. Faster, and it costs
   // more tokens, so it is off until the reader turns it on. skill/subagents.md says what the agent does with it.
   subagents: false,
+  // Publish a branch's report to Reflektor when its pull request is open, and each later round while it stays open.
+  // It does nothing until the reader signs in to Reflektor (review.mjs login), so on by default means on once signed in.
+  reflektorAutoPublish: true,
+  // The Reflektor API and app to sign in with. Empty means Reflektor's own (api.reflektor.dev, reflektor.dev), and the
+  // REFLEKTOR_API_URL and REFLEKTOR_APP_URL variables win over both. A login keeps the URLs it was made with.
+  reflektorApiUrl: "",
+  reflektorAppUrl: "",
 };
 
 // `base` with the values `from` has for the same keys, where they are of the same type. The file and what the page

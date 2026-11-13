@@ -54,6 +54,13 @@ export type LiveState = {
   // An agent waits for this review's events (review.mts wait), and since when the oldest one waits.
   // The agent that called the daemon last for this review; null until one has said who it is.
   agent: AgentInfo | null;
+  // Reflektor: where this branch's report went last, the last publish that did not work, and whether one runs now.
+  // Missing in states from an older daemon.
+  reflektor?: {
+    published: { round: number; organization: string; url: string; at: string } | null;
+    error: { reason: string; message: string; round: number; at: string } | null;
+    publishing: boolean;
+  };
   listening: boolean;
   undeliveredSince: string | null;
   updatedAt: string;

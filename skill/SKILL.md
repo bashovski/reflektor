@@ -330,6 +330,16 @@ node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" resume --repo .
 
 It finds this branch's review (or pass `--id`) and prints what waits for you, the same way the waiter does: a sent review, a plan decision, a question, or a fix loop that was cut off, with the comments still open. Follow it from there; for a cut-off fix loop, comments that already have a final status are done. When nothing waits for you, it says to start the waiter.
 
+## Publish to Reflektor
+
+Reflektor is where the user's organization reads published reports. When the user asks to publish or share the report there:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" publish [--org <slug>]
+```
+
+It publishes this branch's newest finished round and prints where it went, or why it did not. When it lists several organizations, ask the user which one and run it again with `--org`. When nobody is signed in, run `review.mjs login` in the background and tell the user to approve the code it prints in the browser tab it opens. While the branch's pull request is open, the daemon publishes each new round by itself once the user is signed in; there is nothing to run for that.
+
 ## Follow-ups
 
 - **Wording or grouping changes:** edit report.json and run build.mjs again. No need to collect again.

@@ -1,18 +1,21 @@
 #!/usr/bin/env node
 // End-to-end check: rebuilds the fake books repo, runs collect.mts and build.mts on it with
-// samples/report.json, and fails on any warning. Then drives a whole review through a private daemon.
+// samples/report.json, and fails on any warning. Then drives a whole review through a private daemon, and publishes
+// reports to a local stand-in for Reflektor.
 // Also refreshes samples/bundle.json for `pnpm dev` and the standalone samples/books-report.html.
 //
 // Usage: pnpm check, or pnpm sample to open the sample report after
 
 import { type ChildProcessByStdio, execFile, execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
+import { gunzipSync } from "node:zlib";
 import type { AgentInfo, Bundle, ChecksRun, DiffData, DiffFile, HookName, InboxData, LiveQuestion, PrState, Report, RepoConfig } from "../skill/schema/types.js";
 import { githubPr, startGithubStub } from "./github-stub.mjs";
+import { STUB_TOKEN, STUB_USER, type StubAnswer, startReflektorStub } from "./reflektor-stub.mjs";
 import { root } from "./paths.mjs";
 
 // What execFileSync throws when the command fails. Every call asks for utf8, so the output is text.
@@ -32,6 +35,7 @@ type LiveState = {
   drift: { files: string[]; fileCount: number; commits: number; branch: string | null } | null;
   pr?: { number: number; state: PrState; base: string | null; mergedAt: string | null } | null;
   agent: AgentInfo | null;
+  reflektor?: { published: { round: number; snapshot: string; organization: string; url: string } | null; error: { reason: string; message: string } | null; publishing: boolean };
   listening: boolean;
   undeliveredSince: string | null;
   updatedAt: string;
@@ -332,6 +336,7 @@ try {
   updateFlow();
   await concurrentStart();
   await hooksFlow();
+  await reflektorFlow();
 } catch (error) {
   const e = error as ExecError;
   fail(e.stderr?.toString() || e.message);
@@ -910,6 +915,332 @@ async function hooksFlow() {
     } catch {
       // Already stopped.
     }
+    github.close();
+  }
+}
+
+// ------------------------------------------------------------------ Reflektor
+// Publishing to Reflektor (reflektor.mts) against a local stand-in for its API: the login file, the device flow's
+// answers, the preflight that keeps code from unapproved repos on the machine, the gzipped upload, and each refusal.
+// Then review.mjs login, whoami and logout, and a private daemon publishing by itself while the pull request is open:
+// once per snapshot, also across a restart, never a draft, not with the setting off, not after the pull request closed.
+
+async function reflektorFlow() {
+  const stub = await startReflektorStub();
+  const github = await startGithubStub();
+  const client = (await fromPackage("reflektor.mjs")) as typeof import("../skill/scripts/reflektor.mjs");
+  type Outcome = Awaited<ReturnType<typeof client.publishBundle>>;
+  const bundle = JSON.parse(readFileSync(join(root, "samples/bundle.json"), "utf8")) as Bundle;
+  const home = join(tmp, "reflektor-home");
+  const file = join(home, "reflektor.json");
+  const login = { apiUrl: stub.url, appUrl: stub.url, token: STUB_TOKEN, user: STUB_USER, savedAt: new Date().toISOString(), organizations: {} };
+  const acme = { slug: "acme", name: "Acme" };
+  const beta = { slug: "beta", name: "Beta" };
+  const ownerOnly = (f: string) => process.platform === "win32" || (statSync(f).mode & 0o777) === 0o600;
+  const posts = (path: string) => stub.requests.filter((q) => q.method === "POST" && q.path === path).length;
+  const codeOf = (e: unknown) => (e as { code?: string }).code;
+  // review.mjs, run without blocking: the stand-ins live in this process and must be free to answer.
+  const cli = (env: NodeJS.ProcessEnv, ...a: string[]) =>
+    new Promise<{ code: number; out: string }>((done) =>
+      execFile("node", [join(root, "dist/skill/scripts/review.mjs"), ...a], { cwd: root, encoding: "utf8", env: { ...process.env, ...env } }, (e, stdout, stderr) =>
+        done({ code: e ? (typeof e.code === "number" ? e.code : 1) : 0, out: `${stdout}${stderr}` }),
+      ),
+    );
+  const dhome = join(tmp, "reflektor-daemon-home");
+  const env = {
+    PR_REPORT_HOME: dhome,
+    PR_REPORT_PORT: String(5800 + Math.floor(Math.random() * 300)),
+    PR_REPORT_DRIFT_SECONDS: "1",
+    PR_REPORT_GITHUB_API: github.url,
+    PR_REPORT_GITHUB_TOKEN: "stub-token",
+    PR_REPORT_PR_POLL_SECONDS: "1",
+    GH_CONFIG_DIR: join(tmp, "gh-config"),
+    PR_REPORT_AGENT: "claude-code",
+  };
+  const review = (...a: string[]) => run("node", [join(root, "dist/skill/scripts/review.mjs"), ...a], env);
+
+  try {
+    // The login file: the user's only, read back as saved, and logout deletes it and nothing else.
+    mkdirSync(home, { recursive: true });
+    writeFileSync(join(home, "settings.json"), "{}");
+    client.saveLogin(login, file);
+    if (!ownerOnly(file)) fail("the Reflektor login file can be read by other users");
+    chmodSync(file, 0o644);
+    client.saveLogin(login, file);
+    if (!ownerOnly(file)) fail("saving the Reflektor login over a file others could read left it readable");
+    if (client.readLogin(file)?.token !== STUB_TOKEN || client.readLogin(file)?.user.email !== STUB_USER.email) fail("the Reflektor login does not read back as saved");
+    writeFileSync(file, JSON.stringify({ ...login, apiUrl: "http://reflektor.example.test" }));
+    if (client.readLogin(file) !== null) fail("a Reflektor login whose API is plain http on another machine was taken");
+    if (!client.forgetLogin(file) || existsSync(file) || !existsSync(join(home, "settings.json"))) fail("logout did not delete exactly the login file");
+    if (client.forgetLogin(file)) fail("logging out with no login file says it signed out");
+
+    // Where to sign in: the variables, then the settings, then Reflektor's own; https only, except on this machine.
+    const settings = { subagents: false, reflektorAutoPublish: true, reflektorApiUrl: "https://api.example.test/", reflektorAppUrl: "" };
+    const fromSettings = client.reflektorConfig(settings, {});
+    const fromEnv = client.reflektorConfig(settings, { REFLEKTOR_API_URL: stub.url, REFLEKTOR_APP_URL: `${stub.url}/` });
+    if (fromSettings.apiUrl !== "https://api.example.test" || fromSettings.appUrl !== "https://reflektor.dev" || fromEnv.apiUrl !== stub.url || fromEnv.appUrl !== stub.url)
+      fail(`the Reflektor URLs do not come from the variables, then the settings: ${JSON.stringify({ fromSettings, fromEnv })}`);
+    try {
+      client.reflektorConfig(settings, { REFLEKTOR_API_URL: "http://reflektor.example.test" });
+      fail("a plain http Reflektor API on another machine was accepted");
+    } catch (e) {
+      if (codeOf(e) !== "bad_url") fail(`a plain http Reflektor API failed the wrong way: ${(e as Error).message}`);
+    }
+
+    // The device flow: it waits the interval between polls, 5 seconds more after slow_down, and ends on approval,
+    // denial or expiry. The waits are recorded instead of slept.
+    const config = { apiUrl: stub.url, appUrl: stub.url };
+    const pending: StubAnswer = { status: 400, body: { error: "authorization_pending" } };
+    const waits: number[] = [];
+    stub.device([pending, { status: 400, body: { error: "slow_down" } }, pending], { interval: 1 });
+    const start = await client.startDeviceLogin(config, "pr-report on test-box");
+    if ((stub.requests.find((q) => q.path === "/auth/device")?.json as { clientName?: string } | null)?.clientName !== "pr-report on test-box" || start.userCode !== "ABCD-EFGH")
+      fail("the device login did not name this client, or did not hand back the code");
+    const approved = await client.finishDeviceLogin(config, start, { sleep: async (ms) => void waits.push(ms) });
+    if (approved.token !== STUB_TOKEN || approved.user.email !== STUB_USER.email || approved.apiUrl !== stub.url) fail(`the approved device login is not the stub's account: ${JSON.stringify(approved)}`);
+    if (waits.join() !== "1000,1000,6000,6000") fail(`the device flow did not wait its interval, and 5 seconds more after slow_down: ${waits.join()}`);
+    const ending = async (answers: StubAnswer[], options: Parameters<typeof stub.device>[1] = {}) => {
+      let clock = 0;
+      stub.device(answers, options);
+      const code = await client.startDeviceLogin(config);
+      return client.finishDeviceLogin(config, code, { sleep: async (ms) => void (clock += ms), now: () => clock }).then(
+        () => "approved",
+        (e) => codeOf(e),
+      );
+    };
+    if ((await ending([pending, { status: 400, body: { error: "access_denied" } }])) !== "access_denied") fail("a denied device login did not end as denied");
+    if ((await ending([{ status: 400, body: { error: "expired_token" } }])) !== "expired_token") fail("an expired device code did not end the login");
+    const polls = posts("/auth/device/token");
+    if ((await ending([], { then: "pending", interval: 1, expiresIn: 3 })) !== "expired_token" || posts("/auth/device/token") - polls > 4) fail("a device login nobody approves did not stop when its code expired");
+
+    // whoami, and a revoked token.
+    if ((await client.whoami(login)).email !== STUB_USER.email) fail("whoami did not answer the stub's account");
+    stub.failNext("/auth/me", { status: 401, body: { error: "unauthorized" } });
+    if (await client.whoami(login).then(() => "ok", codeOf) !== "unauthorized") fail("a revoked token did not fail whoami as unauthorized");
+
+    // Publishing: never a draft, nothing before the preflight names an organization, and the bundle gzipped with the
+    // token. The preflight sends the repository's name and nothing else.
+    const publish = (b: Bundle, options: { organization?: string } = {}, as = login) => client.publishBundle(as, b, options);
+    const reasonOf = (o: Outcome) => (o.ok ? "ok" : o.reason);
+    const asked = stub.requests.length;
+    const draft = await publish({ ...bundle, draft: true });
+    if (draft.ok || draft.reason !== "draft" || stub.requests.length !== asked) fail("a draft was published, or Reflektor was asked about it");
+    stub.organizations([]);
+    const unapproved = await publish(bundle);
+    if (unapproved.ok || unapproved.reason !== "not_approved" || posts("/reports") !== 0) fail(`a repo no organization approves was uploaded: ${JSON.stringify(unapproved)}`);
+    if (JSON.stringify(stub.requests.at(-1)?.json) !== JSON.stringify({ repository: { host: "github.com", owner: "acme-labs", name: "library" } })) fail("the preflight sent more than the repository's name");
+    stub.organizations([acme]);
+    const one = await publish(bundle);
+    const sent = stub.requests.at(-1)!;
+    if (!one.ok || one.organization !== "acme" || !one.created || one.round !== 1 || !one.report.url) fail(`publishing to the one organization that approves the repo did not work: ${JSON.stringify(one)}`);
+    if (sent.headers["content-encoding"] !== "gzip" || sent.headers["content-type"] !== "application/json" || sent.headers.authorization !== `Bearer ${STUB_TOKEN}`)
+      fail(`the upload lacks its headers: ${JSON.stringify(sent.headers)}`);
+    const body = JSON.parse(gunzipSync(sent.bytes).toString("utf8")) as { organization?: string; bundle?: Bundle };
+    if (body.organization !== "acme" || JSON.stringify(body.bundle) !== JSON.stringify(client.withoutLocalPaths(bundle))) fail("the upload's body is not the gzipped bundle with its organization");
+    if (body.bundle?.diff.repo.root !== "" || body.bundle?.diff.repo.gitDir !== "" || (body.bundle?.projectChecks && body.bundle.projectChecks.file !== ""))
+      fail("the upload sent paths on this machine");
+    const twice = await publish(bundle);
+    if (!twice.ok || twice.created) fail("an upload of a snapshot the platform had already did not say so");
+
+    // Several organizations: the one asked for, else the one saved for the repo, else the list to choose from.
+    stub.organizations([acme, beta]);
+    const uploads = posts("/reports");
+    const several = await publish(bundle);
+    if (several.ok || several.reason !== "organization_required" || several.organizations?.length !== 2 || posts("/reports") !== uploads) fail(`several organizations did not ask which one: ${JSON.stringify(several)}`);
+    if (!(await publish(bundle, { organization: "beta" })).ok || (stub.uploads().at(-1)?.organization !== "beta")) fail("publishing to the organization asked for did not go there");
+    const saved = await publish(bundle, {}, { ...login, organizations: { "github.com/acme-labs/library": "beta" } });
+    if (!saved.ok || saved.organization !== "beta") fail("the organization saved for the repo was not used");
+    if (reasonOf(await publish(bundle, { organization: "nope" })) !== "unknown_organization") fail("an organization that does not approve the repo was not refused");
+
+    // What the upload can answer, each in words the reader can act on.
+    stub.organizations([acme]);
+    const refusals: [string, string, StubAnswer, (o: Outcome & { ok: false }) => boolean][] = [
+      ["/reports", "organization_required", { status: 409, body: { error: "organization_required", organizations: [acme, beta] } }, (o) => o.organizations?.length === 2],
+      ["/reports", "repository_not_approved", { status: 403, body: { error: "repository_not_approved" } }, (o) => o.message.includes("admin")],
+      ["/reports", "not_a_member", { status: 403, body: { error: "not_a_member" } }, (o) => o.message.includes("not a member")],
+      ["/reports/preflight", "unauthorized", { status: 401, body: { error: "unauthorized" } }, (o) => o.message.includes("Sign in again")],
+      ["/reports", "rate_limited", { status: 429, body: { error: "rate_limited" }, headers: { "retry-after": "120" } }, (o) => o.retryAfterMs === 120_000],
+      ["/reports", "too_large", { status: 413, body: { error: "too_large" } }, (o) => o.message.includes("25 MB")],
+      ["/reports", "invalid_bundle", { status: 400, body: { error: "invalid_bundle", issues: [{ path: ["diff", "files", 0, "path"], message: "Required" }] } }, (o) => o.message.includes("diff.files.0.path: Required")],
+    ];
+    for (const [path, reason, answer, test] of refusals) {
+      stub.failNext(path, answer);
+      const o = await publish(bundle);
+      if (o.ok || o.reason !== reason || !test(o)) fail(`a ${answer.status} from ${path} did not end as ${reason}: ${JSON.stringify(o)}`);
+    }
+    if (reasonOf(await publish(bundle, {}, { ...login, apiUrl: "http://127.0.0.1:9" })) !== "network") fail("a Reflektor that does not answer did not end as a network problem");
+
+    // review.mjs login, whoami and logout, against the stand-in.
+    const cliHome = { PR_REPORT_HOME: join(tmp, "reflektor-cli-home"), REFLEKTOR_API_URL: stub.url, REFLEKTOR_APP_URL: stub.url };
+    const loginFile = join(cliHome.PR_REPORT_HOME, "reflektor.json");
+    stub.device([pending]);
+    const signedIn = await cli(cliHome, "login", "--no-open");
+    if (signedIn.code !== 0 || !signedIn.out.includes("ABCD-EFGH") || !signedIn.out.includes("Signed in to Reflektor as Ada Lovelace <ada@example.test>")) fail(`review.mjs login did not sign in:\n${signedIn.out}`);
+    if (!existsSync(loginFile) || !ownerOnly(loginFile) || client.readLogin(loginFile)?.apiUrl !== stub.url) fail("review.mjs login did not save the login for the user only, with its API");
+    if (!(await cli(cliHome, "whoami")).out.includes("as Ada Lovelace <ada@example.test>")) fail("review.mjs whoami did not name the account");
+    stub.failNext("/auth/me", { status: 401, body: { error: "unauthorized" } });
+    const revoked = await cli(cliHome, "whoami");
+    if (revoked.code !== 1 || !revoked.out.includes("Sign in again with")) fail(`review.mjs whoami with a revoked token did not say to sign in again:\n${revoked.out}`);
+    const loggedOut = await cli(cliHome, "logout");
+    if (!loggedOut.out.includes("Signed out of Reflektor") || existsSync(loginFile)) fail(`review.mjs logout did not delete the login:\n${loggedOut.out}`);
+    if (!(await cli(cliHome, "whoami")).out.includes("Not signed in")) fail("review.mjs whoami after logout does not say so");
+    stub.device([{ status: 400, body: { error: "access_denied" } }]);
+    const denied = await cli(cliHome, "login", "--no-open");
+    if (denied.code !== 1 || !denied.out.includes("denied") || existsSync(loginFile)) fail(`a denied review.mjs login did not end clearly:\n${denied.out}`);
+    const cleartext = await cli({ ...cliHome, REFLEKTOR_API_URL: "http://reflektor.example.test" }, "login", "--no-open");
+    if (cleartext.code !== 1 || !cleartext.out.includes("must use https")) fail(`review.mjs login took a plain http API on another machine:\n${cleartext.out}`);
+
+    // The daemon publishes by itself: a fresh books repo, its review on screen, and its pull request on the GitHub stub.
+    const repoDir = join(tmp, "reflektor-books");
+    run(bash, [join(root, "fixtures", "make-books-repo.sh"), repoDir]);
+    const data = join(repoDir, ".git/pr-report/feat-books");
+    const collect = () => run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", repoDir, "--no-fetch"], env);
+    const build = (...a: string[]) => run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(data, "diff.json"), ...a]).match(/Wrote (\S+)/)![1];
+    const finished = () => build("--report", join(root, "samples/report.json"));
+    const snapshotOf = (f: string) => (JSON.parse(readFileSync(f, "utf8")) as Bundle).diff.branch.snapshot;
+    // New code: a line more in a file, collected again.
+    let edits = 0;
+    const edit = () => {
+      appendFileSync(join(repoDir, "apps/web/src/api/books.ts"), `// edit ${++edits}\n`);
+      collect();
+    };
+    collect();
+    const first = finished();
+    const opened = review("open", "--report", first);
+    const id = opened.match(/Review id: (\S+)/)?.[1];
+    if (!id) return fail(`review.mjs open printed no review id:\n${opened}`);
+    const daemonUrl = () => `http://127.0.0.1:${(JSON.parse(readFileSync(join(dhome, "daemon.json"), "utf8")) as DaemonFile).port}`;
+    const page = await (await fetch(`${daemonUrl()}/r/${id}`)).text();
+    const pageConfig = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)![1]) as ReviewConfig;
+    const asPage = { "x-review-token": pageConfig.token, "content-type": "application/json" };
+    const onScreen = () => fetch(`${daemonUrl()}${pageConfig.api}/presence`, { method: "POST", headers: asPage, body: JSON.stringify({ tab: "t1" }) }).catch(() => {});
+    const state = async (): Promise<LiveState> => {
+      const res = await fetch(`${daemonUrl()}/api/events?token=${pageConfig.token}&watch=${id}`, { signal: AbortSignal.timeout(2000) });
+      const reader = res.body!.getReader();
+      const { value } = await reader.read();
+      reader.cancel();
+      return JSON.parse(new TextDecoder().decode(value).match(/data: (.*)/)![1]);
+    };
+    const waitFor = async (test: () => boolean | Promise<boolean>, tries = 50) => {
+      for (let i = 0; i < tries; i++) {
+        await onScreen();
+        if (await test()) return true;
+        await sleep(200);
+      }
+      return false;
+    };
+    // A few of the daemon's ticks, with the review on screen.
+    const ticks = async () => {
+      for (let i = 0; i < 5; i++) {
+        await onScreen();
+        await sleep(500);
+      }
+    };
+    const uploaded = () => stub.uploads().length;
+    const show = (f: string) => review("open", "--report", f);
+
+    github.set([githubPr(7, "open")]);
+    if (!(await waitFor(async () => (await state()).pr?.state === "OPEN"))) fail("the reflektor daemon did not see the pull request open");
+    const before = stub.requests.length;
+    await ticks();
+    if (stub.requests.length !== before) fail("the daemon called Reflektor before anyone signed in");
+
+    // Signed in: the round goes up, once, however many ticks, rebuilds of the same code and restarts follow.
+    const daemonLogin = join(dhome, "reflektor.json");
+    client.saveLogin(login, daemonLogin);
+    const already = uploaded();
+    if (!(await waitFor(() => uploaded() === already + 1))) fail("the daemon did not publish once signed in with the pull request open");
+    if (stub.uploads().at(-1)?.bundle.diff.branch.snapshot !== snapshotOf(first)) fail("the daemon did not publish the round on screen");
+    if (!(await waitFor(async () => Boolean((await state()).reflektor?.published?.url)))) fail("the page state does not say where the report went");
+    await ticks();
+    show(finished());
+    await ticks();
+    if (uploaded() !== already + 1) fail(`the same snapshot went to Reflektor ${uploaded() - already} times`);
+    review("stop");
+    show(finished());
+    await ticks();
+    if (uploaded() !== already + 1) fail("a restarted daemon sent a snapshot it had sent before");
+    const byHand = await cli(env, "publish", "--id", id);
+    if (!byHand.out.includes("is on Reflektor already") || uploaded() !== already + 1) fail(`review.mjs publish sent a snapshot again, or did not say where it is:\n${byHand.out}`);
+
+    // New code while the pull request is open goes up; a draft does not, its finished build does.
+    edit();
+    const second = finished();
+    show(second);
+    if (!(await waitFor(() => uploaded() === already + 2)) || stub.uploads().at(-1)?.bundle.diff.branch.snapshot !== snapshotOf(second)) fail("a later build with the pull request open was not published");
+    edit();
+    show(build("--draft"));
+    await ticks();
+    if (uploaded() !== already + 2 || stub.uploads().some((u) => u.bundle.draft)) fail("a draft was published");
+    show(finished());
+    if (!(await waitFor(() => uploaded() === already + 3))) fail("the finished build after a draft was not published");
+
+    // The setting off: nothing goes up. Turned on again, the build waiting goes.
+    writeFileSync(join(dhome, "settings.json"), JSON.stringify({ reflektorAutoPublish: false }));
+    edit();
+    show(finished());
+    await ticks();
+    if (uploaded() !== already + 3) fail("the daemon published with auto-publish turned off");
+    writeFileSync(join(dhome, "settings.json"), "{}");
+    if (!(await waitFor(() => uploaded() === already + 4))) fail("turning auto-publish on again did not publish the round waiting");
+
+    // A repo no organization approves: nothing uploaded, the reason in the page state, and no new try every tick.
+    stub.organizations([]);
+    edit();
+    show(finished());
+    if (!(await waitFor(async () => (await state()).reflektor?.error?.reason === "not_approved"))) fail("a publish refused by the preflight did not reach the page state");
+    const preflights = posts("/reports/preflight");
+    await ticks();
+    if (uploaded() !== already + 4 || posts("/reports/preflight") !== preflights) fail("the daemon uploaded an unapproved repo, or kept asking about it every tick");
+
+    // The repo approved by the next build: it goes at once, not when the refusal's wait is over.
+    stub.organizations([acme]);
+    edit();
+    show(finished());
+    if (!(await waitFor(() => uploaded() === already + 5))) fail("a new build waited out the retry time of the build refused before it");
+
+    // Several organizations: the daemon does not pick one. From the page: the list first, then the one picked, which
+    // is saved for the repo, so the daemon's next publish goes there by itself.
+    stub.organizations([acme, beta]);
+    edit();
+    show(finished());
+    if (!(await waitFor(async () => (await state()).reflektor?.error?.reason === "organization_required")) || uploaded() !== already + 5)
+      fail("the daemon picked an organization by itself, or did not say it needs one");
+    const publishFromPage = async (body: object) => (await (await fetch(`${daemonUrl()}${pageConfig.api}/reflektor`, { method: "POST", headers: asPage, body: JSON.stringify(body) })).json()) as { ok: boolean; reason: string | null; organizations?: unknown[] };
+    const choose = await publishFromPage({});
+    if (choose.ok || choose.reason !== "organization_required" || choose.organizations?.length !== 2) fail(`publishing from the page with several organizations did not ask which: ${JSON.stringify(choose)}`);
+    const picked = await publishFromPage({ organization: "beta" });
+    if (!picked.ok || uploaded() !== already + 6 || stub.uploads().at(-1)?.organization !== "beta") fail(`publishing from the page to the organization picked did not work: ${JSON.stringify(picked)}`);
+    if (client.readLogin(daemonLogin)?.organizations?.["github.com/acme-labs/library"] !== "beta") fail("the organization picked was not saved for the repo");
+    edit();
+    show(finished());
+    if (!(await waitFor(() => uploaded() === already + 7)) || stub.uploads().at(-1)?.organization !== "beta") fail("the daemon did not publish to the organization saved for the repo");
+
+    // A closed pull request: new code stays here.
+    github.set([githubPr(7, "closed")]);
+    if (!(await waitFor(async () => (await state()).pr?.state === "CLOSED"))) fail("the reflektor daemon did not see the pull request closed");
+    stub.organizations([acme]);
+    edit();
+    show(finished());
+    await ticks();
+    if (uploaded() !== already + 7) fail("the daemon published after the pull request was closed");
+
+    // The page's menu: who is signed in, and signing out there.
+    const status = (await (await fetch(`${daemonUrl()}/api/reflektor`, { headers: asPage })).json()) as { signedIn: boolean; user: { email: string } | null };
+    if (!status.signedIn || status.user?.email !== STUB_USER.email) fail(`the page is not told who is signed in to Reflektor: ${JSON.stringify(status)}`);
+    if ((await fetch(`${daemonUrl()}/api/reflektor`)).status !== 401) fail("the Reflektor status answers without the page token");
+    const out = (await (await fetch(`${daemonUrl()}/api/reflektor/logout`, { method: "POST", headers: asPage })).json()) as { signedIn: boolean };
+    if (out.signedIn || existsSync(daemonLogin)) fail("signing out from the page did not delete the login");
+    console.log(
+      "reflektor: login file for the user only, device flow (pending, slow_down, denied, expired), whoami, preflight before any upload, gzipped upload, refusals, review.mjs login/whoami/logout/publish, and auto-publish once per snapshot while the pull request is open all worked",
+    );
+  } finally {
+    try {
+      review("stop");
+    } catch {
+      // Already stopped.
+    }
+    stub.close();
     github.close();
   }
 }
