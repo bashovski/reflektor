@@ -9,7 +9,7 @@ These rules cover surface style only. The layout and the order of things on the 
 - **Blocks are square and flat.** A block is anything that sits on the page: a section, a file, the plan check. It takes `surface border`: a hairline border, no rounding, no shadow.
 - **Controls have 2px corners.** Buttons, inputs, badges, menus, dialogs, comment boxes and code chips take `rounded-control`. The size is set once, as `--radius-control` in `viewer/src/index.css`.
 - **Round is for dots.** Only status dots, the nodes of a flow and avatars of people are circles. A number mark, like the step numbers in the review path, is a small square with the control corner.
-- **A switch is square too.** Its track and its thumb take `rounded-control`, and the row it sits in is the switch: `SubagentSwitch` in `viewer/src/components/Settings.tsx`.
+- **A switch is square too.** Its track and its thumb take `rounded-control`, and the row it sits in is the switch: `SettingSwitch` in `viewer/src/components/Settings.tsx`.
 - **One shadow.** Only things that float over the page (menus, dialogs, the review bar) have a shadow, and it is always `shadow-float`, set as `--shadow-float` in `index.css`.
 
 ## Type
@@ -60,6 +60,6 @@ The top of the two pages must not jump when you go from one to the other. The ma
 
 The inbox's top bar has one thing a report's does not: a "Star us on GitHub" link left of the avatar. A report keeps its bar for the review.
 
-Settings, Help and the cache purge are not written twice. The inbox shows the report's own dialogs, from the page at `/panel`, in a see-through frame over itself (`viewer/src/lib/panel.ts`). The menu that opens them is written by hand in both places, so a change to one menu needs the same change to the other.
+Settings, Help and the cache purge are not written twice. The inbox shows the report's own dialogs, from the page at `/panel`, in a see-through frame over itself (`viewer/src/lib/panel.ts`). The menu that opens them is written by hand in both places, so a change to one menu needs the same change to the other. One block is in a report's menu only: Reflektor (sign in, publish this review), since a publish is of one review. The inbox shows the Reflektor account in Settings.
 
 The inbox is plain CSS inside `skill/scripts/daemon.mts` and cannot use the classes above. It is laid out like a report: the same top bar (the mark on the left, the reader's menu on the right, with the same options in the menu), the same page width of 1440px with the same side padding, the same setup banner under the bar, and a page title at the size of a report's title. It follows the same rules by hand: 2px corners, mono capitals for labels and status words, mono for figures and branch names, the same focus ring and the same shadow for menus. A change to a rule here needs the same change there.

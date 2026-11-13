@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { pageToken } from "./panel";
 
-// The settings the agent reads. The daemon keeps them on disk (skill/scripts/settings.mts), and not in the browser
-// like the look of the page, because the scripts that write a report need them.
+// The settings the agent and the daemon read. The daemon keeps them on disk (skill/scripts/settings.mts), and not in
+// the browser like the look of the page, because the scripts that write a report need them.
 export type AgentSettings = {
   // Split the reading and writing of a report between subagents that work at the same time.
   subagents: boolean;
+  // Publish a branch's report to Reflektor while its pull request is open, once the reader is signed in there.
+  reflektorAutoPublish: boolean;
 };
 
 // The settings as the daemon has them, and a way to change one. `settings` is null until the daemon has answered,

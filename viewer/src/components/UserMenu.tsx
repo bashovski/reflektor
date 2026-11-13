@@ -1,12 +1,14 @@
 import { Menu, MenuButton, MenuItem, MenuItems, MenuSeparator } from "@headlessui/react";
-import { Bug, CircleHelp, ExternalLink, Settings, Trash2, UserRound } from "lucide-react";
+import { Bug, CircleHelp, CloudUpload, ExternalLink, LogIn, Settings, Trash2, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Bundle, Identity, RepoAvatar } from "../../../skill/schema/types";
 import { useIdentity } from "../lib/identity";
-import { type DaemonInfo, type Link, useLive } from "../lib/live";
+import { type DaemonInfo, type Link, type LiveState, useLive } from "../lib/live";
 import { PROJECT } from "../lib/meta";
 import { pageToken } from "../lib/panel";
+import { type ReflektorStatus, useReflektor } from "../lib/reflektor";
 import { useReport } from "../lib/state";
+import { type ReflektorAction, ReflektorDialog } from "./Reflektor";
 import { cx } from "./ui";
 
 const SOURCES: Record<Identity["source"], string> = {
@@ -111,16 +113,32 @@ export const PurgeDialog = ({ open, onClose }: { open: boolean; onClose: () => v
   );
 };
 
+// The line under "Publish to Reflektor": a publish running, the last one that did not work, where the report went, or
+// whose account it goes up as.
+const publishLine = (status: ReflektorStatus, state: LiveState["reflektor"]) => {
+  const { published, error, publishing } = state ?? { published: null, error: null, publishing: false };
+  if (publishing) return "Publishing…";
+  if (error && (!published || error.at > published.at)) return `Round ${error.round} did not go up`;
+  if (published) return `Round ${published.round} is in ${published.organization}`;
+  return `As ${status.user?.name ?? status.user?.email ?? "you"}`;
+};
+
 // The reader's avatar in the top bar. Its menu holds the page's own things (settings, help, a bug
-// report) and the daemon's (its cache and its status), apart from the owner menu on the left.
+// report), Reflektor (sign in, publish this review), and the daemon's (its cache and its status), apart from the
+// owner menu on the left.
 export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHelp: () => void }) => {
   const { bundle } = useReport();
   const { repo } = bundle.diff;
   const who = useIdentity({ host: repo.host, forge: repo.web?.forge ?? null, root: repo.root });
-  const { daemon, link } = useLive();
+  const { daemon, link, live, config } = useLive();
   const [purging, setPurging] = useState(false);
+  // Reflektor needs the daemon: a report saved as a file has no such block.
+  const reflektor = useReflektor(Boolean(config));
+  const [reflektorAction, setReflektorAction] = useState<ReflektorAction | null>(null);
+  const status = reflektor.status;
+  const published = live?.reflektor?.published ?? null;
   const forge = repo.web?.forge ? FORGE_NAMES[repo.web.forge] : null;
-  const status = LINKS[link];
+  const linkStatus = LINKS[link];
 
   return (
     <>
@@ -183,6 +201,41 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
           </MenuItem>
           <MenuSeparator className="my-1 h-px bg-[var(--border)]" />
 
+          {config && status && (
+            <>
+              {status.signedIn ? (
+                <MenuItem>
+                  <button type="button" onClick={() => setReflektorAction("publish")} className={item}>
+                    <CloudUpload />
+                    <span className="min-w-0 flex-1">
+                      <span className="block">Publish to Reflektor</span>
+                      <span className="block truncate text-xs text-muted">{publishLine(status, live?.reflektor)}</span>
+                    </span>
+                  </button>
+                </MenuItem>
+              ) : (
+                <MenuItem>
+                  <button type="button" onClick={() => setReflektorAction("sign-in")} className={item}>
+                    <LogIn />
+                    <span className="min-w-0 flex-1">
+                      <span className="block">Sign in to Reflektor</span>
+                      <span className="block truncate text-xs text-muted">Publish reports to your team</span>
+                    </span>
+                  </button>
+                </MenuItem>
+              )}
+              {status.signedIn && published && (
+                <MenuItem>
+                  <a href={published.url} target="_blank" rel="noreferrer" className={item}>
+                    <ExternalLink />
+                    <span className="flex-1">Open on Reflektor</span>
+                  </a>
+                </MenuItem>
+              )}
+              <MenuSeparator className="my-1 h-px bg-[var(--border)]" />
+            </>
+          )}
+
           <MenuItem>
             <button type="button" onClick={() => setPurging(true)} className={item}>
               <Trash2 />
@@ -192,15 +245,26 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
           <MenuSeparator className="my-1 h-px bg-[var(--border)]" />
 
           <div role="status" className="flex items-center gap-2 px-2.5 py-2 text-xs text-muted">
-            <span aria-hidden className={cx("size-2 shrink-0 rounded-full", status.dot)} />
+            <span aria-hidden className={cx("size-2 shrink-0 rounded-full", linkStatus.dot)} />
             <span className="truncate">
-              {status.label}
+              {linkStatus.label}
               {link === "up" && daemon && ` · ${daemon.version.slice(0, 7)} · ${uptime(daemon.startedAt)}`}
             </span>
           </div>
         </MenuItems>
       </Menu>
       <PurgeDialog open={purging} onClose={() => setPurging(false)} />
+      {config && (
+        <ReflektorDialog
+          action={reflektorAction}
+          api={config.api}
+          onAction={setReflektorAction}
+          onClose={() => {
+            setReflektorAction(null);
+            void reflektor.refresh();
+          }}
+        />
+      )}
     </>
   );
 };

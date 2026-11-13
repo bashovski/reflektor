@@ -3,7 +3,8 @@
 // daemon, the fake books repo and review.mts playing the agent. Covers what scripts/check.mts cannot
 // see from the API: the first-run setup page, the draft page, comments and Send, the warning when no
 // session listens, the plan, progress, the next round with its "since round 1" view, the warning about
-// changed code, and the offer of the setup to a browser that skipped it.
+// changed code, signing in to Reflektor and publishing from the menu, and the offer of the setup to a browser that
+// skipped it.
 //
 // Uses the installed Google Chrome (or PR_REPORT_CHROME=<path>), so no browser is downloaded.
 // Usage: pnpm check:browser [--headed], after pnpm build
@@ -18,6 +19,7 @@ import type { Review } from "../skill/schema/types.js";
 // playwright-core is one of the viewer's packages, so its types come from there too.
 import type { BrowserType, Locator } from "playwright-core";
 import { githubPr, startGithubStub } from "./github-stub.mjs";
+import { startReflektorStub } from "./reflektor-stub.mjs";
 import { root } from "./paths.mjs";
 
 // An execFileSync error carries the command's stderr; other errors do not.
@@ -36,8 +38,10 @@ const tmp = mkdtempSync(join(tmpdir(), "pr-report-browser-"));
 const repo = join(tmp, "books");
 const data = join(repo, ".git/pr-report/feat-books");
 // GitHub is a local stub: the fake repo's remote is on github.com, so the daemon would otherwise ask the real API.
-// GH_CONFIG_DIR points at nothing, so gh has no login and the user menu shows the repo's git identity.
+// GH_CONFIG_DIR points at nothing, so gh has no login and the user menu shows the repo's git identity. Reflektor is a
+// local stub too: signing in from the menu goes to REFLEKTOR_API_URL.
 const github = await startGithubStub();
+const reflektor = await startReflektorStub();
 const env = {
   ...process.env,
   PR_REPORT_HOME: join(tmp, "home"),
@@ -47,6 +51,8 @@ const env = {
   PR_REPORT_GITHUB_TOKEN: "stub-token",
   PR_REPORT_PR_POLL_SECONDS: "1",
   GH_CONFIG_DIR: join(tmp, "gh-config"),
+  REFLEKTOR_API_URL: reflektor.url,
+  REFLEKTOR_APP_URL: reflektor.url,
   // The suite's calls say which agent they are, so the page words are the same wherever the suite runs.
   PR_REPORT_AGENT: "claude-code",
 };
@@ -174,6 +180,22 @@ try {
   await page.getByRole("menuitem", { name: "Purge daemon cache" }).click();
   await page.getByRole("button", { name: "Purge", exact: true }).click();
   await expectVisible(page.getByText(/Removed \d+ cached/), "the purge result");
+  await page.getByRole("button", { name: "Close" }).click();
+
+  // Reflektor from the same menu: signing in shows the code and waits for the approval in the browser, then the menu
+  // publishes this review and links to it.
+  reflektor.device([{ status: 400, body: { error: "authorization_pending" } }], { interval: 1 });
+  await page.getByRole("button", { name: "Your account and the daemon" }).click();
+  await page.getByRole("menuitem", { name: /Sign in to Reflektor/ }).click();
+  await expectVisible(page.getByText("ABCD-EFGH"), "the Reflektor sign-in code");
+  await expectVisible(page.getByRole("link", { name: /Open Reflektor/ }), "the link to approve the sign-in");
+  await expectVisible(page.getByText(/Signed in as Ada Lovelace/), "the Reflektor account once the sign-in was approved", 15_000);
+  await page.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Your account and the daemon" }).click();
+  await page.getByRole("menuitem", { name: /Publish to Reflektor/ }).click();
+  await expectVisible(page.getByText(/Round 1 is on Reflektor, in acme/), "the publish result");
+  await expectVisible(page.getByRole("link", { name: /Open on Reflektor/ }), "the link to the published report");
+  if (reflektor.uploads().length !== 1) fail(`publishing from the menu made ${reflektor.uploads().length} uploads, not 1`);
   await page.getByRole("button", { name: "Close" }).click();
 
   // 3. Comments: one on the whole change, and "Fix this" on a risk.
@@ -310,6 +332,7 @@ try {
   const panel = page.frameLocator("iframe.panel");
   await expectVisible(panel.getByRole("heading", { name: "Settings" }), "Settings, opened from the inbox's menu");
   await expectVisible(panel.getByRole("switch", { name: /Subagentic Mode/, checked: true }), "subagent mode in Settings, as it was set in the wizard");
+  await expectVisible(panel.getByRole("switch", { name: /Publish while the pull request is open/, checked: true }), "Reflektor's auto-publish in Settings, once signed in");
   await panel.getByRole("button", { name: /^Close/ }).click();
   await page
     .locator("iframe.panel")
@@ -320,7 +343,7 @@ try {
   const unexpected = errors.filter((e) => !/favicon/.test(e));
   if (unexpected.length) fail(`errors in the page:\n${unexpected.join("\n")}`);
   console.log(
-    "browser: setup page, draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, user menu, agent name, changed-code warning, pull request opened and merged, inbox grouping and search, and the setup offer all worked",
+    "browser: setup page, draft, report, comments, send, no-listener warning, resume, plan, progress, round 2 views, owner menu, user menu, Reflektor sign-in and publish, agent name, changed-code warning, pull request opened and merged, inbox grouping and search, and the setup offer all worked",
   );
 } catch (error) {
   const e = error as ExecError;
@@ -333,6 +356,7 @@ try {
     // Already stopped.
   }
   github.close();
+  reflektor.close();
   await sleep(200);
   rmSync(tmp, { recursive: true, force: true });
 }

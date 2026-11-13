@@ -3,6 +3,7 @@ import { Monitor, Moon, Sun, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 import type { BundledTheme } from "shiki/themes";
 import { type DiffStyle, type ThemeChoice, usePrefs } from "../lib/prefs";
+import { useReflektor } from "../lib/reflektor";
 import { type AgentSettings, useAgentSettings } from "../lib/settings";
 import { codeThemesFor, type ThemeMode } from "../lib/themes";
 import { cx, Kbd, MOD_KEY } from "./ui";
@@ -50,22 +51,24 @@ export const Choice = <T extends string>({
   </div>
 );
 
-// The one setting the agent reads: whether to split the writing of a report between subagents. The whole row is
-// the switch. It is shown in Settings and in the setup wizard.
-export const SubagentSwitch = ({ settings, change }: { settings: AgentSettings; change: (patch: Partial<AgentSettings>) => void }) => {
-  const on = settings.subagents;
-  return (
-    <Switch checked={on} onChange={(next) => change({ subagents: next })} className={cx("flex w-full items-center justify-between gap-4 px-3 py-2.5", card(on))}>
-      <span>
-        <span className="block text-sm font-medium">Subagentic Mode</span>
-        <span className="block text-xs text-muted">Consumes more tokens, but it&rsquo;s hella faster.</span>
-      </span>
-      <span aria-hidden className={cx("flex h-5 w-9 shrink-0 items-center rounded-control p-0.5 transition-colors", on ? "bg-accent" : "bg-zinc-500/30")}>
-        <span className={cx("size-4 rounded-control transition-transform", on ? "translate-x-4 bg-on-accent" : "bg-white")} />
-      </span>
-    </Switch>
-  );
-};
+// A setting that is on or off. The whole row is the switch.
+const SettingSwitch = ({ on, onChange, title, hint }: { on: boolean; onChange: (next: boolean) => void; title: string; hint: ReactNode }) => (
+  <Switch checked={on} onChange={onChange} className={cx("flex w-full items-center justify-between gap-4 px-3 py-2.5", card(on))}>
+    <span>
+      <span className="block text-sm font-medium">{title}</span>
+      <span className="block text-xs text-muted">{hint}</span>
+    </span>
+    <span aria-hidden className={cx("flex h-5 w-9 shrink-0 items-center rounded-control p-0.5 transition-colors", on ? "bg-accent" : "bg-zinc-500/30")}>
+      <span className={cx("size-4 rounded-control transition-transform", on ? "translate-x-4 bg-on-accent" : "bg-white")} />
+    </span>
+  </Switch>
+);
+
+// The setting the agent reads: whether to split the writing of a report between subagents. It is shown in Settings
+// and in the setup wizard.
+export const SubagentSwitch = ({ settings, change }: { settings: AgentSettings; change: (patch: Partial<AgentSettings>) => void }) => (
+  <SettingSwitch on={settings.subagents} onChange={(next) => change({ subagents: next })} title="Subagentic Mode" hint={<>Consumes more tokens, but it&rsquo;s hella faster.</>} />
+);
 
 // Shown where a daemon keeps the setting. A report saved as a file has none, and leaves the section out.
 const WritingSection = ({ open }: { open: boolean }) => {
@@ -75,6 +78,34 @@ const WritingSection = ({ open }: { open: boolean }) => {
     <section>
       <h3 className="mb-2 label-caps text-xs text-muted">Writing reports</h3>
       <SubagentSwitch settings={settings} change={change} />
+    </section>
+  );
+};
+
+// The Reflektor account the daemon publishes as, and whether it publishes by itself. Shown once signed in; signing in
+// is in the reader's menu on a report.
+const ReflektorSection = ({ open }: { open: boolean }) => {
+  const { status, signOut } = useReflektor(open);
+  const { settings, change } = useAgentSettings(open);
+  if (!status?.signedIn || !settings) return null;
+  return (
+    <section>
+      <h3 className="mb-2 label-caps text-xs text-muted">Reflektor</h3>
+      <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+        <span className="min-w-0 truncate">
+          Signed in as {status.user?.name ?? status.user?.email}
+          {status.user?.name && <span className="text-muted"> · {status.user.email}</span>}
+        </span>
+        <button type="button" onClick={() => void signOut().catch(() => {})} className="shrink-0 rounded-control border border-[var(--border)] px-2.5 py-1 text-xs hover:bg-zinc-500/10">
+          Sign out
+        </button>
+      </div>
+      <SettingSwitch
+        on={settings.reflektorAutoPublish}
+        onChange={(next) => change({ reflektorAutoPublish: next })}
+        title="Publish while the pull request is open"
+        hint="Each finished round goes to your organization on its own, once its repository is approved there."
+      />
     </section>
   );
 };
@@ -155,6 +186,8 @@ export const SettingsDialog = ({ open, onClose }: { open: boolean; onClose: () =
         </section>
 
         <WritingSection open={open} />
+
+        <ReflektorSection open={open} />
 
         <section>
           <h3 className="mb-2 label-caps text-xs text-muted">Keyboard shortcuts</h3>
