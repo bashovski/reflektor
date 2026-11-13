@@ -1,9 +1,9 @@
 import { Switch } from "@headlessui/react";
 import { Monitor, Moon, Sun, X } from "lucide-react";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { BundledTheme } from "shiki/themes";
 import { type DiffStyle, type ThemeChoice, usePrefs } from "../lib/prefs";
-import { useReflektor } from "../lib/reflektor";
+import { type ReflektorStatus, useReflektor } from "../lib/reflektor";
 import { type AgentSettings, useAgentSettings } from "../lib/settings";
 import { codeThemesFor, type ThemeMode } from "../lib/themes";
 import { cx, Kbd, MOD_KEY } from "./ui";
@@ -82,30 +82,130 @@ const WritingSection = ({ open }: { open: boolean }) => {
   );
 };
 
-// The Reflektor account the daemon publishes as, and whether it publishes by itself. Shown once signed in; signing in
-// is in the reader's menu on a report.
+const smallButton = "shrink-0 rounded-control border border-[var(--border)] px-2.5 py-1 text-xs hover:bg-zinc-500/10 disabled:opacity-50 disabled:hover:bg-transparent";
+
+// Where Reflektor's API is, for a self-hosted Reflektor. A login keeps the API it was made with, so the address can
+// only change while signed out; signed in, it is shown as it is in use.
+const ApiUrlField = ({ status, settings, save, refresh }: { status: ReflektorStatus; settings: AgentSettings; save: (patch: Partial<AgentSettings>) => Promise<AgentSettings>; refresh: () => Promise<unknown> }) => {
+  const saved = settings.reflektorApiUrl || status.defaultApiUrl;
+  const [draft, setDraft] = useState(saved);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => setDraft(saved), [saved]);
+
+  const store = async (value: string, done: string) => {
+    setBusy(true);
+    setError(null);
+    setNote(null);
+    try {
+      const next = await save({ reflektorApiUrl: value });
+      setDraft(next.reflektorApiUrl || status.defaultApiUrl);
+      setNote(done);
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const isDefault = settings.reflektorApiUrl === "";
+  const changed = draft.trim() !== saved;
+
+  if (status.signedIn)
+    return (
+      <div className="mt-3 text-xs text-muted">
+        <span className="block">
+          API: <span className="font-mono text-[var(--text)]">{status.apiUrl}</span>
+        </span>
+        <span className="block">Sign out to use another address.</span>
+      </div>
+    );
+
+  return (
+    <form
+      className="mt-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (changed && !busy) void store(draft, "Saved. Signing in uses this address.");
+      }}
+    >
+      <label htmlFor="reflektor-api-url" className="mb-1 block text-xs text-muted">
+        API URL
+      </label>
+      <div className="flex items-center gap-2">
+        <input
+          id="reflektor-api-url"
+          type="url"
+          inputMode="url"
+          spellCheck={false}
+          autoComplete="off"
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setError(null);
+            setNote(null);
+          }}
+          aria-invalid={error ? true : undefined}
+          aria-describedby="reflektor-api-url-hint"
+          className="min-w-0 flex-1 rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 font-mono text-xs text-[var(--text)] outline-none focus:border-accent"
+        />
+        <button type="submit" disabled={!changed || busy} className={smallButton}>
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <button type="button" disabled={isDefault || busy} onClick={() => void store("", "Back to Reflektor's own address.")} className={smallButton}>
+          Reset to default
+        </button>
+      </div>
+      {error && (
+        <p role="alert" className="mt-1.5 text-xs text-danger-600 dark:text-danger-400">
+          {error}
+        </p>
+      )}
+      {note && !error && (
+        <p role="status" className="mt-1.5 text-xs text-muted">
+          {note}
+        </p>
+      )}
+      <p id="reflektor-api-url-hint" className="mt-1.5 text-xs text-muted">
+        Change it for a self-hosted Reflektor. The default is <span className="font-mono">{status.defaultApiUrl}</span>.
+        {status.apiUrlFromEnv && " REFLEKTOR_API_URL is set where the daemon runs, so that address is used instead."}
+      </p>
+    </form>
+  );
+};
+
+// The Reflektor account the daemon publishes as, whether it publishes by itself, and the API it talks to. The account
+// and the switch show once signed in; signing in is in the reader's menu on a report.
 const ReflektorSection = ({ open }: { open: boolean }) => {
-  const { status, signOut } = useReflektor(open);
-  const { settings, change } = useAgentSettings(open);
-  if (!status?.signedIn || !settings) return null;
+  const { status, signOut, refresh } = useReflektor(open);
+  const { settings, change, save } = useAgentSettings(open);
+  if (!status || !settings) return null;
   return (
     <section>
       <h3 className="mb-2 label-caps text-xs text-muted">Reflektor</h3>
-      <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-        <span className="min-w-0 truncate">
-          Signed in as {status.user?.name ?? status.user?.email}
-          {status.user?.name && <span className="text-muted"> · {status.user.email}</span>}
-        </span>
-        <button type="button" onClick={() => void signOut().catch(() => {})} className="shrink-0 rounded-control border border-[var(--border)] px-2.5 py-1 text-xs hover:bg-zinc-500/10">
-          Sign out
-        </button>
-      </div>
-      <SettingSwitch
-        on={settings.reflektorAutoPublish}
-        onChange={(next) => change({ reflektorAutoPublish: next })}
-        title="Publish while the pull request is open"
-        hint="Each finished round goes to your organization on its own, once its repository is approved there."
-      />
+      {status.signedIn && (
+        <>
+          <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+            <span className="min-w-0 truncate">
+              Signed in as {status.user?.name ?? status.user?.email}
+              {status.user?.name && <span className="text-muted"> · {status.user.email}</span>}
+            </span>
+            <button type="button" onClick={() => void signOut().catch(() => {})} className={smallButton}>
+              Sign out
+            </button>
+          </div>
+          <SettingSwitch
+            on={settings.reflektorAutoPublish}
+            onChange={(next) => change({ reflektorAutoPublish: next })}
+            title="Publish while the pull request is open"
+            hint="Each finished round goes to your organization on its own, once its repository is approved there."
+          />
+        </>
+      )}
+      <ApiUrlField status={status} settings={settings} save={save} refresh={refresh} />
     </section>
   );
 };

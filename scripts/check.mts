@@ -457,6 +457,18 @@ async function daemonFlow() {
     if (settingsBefore.subagents !== false || settingsAfter.subagents !== true || settingsOnDisk.subagents !== true || "other" in settingsOnDisk)
       fail(`the settings were not saved as sent: ${JSON.stringify({ settingsBefore, settingsAfter, settingsOnDisk })}`);
     if ((await fetch(settingsUrl, { method: "POST", headers: asPage, body: "{" })).status !== 400) fail("the settings endpoint takes a body that is not JSON");
+    // The Reflektor API URL from Settings: refused with a reason when it cannot carry a token, saved as a base URL,
+    // shown as the address a sign-in would use, and saved empty when reset.
+    const postSetting = (body: unknown) => fetch(settingsUrl, { method: "POST", headers: asPage, body: JSON.stringify(body) });
+    const refusedUrl = await postSetting({ reflektorApiUrl: "http://reflektor.example.test" });
+    if (refusedUrl.status !== 400 || !((await refusedUrl.json()) as { error?: string }).error?.includes("https")) fail("a plain http Reflektor API URL was saved from the page, or refused without a reason");
+    const savedUrl = (await (await postSetting({ reflektorApiUrl: " https://reflektor.corp.example.test/api/ " })).json()) as Record<string, unknown>;
+    if (savedUrl.reflektorApiUrl !== "https://reflektor.corp.example.test/api") fail(`the Reflektor API URL was not saved as a base URL: ${JSON.stringify(savedUrl)}`);
+    const urlStatus = (await (await fetch(`${base}/api/reflektor`, { headers: asPage })).json()) as { apiUrl: string | null; defaultApiUrl: string; apiUrlFromEnv: boolean; signedIn: boolean };
+    if (urlStatus.defaultApiUrl !== "https://api.reflektor.dev" || (!urlStatus.apiUrlFromEnv && !urlStatus.signedIn && urlStatus.apiUrl !== "https://reflektor.corp.example.test/api"))
+      fail(`the Reflektor status does not show the API a sign-in would use: ${JSON.stringify(urlStatus)}`);
+    if (((await (await postSetting({ reflektorApiUrl: "" })).json()) as Record<string, unknown>).reflektorApiUrl !== "") fail("resetting the Reflektor API URL did not save it empty");
+
     // A value of the wrong type in the file counts as not set.
     writeFileSync(join(env.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: "yes" }));
     if (((await (await fetch(settingsUrl, { headers: asPage })).json()) as Record<string, unknown>).subagents !== false) fail("a setting of the wrong type in settings.json is taken for on");
@@ -999,6 +1011,17 @@ async function reflektorFlow() {
     const approved = await client.finishDeviceLogin(config, start, { sleep: async (ms) => void waits.push(ms) });
     if (approved.token !== STUB_TOKEN || approved.user.email !== STUB_USER.email || approved.apiUrl !== stub.url) fail(`the approved device login is not the stub's account: ${JSON.stringify(approved)}`);
     if (waits.join() !== "1000,1000,6000,6000") fail(`the device flow did not wait its interval, and 5 seconds more after slow_down: ${waits.join()}`);
+    // With no app URL named, a login takes the app from the sign-in page the API sends, so a self-hosted Reflektor
+    // links to itself. A named one stays.
+    stub.device([]);
+    const unnamed = await client.finishDeviceLogin({ apiUrl: stub.url, appUrl: "https://reflektor.dev", appUrlSet: false }, await client.startDeviceLogin(config), { sleep: async () => {} });
+    stub.device([]);
+    const named = await client.finishDeviceLogin({ apiUrl: stub.url, appUrl: "https://app.example.test", appUrlSet: true }, await client.startDeviceLogin(config), { sleep: async () => {} });
+    if (unnamed.appUrl !== stub.url || named.appUrl !== "https://app.example.test") fail(`the login's app URL is not the sign-in page's, or overrode a named one: ${JSON.stringify([unnamed.appUrl, named.appUrl])}`);
+    // The API URL from Settings: trimmed, Reflektor's own saved as empty, plain http off this machine refused.
+    if (client.settingApiUrl(" https://api.example.test/ ") !== "https://api.example.test" || client.settingApiUrl("https://api.reflektor.dev/") !== "" || client.settingApiUrl("  ") !== "" || client.settingApiUrl("http://localhost:3000") !== "http://localhost:3000")
+      fail("the Settings API URL is not saved as a base URL, empty for Reflektor's own");
+    if (codeOf(await Promise.resolve().then(() => client.settingApiUrl("http://reflektor.example.test")).catch((e: unknown) => e)) !== "bad_url") fail("a plain http API URL off this machine was taken from Settings");
     const ending = async (answers: StubAnswer[], options: Parameters<typeof stub.device>[1] = {}) => {
       let clock = 0;
       stub.device(answers, options);
@@ -1232,7 +1255,7 @@ async function reflektorFlow() {
     const out = (await (await fetch(`${daemonUrl()}/api/reflektor/logout`, { method: "POST", headers: asPage })).json()) as { signedIn: boolean };
     if (out.signedIn || existsSync(daemonLogin)) fail("signing out from the page did not delete the login");
     console.log(
-      "reflektor: login file for the user only, device flow (pending, slow_down, denied, expired), whoami, preflight before any upload, gzipped upload, refusals, review.mjs login/whoami/logout/publish, and auto-publish once per snapshot while the pull request is open all worked",
+      "reflektor: login file for the user only, device flow (pending, slow_down, denied, expired), whoami, preflight before any upload, gzipped upload, refusals, review.mjs login/whoami/logout/publish, auto-publish once per snapshot while the pull request is open, and the API URL from Settings all worked",
     );
   } finally {
     try {

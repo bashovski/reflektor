@@ -24,7 +24,7 @@ import { promisify } from "node:util";
 import { readChecksRun } from "./checks-run.mjs";
 import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mjs";
 import { purgeCache, whoAmI } from "./identity.mjs";
-import { finishDeviceLogin, forgetLogin, type Organization, publishBundle, readLogin, reflektorConfig, rememberOrganization, repositoryOf, saveLogin, startDeviceLogin } from "./reflektor.mjs";
+import { DEFAULT_REFLEKTOR_API, finishDeviceLogin, forgetLogin, type Organization, publishBundle, readLogin, reflektorConfig, rememberOrganization, repositoryOf, saveLogin, settingApiUrl, startDeviceLogin } from "./reflektor.mjs";
 import { readSettings, writeSettings } from "./settings.mjs";
 import { replaceFile } from "./repo.mjs";
 import type { AgentInfo, Bundle, ChecksRun, CommentKind, CommentTarget, InboxData, LiveQuestion, PrState, Ref, RepoAvatar, Review, ReviewComment, Tag } from "../schema/types.js";
@@ -1192,15 +1192,29 @@ async function startSignIn() {
 }
 
 // What the page's menu shows: who is signed in, the app to link to, the setting, and a sign-in waiting for approval.
+// `apiUrl` is the API in use: the login's, or the one a sign-in would use. `apiUrlFromEnv` says REFLEKTOR_API_URL
+// wins over the setting.
 function reflektorStatus() {
   const login = readLogin();
   let appUrl = login?.appUrl ?? null;
+  let apiUrl = login?.apiUrl ?? null;
   try {
-    appUrl ??= reflektorConfig().appUrl;
+    const config = reflektorConfig();
+    appUrl ??= config.appUrl;
+    apiUrl ??= config.apiUrl;
   } catch {
     // A setting that is not a usable URL: no link, and signing in says why.
   }
-  return { signedIn: Boolean(login), user: login ? { name: login.user.name, email: login.user.email } : null, appUrl, autoPublish: readSettings().reflektorAutoPublish, signIn };
+  return {
+    signedIn: Boolean(login),
+    user: login ? { name: login.user.name, email: login.user.email } : null,
+    appUrl,
+    apiUrl,
+    defaultApiUrl: DEFAULT_REFLEKTOR_API,
+    apiUrlFromEnv: Boolean(process.env.REFLEKTOR_API_URL),
+    autoPublish: readSettings().reflektorAutoPublish,
+    signIn,
+  };
 }
 
 // ------------------------------------------------------------------ archive
@@ -1320,7 +1334,18 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     if (!same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
     // The page shows and changes the settings here; the scripts read the file (settings.mjs).
     if (req.method === "GET" && parts[1] === "settings") return send(res, 200, readSettings());
-    if (req.method === "POST" && parts[1] === "settings") return send(res, 200, writeSettings(JSON.parse(await readBody(req))));
+    if (req.method === "POST" && parts[1] === "settings") {
+      const patch = JSON.parse(await readBody(req)) as Record<string, unknown> | null;
+      // The Reflektor API URL is checked here, where the reader can still be told, and saved empty for Reflektor's own.
+      if (patch && typeof patch.reflektorApiUrl === "string") {
+        try {
+          patch.reflektorApiUrl = settingApiUrl(patch.reflektorApiUrl);
+        } catch (e) {
+          return send(res, 400, { error: (e as Error).message });
+        }
+      }
+      return send(res, 200, writeSettings(patch));
+    }
     if (req.method === "GET" && parts[1] === "me") {
       const who = await whoAmI({ host: url.searchParams.get("host") || null, forge: url.searchParams.get("forge") || null, root: url.searchParams.get("root") || null });
       return send(res, 200, who);
