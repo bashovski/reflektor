@@ -214,7 +214,9 @@ const ReflektorSection = ({ open }: { open: boolean }) => {
 };
 
 const SECTIONS = [
-  { id: "settings-appearance", label: "Appearance", daemon: false },
+  { id: "settings-theme", label: "Theme", daemon: false },
+  { id: "settings-diff", label: "Diff view", daemon: false },
+  { id: "settings-code", label: "Code theme", daemon: false },
   { id: "settings-writing", label: "Writing reports", daemon: true },
   { id: "settings-reflektor", label: "Reflektor", daemon: true },
   { id: "settings-shortcuts", label: "Keyboard shortcuts", daemon: false },
@@ -296,7 +298,7 @@ export const SettingsPage = ({ back, topBar }: { back: SettingsBack; topBar: Rea
           </nav>
         </aside>
 
-        <main className="min-w-0 max-w-2xl space-y-10 pb-24">
+        <main className="min-w-0 max-w-2xl space-y-7 pb-24">
           <header>
             <BackLink back={back} className="-ml-2 mb-4 lg:hidden" />
             <h1 className="text-2xl font-medium tracking-tight">Settings</h1>
@@ -305,57 +307,54 @@ export const SettingsPage = ({ back, topBar }: { back: SettingsBack; topBar: Rea
             </p>
           </header>
 
-          <section id="settings-appearance" className="scroll-mt-20 space-y-6">
-            <h2 className={sectionHeading}>Appearance</h2>
-            <div>
-              <h3 className="mb-2 text-sm font-medium">Diff view</h3>
-              <Choice<DiffStyle>
-                value={diffStyle}
-                onChange={setDiffStyle}
-                options={[
-                  { value: "unified", label: "Unified", hint: "One column" },
-                  { value: "split", label: "Split", hint: "Old and new side by side" },
-                ]}
-              />
-            </div>
+          <section id="settings-theme" className="scroll-mt-20">
+            <h2 className={sectionHeading}>Theme</h2>
+            <Choice<ThemeChoice>
+              value={theme}
+              onChange={setTheme}
+              options={[
+                { value: "system", label: "System", icon: <Monitor className="size-3.5" />, hint: "Follow your OS" },
+                { value: "light", label: "Light", icon: <Sun className="size-3.5" />, hint: "Always light" },
+                { value: "dark", label: "Dark", icon: <Moon className="size-3.5" />, hint: "Always dark" },
+              ]}
+            />
+          </section>
 
-            <div>
-              <h3 className="mb-2 text-sm font-medium">Theme</h3>
-              <Choice<ThemeChoice>
-                value={theme}
-                onChange={setTheme}
-                options={[
-                  { value: "system", label: "System", icon: <Monitor className="size-3.5" />, hint: "Follow your OS" },
-                  { value: "light", label: "Light", icon: <Sun className="size-3.5" />, hint: "Always light" },
-                  { value: "dark", label: "Dark", icon: <Moon className="size-3.5" />, hint: "Always dark" },
-                ]}
-              />
-            </div>
+          <section id="settings-diff" className="scroll-mt-20">
+            <h2 className={sectionHeading}>Diff view</h2>
+            <Choice<DiffStyle>
+              value={diffStyle}
+              onChange={setDiffStyle}
+              options={[
+                { value: "unified", label: "Unified", hint: "One column" },
+                { value: "split", label: "Split", hint: "Old and new side by side" },
+              ]}
+            />
+          </section>
 
-            <div>
-              <h3 className="mb-2 text-sm font-medium">Code theme</h3>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {(["dark", "light"] as const).map((mode: ThemeMode) => (
-                  <label key={mode} className="flex flex-col gap-1 text-xs text-muted">
-                    <span className="inline-flex items-center gap-1.5">
-                      {mode === "dark" ? <Moon className="size-3.5" /> : <Sun className="size-3.5" />}
-                      {mode === "dark" ? "Dark mode" : "Light mode"}
-                      {resolvedTheme === mode && <span className="text-faint">(on screen now)</span>}
-                    </span>
-                    <select
-                      value={codeTheme[mode]}
-                      onChange={(e) => setCodeTheme(mode, e.target.value as BundledTheme)}
-                      className="h-8 rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 text-sm text-[var(--text)] outline-none focus:border-accent"
-                    >
-                      {codeThemesFor(mode).map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-              </div>
+          <section id="settings-code" className="scroll-mt-20">
+            <h2 className={sectionHeading}>Code theme</h2>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(["dark", "light"] as const).map((mode: ThemeMode) => (
+                <label key={mode} className="flex flex-col gap-1 text-xs text-muted">
+                  <span className="inline-flex items-center gap-1.5">
+                    {mode === "dark" ? <Moon className="size-3.5" /> : <Sun className="size-3.5" />}
+                    {mode === "dark" ? "Dark mode" : "Light mode"}
+                    {resolvedTheme === mode && <span className="text-faint">(on screen now)</span>}
+                  </span>
+                  <select
+                    value={codeTheme[mode]}
+                    onChange={(e) => setCodeTheme(mode, e.target.value as BundledTheme)}
+                    className="h-8 rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 text-sm text-[var(--text)] outline-none focus:border-accent"
+                  >
+                    {codeThemesFor(mode).map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
             </div>
           </section>
 
