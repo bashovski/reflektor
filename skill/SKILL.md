@@ -1,7 +1,7 @@
 ---
 name: pr-report
 description: Builds a visual HTML review report for the current branch or PR against its base branch, with a plain-English title and summary, review order, highlights, request flows, GitHub-style diffs with notes, and test coverage of new lines. The user can comment in the report and send the comments back for fixing. Use when the user asks for a PR report, a review report, a summary of branch changes for review, or wants to review changes before opening a PR. Works with any language or stack.
-argument-hint: "[base-branch] [--since last] [--session] [resume]"
+argument-hint: "[base-branch] [--since last] [--session] [resume] [push]"
 allowed-tools: Bash(node "${CLAUDE_SKILL_DIR}/scripts/collect.mjs" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/build.mjs" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/review.mjs *)
 ---
 
@@ -11,7 +11,7 @@ You write the judgment in `report.json`: words, grouping, risks and flows. Scrip
 
 Scripts and reference files live in `${CLAUDE_SKILL_DIR}`. That is this skill's folder: the folder this file is in. Where a command below still shows a `${...}` name instead of a real path, put the folder's absolute path there, with forward slashes. Needs git and Node.js 18 or newer. `gh` is optional.
 
-The request can carry arguments: a base branch, `--since last`, `--session` or `resume`. In Claude Code the user types them after `/pr-report`; with another agent they say them in words. For `resume`, or when the user asks to continue or pick up a review, go to "Pick up a review" at the end and skip the other steps.
+The request can carry arguments: a base branch, `--since last`, `--session`, `resume` or `push`. In Claude Code the user types them after `/pr-report`; with another agent they say them in words. For `resume`, or when the user asks to continue or pick up a review, go to "Pick up a review" at the end and skip the other steps. For `push`, or when the user asks to push, publish or upload the report to Reflektor, go to "Publish to Reflektor" and skip the other steps.
 
 ## 1. Pick the base branch and scope
 
@@ -332,13 +332,24 @@ It finds this branch's review (or pass `--id`) and prints what waits for you, th
 
 ## Publish to Reflektor
 
-Reflektor is where the user's organization reads published reports. When the user asks to publish or share the report there:
+Reflektor is where the user's organization reads published reports. When the user asks to publish or share the report there, or passes `push` (for example because the daemon's own publish failed or never ran):
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" publish [--org <slug>]
 ```
 
-It publishes this branch's newest finished round and prints where it went, or why it did not. When it lists several organizations, ask the user which one and run it again with `--org`. When nobody is signed in, run `review.mjs login` in the background and tell the user to approve the code it prints in the browser tab it opens. While the branch's pull request is open, the daemon publishes each new round by itself once the user is signed in; there is nothing to run for that.
+It publishes this branch's newest finished round and prints where it went, or why it did not. Tell the user the outcome in one or two lines, with the link when there is one:
+
+- **Already up:** a round that went up before answers with its link and is not sent again. Say so; nothing else to do.
+- **Several organizations:** ask the user which one and run it again with `--org`.
+- **Not signed in:** run `review.mjs login` in the background and tell the user to approve the code it prints in the browser tab it opens, then publish again.
+- **No review for this branch, or only a draft:** say there is no finished report to push yet, and offer to build one (the steps above).
+- **Repository not approved:** nothing was uploaded; an admin of the organization has to approve the repository on Reflektor first.
+- **Network or server error:** say what it printed. Pushing again later is safe.
+
+A pushed round carries the pull request it was built with. When the branch's pull request opened after the newest round was built, the push still works, but Reflektor cannot tie that round to the pull request. Say so, and offer an updated report (step 8.5): its new round records the pull request and the daemon publishes it.
+
+While the branch's pull request is open, the daemon publishes each new round by itself once the user is signed in; `push` is for when that did not happen.
 
 ## Follow-ups
 

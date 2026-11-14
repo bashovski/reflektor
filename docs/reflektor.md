@@ -66,7 +66,8 @@ node ~/.claude/skills/pr-report/scripts/review.mjs publish            # this bra
 node ~/.claude/skills/pr-report/scripts/review.mjs publish --id <review id> --org acme
 ```
 
-Or **Publish to Reflektor** in the reader's menu on the report page. Both go through the daemon, which:
+In Claude Code, `/pr-report push` asks the agent to run the first one and explain the outcome, for example after the
+daemon's own publish failed. Or **Publish to Reflektor** in the reader's menu on the report page. Both go through the daemon, which:
 
 1. Takes the review's newest round that is not a draft, as the report data file `build.mjs` wrote.
 2. Asks Reflektor which of your organizations approve the repository (`POST /reports/preflight`). Only the host, owner

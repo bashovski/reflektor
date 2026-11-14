@@ -39,6 +39,7 @@ Then, in any git repo, ask your agent for a PR report. In Claude Code you can al
 /pr-report --since last only what changed since the last report
 /pr-report --session    only files changed in this session
 /pr-report resume       pick up a review in a new session
+/pr-report push         publish this branch's report to Reflektor now
 ```
 
 In Codex, type `$pr-report` and say the rest in words, such as "compare with develop".
