@@ -740,7 +740,8 @@ if (args.mode === "run") {
   const sha = headSha();
   const save = (status: "running" | "done", result: "passed" | "failed" | null = null) =>
     writeRun({ status, result, startedAt, ranAt: status === "done" ? now() : null, headSha: sha, skipped: null, sets, ...(status === "running" ? { pid: process.pid } : {}) });
-  rmSync(shotsDir, { recursive: true, force: true });
+  // Pictures are named by their content and earlier ones stay, so a comment on a round's picture keeps showing that
+  // picture after a later round takes the shot again.
   mkdirSync(shotsDir, { recursive: true });
   save("running");
 
@@ -776,9 +777,11 @@ if (args.mode === "run") {
       try {
         for (const action of step.do) await act(s!, page, action);
         await settle(page);
-        const file = join(shotsDir, `${shot.id}.png`);
-        const png = await page.screenshot({ path: file, animations: "disabled", caret: "hide", fullPage: Boolean(step.fullPage) });
-        Object.assign(shot, { status: "taken", file: `shots/${shot.id}.png`, width: png.readUInt32BE(16), height: png.readUInt32BE(20) });
+        const png = await page.screenshot({ animations: "disabled", caret: "hide", fullPage: Boolean(step.fullPage) });
+        const name = `${createHash("sha1").update(png).digest("hex").slice(0, 16)}.png`;
+        const file = join(shotsDir, name);
+        if (!existsSync(file)) writeFileSync(file, png);
+        Object.assign(shot, { status: "taken", file: `shots/${name}`, width: png.readUInt32BE(16), height: png.readUInt32BE(20) });
         console.log(`taken  ${shot.id}  ${shellPath(file)}  "${shot.caption}"`);
       } catch (e) {
         Object.assign(shot, { status: "failed", error: short(e) });

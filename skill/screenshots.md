@@ -30,6 +30,8 @@ Skip this when nothing a user sees changed, for example a refactor with the same
 
 If you cannot start a subagent that runs in the background, skip the screenshots for this report and say so.
 
+In a later round (`collect --update`), start the subagent again with the plan `--status` names, so the pictures show the fixes. Reviewers comment on screenshots; those comments come in the review file like the others (SKILL.md, step 8).
+
 When the subagent ends, the page already shows its shots. Its answer lists them. You need not change report.json for them.
 
 ## The subagent's work

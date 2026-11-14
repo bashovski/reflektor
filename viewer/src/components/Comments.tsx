@@ -9,7 +9,7 @@ import { RichText } from "./RichText";
 import { cx, Pill, RefLink } from "./ui";
 
 const button =
-  "inline-flex items-center gap-1 rounded-control px-2 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40";
+  "inline-flex items-center gap-1 whitespace-nowrap rounded-control px-2 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40";
 const ghost = `${button} text-zinc-600 hover:bg-zinc-500/10 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100`;
 const primary = `${button} bg-accent text-on-accent hover:bg-accent/85`;
 
@@ -52,7 +52,12 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
 
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
-    if (e.key === "Escape") closeComposer();
+    // Escape closes only this box, not a dialog or viewer it sits in.
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeComposer();
+    }
   };
 
   return (
@@ -67,8 +72,8 @@ export const Composer = ({ target, placeholder }: { target: CommentTarget; place
         placeholder={placeholder ?? "What should change, or what do you want to know?"}
         className="w-full resize-y rounded-control border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2 text-[13px] leading-relaxed outline-none placeholder:text-faint focus:border-accent"
       />
-      <div className="mt-1.5 flex items-center gap-2">
-        <span className="hidden text-[11px] text-faint sm:inline">
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <span data-composer-hint className="hidden text-[11px] text-faint sm:inline">
           {canAsk ? `Ask now: ${agent.name} answers while you review. Add comment: saved until you send the review.` : <>Start with <code>nit:</code> or <code>q:</code> to mark it, or let {agent.name} decide. ⌘↵ saves.</>}
         </span>
         <span className="ml-auto" />
@@ -124,14 +129,14 @@ export const CommentItem = ({ comment, compact }: { comment: ReviewComment; comp
   const tone = comment.kind ? COMMENT_KINDS[comment.kind].className : "bg-zinc-500/10 text-muted ring-zinc-500/25";
 
   return (
-    <div className={cx("group/comment flex items-start gap-2 rounded-control border border-[var(--border)] bg-[var(--surface-2)] font-sans", compact ? "px-2 py-1.5" : "my-1.5 px-3 py-2")}>
+    <div data-comment-item className={cx("group/comment flex items-start gap-2 rounded-control border border-[var(--border)] bg-[var(--surface-2)] font-sans", compact ? "px-2 py-1.5" : "my-1.5 px-3 py-2")}>
       <Pill className={cx("mt-px shrink-0 px-2 py-0 text-[10px]", tone)}>{kindLabel(comment, agent)}</Pill>
-      <div className="min-w-0 flex-1 text-[13px] leading-snug">
+      <div data-comment-text className="min-w-0 flex-1 text-[13px] leading-snug">
         {comment.text ? <RichText text={comment.text} /> : null}
         <CommentStatusLine commentId={comment.id} />
       </div>
       {editable && (
-        <span className="flex shrink-0 gap-0.5 opacity-60 group-hover/comment:opacity-100">
+        <span data-comment-actions className="flex shrink-0 gap-0.5 opacity-60 group-hover/comment:opacity-100">
           <button type="button" title="Edit" onClick={() => openComposer(comment.target, { editingId: comment.id })} className="rounded-control p-1 hover:bg-zinc-500/10">
             <Pencil className="size-3" />
           </button>

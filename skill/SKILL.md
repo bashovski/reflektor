@@ -269,7 +269,14 @@ Skip this when the reviewer already sent the round: the next round includes the 
 
 The reviewer follows along in the page: your plan and your progress on each comment show up live.
 
-1. **Read the review file** the waiter named. Its shape is `Review` in schema/types.ts. Each comment's `target` says what it is about: a line range (with the code), a file, a highlight (with its suggested fix), a question, a plan item, a flow problem, a before-merge item, or the whole report.
+1. **Read the review file** the waiter named. Its shape is `Review` in schema/types.ts. Each comment's `target` says what it is about: a line range (with the code), a file, a highlight (with its suggested fix), a question, a plan item, a flow problem, a before-merge item, a screenshot, or the whole report.
+
+   **A screenshot comment** is about what the reviewer saw on screen:
+   - `file` is the picture, relative to the review file's folder. Look at it with your file reading tool before you plan. Pictures are taken at twice a 1280 by 800 window, so 2 pixels in the picture are 1 CSS pixel.
+   - `pin`, when there is one, is where they clicked, as fractions of the picture's width and height from its top left (`{ "x": 0.42, "y": 0.18 }` is 42% across and 18% down). Without one, the comment is about the whole picture. A pin is approximate: read the comment first, then use the pin to choose between the elements near it.
+   - `screenshots.json`, next to the review file, has the shot: `set` matches a set's `id` and `shot` a shot's `id`. Its `refs` point at the changed markup; follow it to where it is styled, even in a file the branch does not change.
+   - When a comment names something the project does not have, such as an accent color with no color defined, pick a value and say so in the plan step, or make it a `question` when the choice matters.
+   - After fixing, the next round takes the screenshots again, so the reviewer sees the result.
 2. **Work out the kind** of every comment that has none:
    - `question`: asks why, what or whether, or starts with `q:`. Answer it; no code change.
    - `fix`: asks for a change.

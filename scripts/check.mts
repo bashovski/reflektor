@@ -1028,11 +1028,20 @@ async function screenshotsFlow() {
   const done = readRun();
   const all = done.sets.flatMap((set) => set.shots);
   if (done.result !== "passed" || all.length !== 4 || all.some((shot) => shot.status !== "taken" || !shot.file || !existsSync(join(data, shot.file)) || !shot.width)) fail(`the screenshots run did not take every shot:\n${ranOut}`);
+  if (all.some((shot) => !/^shots\/[0-9a-f]{16}\.png$/.test(shot.file ?? ""))) fail(`screenshots are not named by their content: ${all.map((shot) => shot.file).join(", ")}`);
   if (JSON.stringify(all[0].refs) !== JSON.stringify([{ path: "books.html", line: 2 }]) || !ranOut.includes("server.mjs is not changed by this branch")) fail(`a reference to a file the branch does not change was kept: ${JSON.stringify(all[0].refs)}`);
   if (readFileSync(join(data, "screenshots/plan.json"), "utf8") !== readFileSync(plan, "utf8")) fail("the plan was not kept for the next round");
   if (hooksRan().join(",") !== "onScreenshotsPassed passed,postScreenshots passed") fail(`the hooks after a passing run: ${hooksRan().join(", ")}`);
   const stillUp = await fetch(`http://127.0.0.1:${port}/`).then(() => true, () => false);
   if (stillUp) fail("the app started by --prepare was still running after --run");
+
+  // A later run keeps the pictures of the earlier one, so a comment on one still shows it.
+  const before = all.map((shot) => shot.file!);
+  writeFileSync(join(shotsRepo, "books.html"), readFileSync(join(shotsRepo, "books.html"), "utf8").replace("Your books", "My books"));
+  shots("--prepare");
+  shots("--run", "--plan", plan);
+  const after2 = readRun().sets.flatMap((set) => set.shots.map((shot) => shot.file!));
+  if (before.some((file) => !existsSync(join(data, file))) || after2[0] === before[0]) fail(`a new run did not keep the earlier pictures or did not take a new one: ${JSON.stringify({ before, after: after2 })}`);
 
   const built = run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(data, "diff.json"), "--draft", "--out", join(tmp, "shots-bundle.json"), "--html", join(tmp, "shots.html")]);
   const bundle = JSON.parse(readFileSync(join(tmp, "shots-bundle.json"), "utf8")) as Bundle;

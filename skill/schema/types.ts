@@ -336,6 +336,10 @@ export type CommentTarget =
   | { type: "flow-detail"; flow: string; step: number; detail: number; symbol: string; text: string; fix?: string }
   | { type: "before-merge"; index: number; text: string }
   | { type: "plan-item"; index: number; status: PlanStatus; text: string }
+  // A screenshot from screenshots.mjs. `file` is the picture, relative to the review's folder; pictures are named by
+  // their content, so it stays the picture the reviewer saw after later rounds take the shot again. `pin` is the point
+  // the reviewer clicked, as fractions of the picture's width and height from its top left; none means the whole shot.
+  | { type: "screenshot"; set: string; shot: string; caption: string; file: string; pin?: { x: number; y: number } }
   | { type: "report" };
 
 export type ReviewComment = {
