@@ -15,12 +15,15 @@ const FILE = join(HOME, "settings.json");
 
 // Every setting with the value it has until someone changes it. A key that is not listed here is never read or
 // written, and a value of the wrong type counts as not set.
-export type Settings = { subagents: boolean; reflektorAutoPublish: boolean; reflektorApiUrl: string; reflektorAppUrl: string };
+export type Settings = { subagents: boolean; screenshots: boolean; reflektorAutoPublish: boolean; reflektorApiUrl: string; reflektorAppUrl: string };
 
 const DEFAULTS: Settings = {
   // Split the reading and writing of a report between subagents that work at the same time. Faster, and it costs
   // more tokens, so it is off until the reader turns it on. skill/subagents.md says what the agent does with it.
   subagents: false,
+  // Take screenshots of the changed UI with Playwright, in the background, while the report is written. Off until the
+  // reader turns it on in the setup wizard or in Settings. skill/screenshots.md says what the agent does with it.
+  screenshots: false,
   // Publish a branch's report to Reflektor when its pull request is open, and each later round while it stays open.
   // It does nothing until the reader signs in to Reflektor (review.mjs login), so on by default means on once signed in.
   reflektorAutoPublish: true,

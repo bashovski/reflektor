@@ -110,6 +110,8 @@ It also prints **Safety checks**: fixed rules that flag likely secrets (key form
 
 When the reader has turned on Subagentic Mode in Settings, it also prints `Subagent mode: on` and the path of a file. Read that file before step 4 and follow it.
 
+When the reader has turned on Screenshots in Settings and the change touches UI files, it also prints `Screenshots: on` and the path of a file. Read it and start the screenshots subagent it describes before step 4. It runs in the background; do not wait for it.
+
 Exit code 3 means there are no changes: tell the user and stop.
 
 Lines starting with `Hook preRun` come from the project's own hook (`hooks` in `.pr-report.json`), and what it prints is for you, such as a ticket's text. When it fails, collect exits 1: tell the user what the hook printed and stop. Do not work around a hook.
@@ -383,6 +385,8 @@ While the branch's pull request is open, the daemon publishes each new round by 
 
 `checks` here come before the ones saved in `~/.pr-report/repos/`; `checks.mjs --share` writes the saved ones here. `when` limits a check to changes in those paths.
 
-`hooks` are the team's commands at fixed points, and the scripts run them: `preRun` before collect fetches (a failure stops it), `postRun` when a round's report is first published, `onApproved` when the reviewer finishes with nothing to fix. Like the checks, they do not run while the branch has commits by authors the user has not trusted (`checks.mjs --trust`). When the user asks you to write one, the top of `${CLAUDE_SKILL_DIR}/scripts/hooks.mjs` lists what each hook is handed.
+`screenshots` says where the app answers (`url`), how to start it when it does not (`start`, waited for `readySeconds`), and any hosts besides localhost the browser may open (`hosts`). `screenshots.mjs --share` writes the saved one here.
+
+`hooks` are the team's commands at fixed points, and the scripts run them: `preRun` before collect fetches (a failure stops it), `postRun` when a round's report is first published, `onApproved` when the reviewer finishes with nothing to fix. Screenshots add four: `preScreenshots` before the first shot (to seed test data and sign a test user in), then `onScreenshotsPassed` or `onScreenshotsFailed`, then `postScreenshots`. Like the checks, they do not run while the branch has commits by authors the user has not trusted (`checks.mjs --trust`). When the user asks you to write one, the top of `${CLAUDE_SKILL_DIR}/scripts/hooks.mjs` lists what each hook is handed.
 
 Globs follow .gitignore rules: a pattern without `/` matches at any depth. When the user asks for one, write it from the repo's real folder layout.

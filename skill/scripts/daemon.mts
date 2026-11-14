@@ -22,12 +22,13 @@ import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { readChecksRun } from "./checks-run.mjs";
+import { readScreenshotsRun } from "./screenshots-run.mjs";
 import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mjs";
 import { purgeCache, whoAmI } from "./identity.mjs";
 import { DEFAULT_REFLEKTOR_API, finishDeviceLogin, forgetLogin, type Organization, publishBundle, readLogin, reflektorConfig, rememberOrganization, repositoryOf, saveLogin, settingApiUrl, startDeviceLogin } from "./reflektor.mjs";
 import { readSettings, writeSettings } from "./settings.mjs";
 import { replaceFile } from "./repo.mjs";
-import type { AgentInfo, Bundle, ChecksRun, CommentKind, CommentTarget, InboxData, LiveQuestion, PrState, Ref, RepoAvatar, Review, ReviewComment, Tag } from "../schema/types.js";
+import type { AgentInfo, Bundle, ChecksRun, ScreenshotsRun, CommentKind, CommentTarget, InboxData, LiveQuestion, PrState, Ref, RepoAvatar, Review, ReviewComment, Tag } from "../schema/types.js";
 
 // ------------------------------------------------------------------ types
 // The daemon's own records. Report data and review files follow skill/schema/types.ts.
@@ -106,6 +107,10 @@ type ReviewRecord = {
   round: number;
   questions: QuestionRecord[];
   checks: ChecksRun | null;
+  // Screenshots of the changed UI (screenshots.mjs), watched like the checks. The file is next to the report's.
+  screenshotsFile: string;
+  screenshots: ScreenshotsRun | null;
+  screenshotsMtime?: number;
   facts?: RoundFacts | NoFacts;
   drift?: Drift | null;
   checkingDrift?: boolean;
@@ -253,6 +258,8 @@ function loadReview(entry: RegistryEntry) {
   r.round = r.rounds.at(-1)?.round ?? 1;
   r.questions = readJson(questionsFile(r, r.round), []) as QuestionRecord[];
   r.checks = readChecksRun(r.checksFile);
+  r.screenshotsFile = join(entry.dir, "screenshots.json");
+  r.screenshots = readScreenshotsRun(r.screenshotsFile);
   return r;
 }
 for (const entry of registry) {
@@ -323,6 +330,8 @@ const liveState = (r: ReviewRecord) => ({
   questions: r.questions.map(({ deliveredAt: _, ...q }) => q),
   submitted: submittedComments(r),
   checks: r.checks ?? null,
+  // Screenshots of the changed UI as they are taken; null when there are none.
+  screenshots: r.screenshots ?? null,
   // Changes when the agent publishes the same round again; open pages then reload its data.
   roundBuiltAt: r.rounds.find((x) => x.round === r.round)?.builtAt ?? null,
   lastAgentActivity: r.lastAgentActivity,
@@ -891,6 +900,23 @@ async function toolsReport() {
   return report;
 }
 
+// The setup page and Settings ask whether Playwright and its Chromium are on this machine. screenshots.mjs --detect
+// answers, in a process of its own, so the daemon never loads Playwright. Kept for five seconds, since the page asks
+// every few seconds while it is open.
+let playwrightCache: { at: number; report: unknown } | null = null;
+async function playwrightReport() {
+  if (playwrightCache && Date.now() - playwrightCache.at < 5000) return playwrightCache.report;
+  let report: unknown;
+  try {
+    const { stdout } = await run(process.execPath, [join(here, "screenshots.mjs"), "--detect"], { timeout: 20_000, windowsHide: true, env: process.env });
+    report = JSON.parse(stdout);
+  } catch {
+    report = { playwright: { found: false, version: null, from: null }, chromium: { found: false }, install: null };
+  }
+  playwrightCache = { at: Date.now(), report };
+  return report;
+}
+
 // The repo and the code a round was built from, read once from its data file.
 function roundFacts(r: ReviewRecord) {
   const entry = r.rounds.find((x) => x.round === r.round);
@@ -1332,6 +1358,10 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     if (!same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
     return send(res, 200, await toolsReport());
   }
+  if (req.method === "GET" && parts[1] === "setup" && parts[2] === "playwright") {
+    if (!same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
+    return send(res, 200, await playwrightReport());
+  }
 
   // ---------- agent API (review.mjs), admin token
   const admin = same(req.headers["x-admin-token"], adminToken);
@@ -1426,6 +1456,8 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     r.avatar = bundle.diff.repo.avatar ?? null;
     r.checksFile = bundle.projectChecks?.file ?? join(dir, "checks.json");
     r.checks = readChecksRun(r.checksFile);
+    r.screenshotsFile = bundle.screenshots?.file ?? join(dir, "screenshots.json");
+    r.screenshots = readScreenshotsRun(r.screenshotsFile);
     const round = bundle.round ?? r.round;
     // Publishing a round again (a rebuild, or an agent reconnecting) only swaps its data file.
     // Comments, plan and progress belong to the round and stay.
@@ -1464,6 +1496,15 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
   const r = reviews.get(parts[2]);
   if (!r) return send(res, 404, { error: "unknown review" });
   const action = parts[3];
+
+  // A screenshot, for an <img> on the review page, which cannot send a header: the page token comes in the query.
+  if (req.method === "GET" && action === "shots" && parts[4]) {
+    if (!same(url.searchParams.get("token"), pageToken) && !same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
+    const file = join(dirname(r.screenshotsFile), "shots", basename(parts[4]));
+    if (extname(file) !== ".png" || !existsSync(file)) return send(res, 404, { error: "no such screenshot" });
+    res.writeHead(200, { "content-type": "image/png", "cache-control": "no-cache", "x-content-type-options": "nosniff" });
+    return res.end(readFileSync(file));
+  }
 
   if (admin) {
     if (noteAgent(r, req)) broadcast(r);
@@ -1753,6 +1794,25 @@ setInterval(() => {
     const next = readChecksRun(r.checksFile);
     if (JSON.stringify(next) === JSON.stringify(r.checks ?? null)) continue;
     r.checks = next;
+    broadcast(r);
+  }
+}, 1000).unref();
+
+// screenshots.mjs writes screenshots.json after every shot. Streamed the same way as the checks.
+setInterval(() => {
+  for (const r of reviews.values()) {
+    let mtime = 0;
+    try {
+      mtime = statSync(r.screenshotsFile).mtimeMs;
+    } catch {
+      // No screenshots for this review (yet).
+    }
+    const busy = r.screenshots?.status === "running" || r.screenshots?.status === "preparing";
+    if (mtime === r.screenshotsMtime && !busy) continue;
+    r.screenshotsMtime = mtime;
+    const next = readScreenshotsRun(r.screenshotsFile);
+    if (JSON.stringify(next) === JSON.stringify(r.screenshots ?? null)) continue;
+    r.screenshots = next;
     broadcast(r);
   }
 }, 1000).unref();

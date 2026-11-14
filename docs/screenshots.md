@@ -1,6 +1,6 @@
 # Screenshots (spec)
 
-Status: proposed, not built. Replaces the "Before/after screenshots" line in ROADMAP.md.
+Status: built in pr-report (skill/scripts/screenshots.mts, skill/screenshots.md, the Screenshots section of the review page). The Reflektor upload and the platform's section wait for object storage.
 
 ## Why
 
@@ -41,7 +41,7 @@ The daemon answers `GET /api/setup/playwright`:
 ```
 
 - **Playwright:** whichever is installed. A repo's own `playwright` or `@playwright/test` comes first at run time, then a global install. The daemon has no repo when the wizard runs, so it checks the global one and the page says that a project's own Playwright counts too.
-- **Chromium:** a `chromium-*` or `chromium_headless_shell-*` folder in `PLAYWRIGHT_BROWSERS_PATH`, or else in Playwright's default cache (`~/Library/Caches/ms-playwright`, `~/.cache/ms-playwright`, `%LOCALAPPDATA%\ms-playwright`).
+- **A browser:** the Chromium that Playwright version expects (or its headless shell), else the Google Chrome installed on the machine, which Playwright drives directly. So most people only install Playwright.
 
 ### Wizard step
 
@@ -77,7 +77,7 @@ The app's address and how to start it come from `.pr-report.json`:
 - If not, and `start` is set, screenshots.mjs starts it in the repo root, waits up to `readySeconds` for `url` to answer, and stops it when done.
 - If neither works, the run is skipped and the reason shows in the report.
 - Without the `screenshots` block, the agent works the values out once from the repo (package.json scripts, the dev server's config) and saves them in `~/.pr-report/repos/`, the same way it saves checks. `screenshots.mjs --share` copies them into `.pr-report.json`.
-- `hosts` limits where the browser may go. The default is localhost addresses and names ending in `.localhost` or `.test`. A request to any other host is blocked, and the shot that needed it fails.
+- `hosts` limits where the browser may go. The default is localhost addresses and names ending in `.localhost` or `.test`, plus the app's own host. Pages may still load fonts and scripts from anywhere, but a navigation or any request other than GET to another host is blocked, and the shot that needed it fails.
 
 ## Signed in or signed out
 

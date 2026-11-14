@@ -12,7 +12,7 @@ export type ToolState = { installed: boolean; version: string | null; loggedIn: 
 export type ToolsReport = { gh: ToolState; glab: ToolState };
 
 type Os = "win" | "mac" | "linux";
-const os: Os = /Windows/.test(navigator.userAgent) ? "win" : /Mac/.test(navigator.userAgent) ? "mac" : "linux";
+export const os: Os = /Windows/.test(navigator.userAgent) ? "win" : /Mac/.test(navigator.userAgent) ? "mac" : "linux";
 
 const GitHubMark = () => (
   <svg viewBox="0 0 16 16" className="size-7" fill="currentColor" aria-hidden>
@@ -83,7 +83,7 @@ const useTools = () => {
   return tools;
 };
 
-const Command = ({ text }: { text: string }) => {
+export const Command = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false);
   const runnable = !text.startsWith("See ");
   const copy = async () => {

@@ -7,6 +7,7 @@ import { type ReflektorStatus, useReflektor } from "../lib/reflektor";
 import { pageToken } from "../lib/panel";
 import { type AgentSettings, useAgentSettings } from "../lib/settings";
 import { codeThemesFor, type ThemeMode } from "../lib/themes";
+import { ScreenshotsSetup } from "./ScreenshotsSetup";
 import { cx, Kbd, MOD_KEY } from "./ui";
 
 export const SHORTCUTS = [
@@ -53,7 +54,7 @@ export const Choice = <T extends string>({
 );
 
 // A setting that is on or off. The whole row is the switch.
-const SettingSwitch = ({ on, onChange, title, hint }: { on: boolean; onChange: (next: boolean) => void; title: string; hint: ReactNode }) => (
+export const SettingSwitch = ({ on, onChange, title, hint }: { on: boolean; onChange: (next: boolean) => void; title: string; hint: ReactNode }) => (
   <Switch checked={on} onChange={onChange} className={cx("flex w-full items-center justify-between gap-4 px-3 py-2.5", card(on))}>
     <span>
       <span className="block text-sm font-medium">{title}</span>
@@ -218,6 +219,7 @@ const SECTIONS = [
   { id: "settings-diff", label: "Diff view", daemon: false },
   { id: "settings-code", label: "Code theme", daemon: false },
   { id: "settings-writing", label: "Writing reports", daemon: true },
+  { id: "settings-screenshots", label: "Screenshots", daemon: true },
   { id: "settings-reflektor", label: "Reflektor", daemon: true },
   { id: "settings-shortcuts", label: "Keyboard shortcuts", daemon: false },
 ];
@@ -359,6 +361,13 @@ export const SettingsPage = ({ back, topBar }: { back: SettingsBack; topBar: Rea
           </section>
 
           <WritingSection open />
+
+          {daemon && (
+            <section id="settings-screenshots" className="scroll-mt-20">
+              <h2 className={sectionHeading}>Screenshots</h2>
+              <ScreenshotsSetup />
+            </section>
+          )}
 
           <ReflektorSection open />
 

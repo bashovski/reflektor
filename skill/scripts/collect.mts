@@ -1000,6 +1000,12 @@ if (coverage) {
 console.log(config ? "Config: .pr-report.json found" : "Config: no .pr-report.json");
 // The reader can ask for speed over tokens in the page's Settings. It is said only when it is on, so the usual run
 // reads as before, and the steps for it are in a file of their own, which only such a run has to read.
+// Screenshots are said the same way: only when on, and only when the change touches files a page is drawn from.
+const UI_FILE = /\.(tsx|jsx|vue|svelte|astro|html|css|scss|sass|less|erb|haml|twig|hbs|liquid)$/i;
+const uiFiles = files.filter((f) => f.status !== "deleted" && !f.generated && (f.target === "frontend" || UI_FILE.test(f.path)));
+if (readSettings().screenshots && uiFiles.length) {
+  console.log(`Screenshots: on (turned on in Settings), ${uiFiles.length} changed UI ${uiFiles.length === 1 ? "file" : "files"}. Read ${shellPath(fileURLToPath(new URL("../screenshots.md", import.meta.url)))} and start the screenshots subagent before you read the changes.`);
+}
 if (readSettings().subagents) console.log(`Subagent mode: on (turned on in Settings). Read ${shellPath(fileURLToPath(new URL("../subagents.md", import.meta.url)))} before you read the changes.`);
 console.log("");
 console.log(`Read the changes with: git diff ${from} ${to} -- <path>   (includes uncommitted and untracked files)`);

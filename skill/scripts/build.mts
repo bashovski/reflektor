@@ -20,6 +20,7 @@ import type { Bundle, DiffData, DiffFile, PlanItem, PlanStatus, Ref, Review, Rev
 import { reviewMinutes } from "./reading.mjs";
 import { detectAgent } from "./agent.mjs";
 import { readChecksRun } from "./checks-run.mjs";
+import { readScreenshotsRun } from "./screenshots-run.mjs";
 import { shellPath } from "./repo.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -422,6 +423,28 @@ function loadProjectChecks(): Bundle["projectChecks"] {
 
 const projectChecks = loadProjectChecks();
 
+// ------------------------------------------------------------------ screenshots
+// screenshots.json from screenshots.mjs, next to diff.json. Like the checks, it may still be running; the daemon then
+// streams the shots to the page as they are taken.
+const screenshotsFile = join(dirname(resolve(args.diff!)), "screenshots.json");
+const screenshotsRun = readScreenshotsRun(screenshotsFile);
+const screenshots: Bundle["screenshots"] = screenshotsRun ? { ...screenshotsRun, file: screenshotsFile } : null;
+if (screenshotsRun?.status === "stopped") notes.push("Screenshots stopped before they finished; the report shows the ones that were taken.");
+
+// The exported page has no daemon to load the pictures from, so they go inside it as data URLs.
+const withPictures = (b: Bundle): Bundle => {
+  if (!b.screenshots) return b;
+  const folder = dirname(b.screenshots.file);
+  const sets = b.screenshots.sets.map((set) => ({
+    ...set,
+    shots: set.shots.map((shot) => {
+      const file = shot.file ? join(folder, shot.file) : null;
+      return file && existsSync(file) ? { ...shot, src: `data:image/png;base64,${readFileSync(file).toString("base64")}` } : shot;
+    }),
+  }));
+  return { ...b, screenshots: { ...b.screenshots, sets } };
+};
+
 // ------------------------------------------------------------------ PR description
 // Markdown for the pull request, built only from the checked report. Written next to the HTML and embedded in it.
 
@@ -535,6 +558,7 @@ const bundle: Bundle = {
   round,
   fileIcons,
   projectChecks,
+  screenshots,
   prDescription: prText,
   ...(args.draft ? { draft: true } : {}),
   // The agent that built this, so the standalone file and a page nobody has called since can name it (agent.mjs).
@@ -563,7 +587,7 @@ if (htmlOut) {
     htmlOut,
     html
       .replace("<title>PR report</title>", () => `<title>${title}</title>`)
-      .replace("__PR_REPORT_DATA__", () => JSON.stringify(bundle).replace(/</g, "\\u003c")),
+      .replace("__PR_REPORT_DATA__", () => JSON.stringify(withPictures(bundle)).replace(/</g, "\\u003c")),
   );
 }
 const prFile = join(dirname(out), "pr-description.md");
@@ -599,6 +623,7 @@ if (diff.sinceRound) {
 for (const n of notes) console.log(`note: ${n}`);
 // Printed only: the page shows the checks live, so this would be out of date there.
 if (projectChecks?.status === "running") console.log("note: Project checks are still running; the review page shows each result when it is ready.");
+if (screenshots && (screenshots.status === "running" || screenshots.status === "preparing")) console.log("note: Screenshots are still being taken; the review page shows each one when it is ready.");
 for (const w of warnings) console.log(`warning: ${w}`);
 
 if (args.open) {

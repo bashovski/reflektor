@@ -108,6 +108,10 @@ try {
   await page.getByRole("switch", { name: /Subagentic Mode/ }).click();
   await expectVisible(page.getByRole("switch", { name: /Subagentic Mode/, checked: true }), "subagent mode turned on in the wizard");
   await page.keyboard.press("Enter");
+  await expectVisible(page.getByRole("heading", { name: "Screenshots of UI changes?" }), "the screenshots step");
+  await expectVisible(page.getByText(/^Installed|Not installed globally/).first(), "what the daemon found out about Playwright", 15_000);
+  await expectVisible(page.getByRole("switch", { name: /Take screenshots/, checked: false }), "screenshots off until the reader turns them on");
+  await page.keyboard.press("Enter");
   await expectVisible(page.getByRole("heading", { name: "Light or dark?" }), "the theme step");
   await page.getByRole("button", { name: "Dark Always dark" }).click();
   await page.keyboard.press("Enter");
@@ -349,20 +353,17 @@ try {
   await page.goto(`http://127.0.0.1:${port}/`);
   await expectVisible(page.getByRole("heading", { name: "All reviews" }), "the inbox again");
   await expectVisible(page.getByRole("button", { name: "Your account and the daemon" }), "the top bar of the inbox, with the reader's menu");
-  await expectVisible(page.getByRole("link", { name: "Star us on GitHub" }), "the star link in the inbox's top bar");
-  // The inbox's menu has the options of a report's menu, and opens the report's own dialogs in a frame over the page.
+  await expectVisible(page.getByRole("navigation", { name: "Reflektor" }).getByRole("link", { name: "GitHub" }), "the platform links in the inbox's top bar");
+  // Settings is a page of its own, opened from the inbox's menu, with the settings the agent reads and the way back.
   await page.getByRole("button", { name: "Your account and the daemon" }).click();
   await page.getByRole("button", { name: /^Settings/ }).click();
-  const panel = page.frameLocator("iframe.panel");
-  await expectVisible(panel.getByRole("heading", { name: "Settings" }), "Settings, opened from the inbox's menu");
-  await expectVisible(panel.getByRole("switch", { name: /Subagentic Mode/, checked: true }), "subagent mode in Settings, as it was set in the wizard");
-  await expectVisible(panel.getByRole("switch", { name: /Publish while the pull request is open/, checked: true }), "Reflektor's auto-publish in Settings, once signed in");
-  await expectVisible(panel.getByText("Sign out to use another address."), "the API URL as read-only while signed in");
-  await panel.getByRole("button", { name: /^Close/ }).click();
-  await page
-    .locator("iframe.panel")
-    .waitFor({ state: "hidden", timeout: 5_000 })
-    .catch(() => fail("the frame of the dialogs stays over the inbox after Settings is closed"));
+  await expectVisible(page.getByRole("heading", { name: "Settings", level: 1 }), "Settings, opened from the inbox's menu");
+  await expectVisible(page.getByRole("switch", { name: /Subagentic Mode/, checked: true }), "subagent mode in Settings, as it was set in the wizard");
+  await expectVisible(page.getByRole("switch", { name: /Take screenshots/, checked: false }), "screenshots in Settings, still off");
+  await expectVisible(page.getByRole("switch", { name: /Publish while the pull request is open/, checked: true }), "Reflektor's auto-publish in Settings, once signed in");
+  await expectVisible(page.getByText("Sign out to use another address."), "the API URL as read-only while signed in");
+  await page.keyboard.press("Escape");
+  await expectVisible(page.getByRole("heading", { name: "All reviews" }), "the inbox after leaving Settings with Escape");
   if (await page.locator("#setup-hint").isVisible()) fail("the inbox offers the setup again after Not now");
 
   const unexpected = errors.filter((e) => !/favicon/.test(e));

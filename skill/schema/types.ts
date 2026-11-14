@@ -71,6 +71,37 @@ export type ChecksRun = {
   pending: string[];
 };
 
+// ------------------------------------------------------------------ screenshots
+// Pictures of the changed UI, taken by screenshots.mjs from a plan the agent writes. A set is one group of shots:
+// the screens of a flow in order, the states of one page, or a single change.
+export type ShotShape = "flow" | "states" | "single";
+export type ShotAuth = "signed-in" | "signed-out";
+// pending: not taken yet. failed: `error` says why. `file` is relative to the folder of screenshots.json.
+// `src` is set only in an exported page, where the picture travels inside the file as a data URL.
+export type Shot = {
+  id: string;
+  caption: string;
+  refs: Ref[];
+  status: "pending" | "taken" | "failed";
+  file: string | null;
+  width: number | null;
+  height: number | null;
+  error: string | null;
+  src?: string;
+};
+export type ShotSet = { id: string; shape: ShotShape; title: string; summary: string | null; auth: ShotAuth; shots: Shot[] };
+// preparing: the app is being reached and the test login set up. running: shots are being taken. stopped: the run's
+// process ended before it finished. `skipped` says why nothing was taken, when nothing was.
+export type ScreenshotsRun = {
+  status: "preparing" | "running" | "done" | "stopped";
+  result: "passed" | "failed" | null;
+  startedAt: string | null;
+  ranAt: string | null;
+  headSha: string;
+  skipped: string | null;
+  sets: ShotSet[];
+};
+
 // The repo owner's picture: a data URL from github.com or gitlab.com, else initials on a color.
 export type RepoAvatar = { image: string | null; initials: string; color: string };
 
@@ -126,9 +157,14 @@ export type RepoConfig = {
   checks?: { name: string; command: string; timeout?: number; when?: string[] }[];
   // Commands run at fixed points of a report (skill/scripts/hooks.mjs): one command or a list, in the repo's root.
   hooks?: Partial<Record<HookName, string | string[]>>;
+  // Screenshots of the changed UI (skill/scripts/screenshots.mjs): where the app answers, how to start it when it does
+  // not, how long to wait for it, the hosts the browser may open, and whether the shots go to Reflektor with a report.
+  screenshots?: ScreenshotsConfig;
 };
 
-export type HookName = "preRun" | "postRun" | "onApproved";
+export type ScreenshotsConfig = { url?: string; start?: string; readySeconds?: number; hosts?: string[]; upload?: boolean };
+
+export type HookName = "preRun" | "postRun" | "onApproved" | "preScreenshots" | "onScreenshotsPassed" | "onScreenshotsFailed" | "postScreenshots";
 
 // ------------------------------------------------------------------ report.json
 // Text fields (highlights, notes, line notes, flow details, questions, before-merge items, test gaps)
@@ -386,6 +422,8 @@ export type Bundle = {
   // Results from checks.mjs. `stale` = code changed after the checks ran.
   // `file` is the checks.json the daemon watches for live updates.
   projectChecks: (ChecksRun & { stale: boolean; file: string }) | null;
+  // Screenshots of the changed UI from screenshots.mjs. `file` is the screenshots.json the daemon watches.
+  screenshots?: (ScreenshotsRun & { file: string }) | null;
   // Pull request title and Markdown body, written from this report. Null when the report covers only
   // part of the branch (--since or --files), so it cannot describe the pull request.
   prDescription: { title: string; body: string } | null;

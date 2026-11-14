@@ -336,6 +336,7 @@ try {
   updateFlow();
   await concurrentStart();
   await hooksFlow();
+  await screenshotsFlow();
   await reflektorFlow();
 } catch (error) {
   const e = error as ExecError;
@@ -933,6 +934,110 @@ async function hooksFlow() {
   }
 }
 
+// ------------------------------------------------------------------ screenshots
+// screenshots.mts on a small app with a sign-in page (fixtures/make-shots-repo.sh): the plan checks, a skipped run,
+// and, where a browser is on this machine, a whole run that signs in with the hook's test credentials, takes a flow
+// and a single shot, keeps only references to changed files, runs the hooks after it and stops the app it started.
+// Playwright comes from the viewer's packages; the browser is Playwright's Chromium or the installed Google Chrome.
+
+async function screenshotsFlow() {
+  const shotsRepo = join(tmp, "shots-books");
+  run(bash, [join(root, "fixtures", "make-shots-repo.sh"), shotsRepo]);
+  const data = join(shotsRepo, ".git/pr-report/feat-add-book");
+  const home = join(tmp, "shots-home");
+  mkdirSync(home, { recursive: true });
+  writeFileSync(join(home, "settings.json"), JSON.stringify({ screenshots: true }));
+  const log = join(tmp, "shots-hooks.log");
+  const logger = join(tmp, "log-shots-hook.mjs");
+  writeFileSync(logger, 'import { appendFileSync } from "node:fs";\nappendFileSync(process.env.HOOK_LOG, `${process.env.PR_REPORT_HOOK} ${process.env.PR_REPORT_SCREENSHOTS_RESULT}\\n`);\n');
+  const logHook = `node "${logger.replaceAll("\\", "/")}"`;
+  writeFileSync(
+    join(shotsRepo, ".pr-report.json"),
+    JSON.stringify({ hooks: { preScreenshots: "sh scripts/e2e-login.sh", onScreenshotsPassed: logHook, onScreenshotsFailed: logHook, postScreenshots: logHook } }),
+  );
+  const hooksRan = () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : []);
+  const port = 5700 + Math.floor(Math.random() * 300);
+  const env = { PR_REPORT_HOME: home, PR_REPORT_PLAYWRIGHT: join(root, "viewer/node_modules/playwright-core"), HOOK_LOG: log };
+  const script = join(root, "dist/skill/scripts/screenshots.mjs");
+  const shots = (...a: string[]) => run("node", [script, "--repo", shotsRepo, ...a], env);
+  const shotsExit = (...a: string[]) => {
+    try {
+      return { code: 0, out: shots(...a) };
+    } catch (e) {
+      return { code: (e as ExecError & { status?: number }).status ?? 1, out: String((e as ExecError).stdout ?? "") };
+    }
+  };
+  const readRun = () => JSON.parse(readFileSync(join(data, "screenshots.json"), "utf8")) as Bundle["screenshots"] & object;
+
+  const collected = run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", shotsRepo, "--no-fetch", "--base", "main"], env);
+  if (!/Screenshots: on \(turned on in Settings\), 1 changed UI file\./.test(collected)) fail(`collect did not point the agent at screenshots.md for a UI change:\n${collected}`);
+
+  const status = shots("--status");
+  if (!status.includes("Screenshots setting: on") || !status.includes("App: none saved") || !status.includes("the preScreenshots hook sets up a test login")) fail(`screenshots --status:\n${status}`);
+
+  const badPlan = join(tmp, "shots-bad-plan.json");
+  writeFileSync(badPlan, JSON.stringify({ sets: [{ id: "Bad Id", shape: "carousel", title: "", auth: "maybe", steps: [{ do: [{ teleport: "/" }] }] }] }));
+  const bad = shotsExit("--run", "--plan", badPlan);
+  for (const expected of ["id must be lowercase", "shape is flow, states or single", "auth is signed-in or signed-out", "needs a title", 'needs a caption in "shot"', "unknown action"]) {
+    if (bad.code !== 2 || !bad.out.includes(expected)) fail(`a broken plan was not refused with "${expected}" (exit ${bad.code}):\n${bad.out}`);
+  }
+
+  shots("--skip", "Nothing a user sees changed.");
+  const skipped = readRun();
+  if (skipped.skipped !== "Nothing a user sees changed." || skipped.result !== "failed" || skipped.status !== "done") fail(`--skip did not record why: ${JSON.stringify(skipped)}`);
+  if (hooksRan().join(",") !== "onScreenshotsFailed failed,postScreenshots failed") fail(`a skipped run did not run the failed and post hooks: ${hooksRan().join(", ")}`);
+  rmSync(log, { force: true });
+
+  const detected = JSON.parse(run("node", [script, "--detect"], env)) as { playwright: { found: boolean }; chromium: { found: boolean }; chrome: { found: boolean } };
+  if (!detected.playwright.found) fail(`screenshots --detect did not find the Playwright named by PR_REPORT_PLAYWRIGHT: ${JSON.stringify(detected)}`);
+  if (!detected.chromium.found && !detected.chrome.found) {
+    console.log("screenshots: plan checks, --status and --skip worked; the browser run was skipped (neither Playwright's Chromium nor Google Chrome is installed)");
+    return;
+  }
+
+  shots("--save", "--url", `http://127.0.0.1:${port}`, "--start", `PORT=${port} node server.mjs`, "--source", "the dev script", "--from", "package.json");
+  const prepared = shots("--prepare");
+  if (!prepared.includes(`App ready at http://127.0.0.1:${port} (started by this script`) || !prepared.includes("the hook wrote test credentials")) fail(`screenshots --prepare:\n${prepared}`);
+
+  const plan = join(tmp, "shots-plan.json");
+  writeFileSync(
+    plan,
+    JSON.stringify({
+      login: { path: "/login", do: [{ fill: ["role=textbox[name='Email']", "$username"] }, { fill: ["role=textbox[name='Password']", "$password"] }, { click: "role=button[name='Sign in']" }] },
+      sets: [
+        {
+          id: "add-book",
+          shape: "flow",
+          title: "Adding a book",
+          summary: "Readers can add a book from their list.",
+          auth: "signed-in",
+          steps: [
+            { do: [{ goto: "/books" }], shot: "Add book button added above the list", refs: ["books.html:2", "server.mjs:1"] },
+            { do: [{ click: "role=button[name='Add book']" }], shot: "The new Add a book dialog" },
+            { do: [{ fill: ["role=textbox[name='Title']", "Hyperion"] }, { click: "role=button[name='Save']" }, { waitFor: "text=Hyperion" }], shot: "The book appears in the list" },
+          ],
+        },
+        { id: "visitors", shape: "single", title: "Signed-out visitors", auth: "signed-out", steps: [{ do: [{ goto: "/books" }], shot: "Visitors are still sent to sign in" }] },
+      ],
+    }),
+  );
+  const ranOut = shots("--run", "--plan", plan);
+  const done = readRun();
+  const all = done.sets.flatMap((set) => set.shots);
+  if (done.result !== "passed" || all.length !== 4 || all.some((shot) => shot.status !== "taken" || !shot.file || !existsSync(join(data, shot.file)) || !shot.width)) fail(`the screenshots run did not take every shot:\n${ranOut}`);
+  if (JSON.stringify(all[0].refs) !== JSON.stringify([{ path: "books.html", line: 2 }]) || !ranOut.includes("server.mjs is not changed by this branch")) fail(`a reference to a file the branch does not change was kept: ${JSON.stringify(all[0].refs)}`);
+  if (readFileSync(join(data, "screenshots/plan.json"), "utf8") !== readFileSync(plan, "utf8")) fail("the plan was not kept for the next round");
+  if (hooksRan().join(",") !== "onScreenshotsPassed passed,postScreenshots passed") fail(`the hooks after a passing run: ${hooksRan().join(", ")}`);
+  const stillUp = await fetch(`http://127.0.0.1:${port}/`).then(() => true, () => false);
+  if (stillUp) fail("the app started by --prepare was still running after --run");
+
+  const built = run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(data, "diff.json"), "--draft", "--out", join(tmp, "shots-bundle.json"), "--html", join(tmp, "shots.html")]);
+  const bundle = JSON.parse(readFileSync(join(tmp, "shots-bundle.json"), "utf8")) as Bundle;
+  if (bundle.screenshots?.sets.length !== 2 || bundle.screenshots.sets[0].shots.some((shot) => shot.src)) fail(`build did not carry the screenshots, or put the pictures in the JSON: ${built}`);
+  if ((readFileSync(join(tmp, "shots.html"), "utf8").match(/data:image\/png;base64,/g) ?? []).length !== 4) fail("the exported page does not carry the four pictures");
+  console.log("screenshots: plan checks, --skip, a signed-in flow and a signed-out shot, references, the hooks after a run, stopping the app, and the build and export all worked");
+}
+
 // ------------------------------------------------------------------ Reflektor
 // Publishing to Reflektor (reflektor.mts) against a local stand-in for its API: the login file, the device flow's
 // answers, the preflight that keeps code from unapproved repos on the machine, the gzipped upload, and each refusal.
@@ -989,7 +1094,7 @@ async function reflektorFlow() {
     if (client.forgetLogin(file)) fail("logging out with no login file says it signed out");
 
     // Where to sign in: the variables, then the settings, then Reflektor's own; https only, except on this machine.
-    const settings = { subagents: false, reflektorAutoPublish: true, reflektorApiUrl: "https://api.example.test/", reflektorAppUrl: "" };
+    const settings = { subagents: false, screenshots: false, reflektorAutoPublish: true, reflektorApiUrl: "https://api.example.test/", reflektorAppUrl: "" };
     const fromSettings = client.reflektorConfig(settings, {});
     const fromEnv = client.reflektorConfig(settings, { REFLEKTOR_API_URL: stub.url, REFLEKTOR_APP_URL: `${stub.url}/` });
     if (fromSettings.apiUrl !== "https://api.example.test" || fromSettings.appUrl !== "https://reflektor.dev" || fromEnv.apiUrl !== stub.url || fromEnv.appUrl !== stub.url)
