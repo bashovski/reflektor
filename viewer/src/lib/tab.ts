@@ -55,13 +55,14 @@ function useNewsWhileAway() {
   return news;
 }
 
-export function useTab() {
+// The tab title follows the platform's "<page> · Reflektor". `paused` while another page (Settings) owns the title.
+export function useTab(paused = false) {
   const { bundle } = useReport();
   const { phase, latestRound, round } = useReview();
   const merged = useMerged();
   const news = useNewsWhileAway();
 
-  const base = `${bundle.diff.branch.head} · ${bundle.diff.repo.name}${round > 1 ? ` · round ${round}` : ""}`;
+  const base = `${bundle.report.title || bundle.diff.branch.head}${round > 1 ? ` · Round ${round}` : ""} · Reflektor`;
   const newer = latestRound > round;
   // A merged pull request ends the review whatever round it was in.
   const prefix = newer ? `Round ${latestRound} ready · ` : merged ? "Merged · " : phase === "planning" ? "Plan ready · " : phase === "done" ? "✓ " : "";
@@ -71,6 +72,7 @@ export function useTab() {
   useEffect(() => setFavicon(icon, news.count > 0), [icon, news.count]);
 
   useEffect(() => {
+    if (paused) return;
     if (!news.count) {
       document.title = title;
       return;
@@ -86,5 +88,5 @@ export function useTab() {
       window.clearInterval(id);
       document.title = title;
     };
-  }, [title, news]);
+  }, [title, news, paused]);
 }

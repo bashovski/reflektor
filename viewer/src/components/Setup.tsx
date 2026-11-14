@@ -21,7 +21,7 @@ export const Setup = () => {
   const codeKeys = useCodeThemeKeys(step.id === "code");
 
   useEffect(() => {
-    document.title = "Set up Reflektor";
+    document.title = "Setup · Reflektor";
   }, []);
 
   // Enter moves on, even from a focused option button, so it never re-picks what is already picked.

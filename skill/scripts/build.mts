@@ -554,7 +554,7 @@ if (htmlOut) {
   const html = readFileSync(viewerPath, "utf8");
   if (!html.includes("__PR_REPORT_DATA__")) throw new Error(`${viewerPath} has no data placeholder`);
   // The page's base title (see viewer/src/lib/tab.ts), so the tab is right while the page loads.
-  const title = `${diff.branch.head} · ${diff.repo.name}${round > 1 ? ` · round ${round}` : ""}`.replace(
+  const title = `${report.title || diff.branch.head}${round > 1 ? ` · Round ${round}` : ""} · Reflektor`.replace(
     /[&<>]/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c as "&" | "<" | ">"],
   );

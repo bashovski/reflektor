@@ -60,3 +60,17 @@ export function useReflektor(shown = true) {
 
 // Publishes the review behind `api` (`/api/r/<id>`) now, to `organization` when the reader picked one.
 export const publishReview = (api: string, organization?: string) => ask<PublishAnswer>(`${api}/reflektor`, "POST", organization ? { organization } : {});
+
+// Reflektor's own site, where Docs, Examples and Pricing live: the one the daemon signs in to, else the public one.
+export const DEFAULT_APP_URL = "https://reflektor.dev";
+
+export const PLATFORM_PAGES = [
+  { path: "/docs", label: "Docs" },
+  { path: "/examples", label: "Examples" },
+  { path: "/pricing", label: "Pricing" },
+] as const;
+
+export function useAppUrl() {
+  const { status } = useReflektor(Boolean(pageToken()));
+  return (status?.appUrl ?? DEFAULT_APP_URL).replace(/\/+$/, "");
+}

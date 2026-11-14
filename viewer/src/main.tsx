@@ -3,11 +3,13 @@ import { createRoot } from "react-dom/client";
 import type { Bundle } from "../../skill/schema/types";
 import { App } from "./components/App";
 import { Panel } from "./components/Panel";
+import { SettingsRoute } from "./components/SettingsRoute";
 import { Setup } from "./components/Setup";
 import { fetchRound, LiveProvider, useLive } from "./lib/live";
 import { isPanelPage } from "./lib/panel";
 import { PreferencesProvider } from "./lib/prefs";
 import { RoundCtx } from "./lib/rounds";
+import { isSettingsPage } from "./lib/settings-page";
 import { isSetupPage } from "./lib/setup";
 import "./index.css";
 
@@ -60,6 +62,6 @@ const Load = () => {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <PreferencesProvider>{isPanelPage() ? <Panel /> : isSetupPage() ? <Setup /> : <Load />}</PreferencesProvider>
+    <PreferencesProvider>{isPanelPage() ? <Panel /> : isSetupPage() ? <Setup /> : isSettingsPage() ? <SettingsRoute /> : <Load />}</PreferencesProvider>
   </StrictMode>,
 );

@@ -659,7 +659,7 @@ function inboxPage(welcome = false) {
   // review page saved is applied in the head, before the first paint; the page's script runs at the end of the body.
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 ${inlineScript(appScript("inbox-theme.js"))}
-<title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}Reflektor</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}">${FUSE_FILE ? '<link rel="modulepreload" href="/fuse.mjs">' : ""}<style>
+<title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}All reviews · Reflektor</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}">${FUSE_FILE ? '<link rel="modulepreload" href="/fuse.mjs">' : ""}<style>
 ${FONT_CSS}
 :root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--faint:#83838c;--lead:#52525b;--accent:#18181b;--hover:color-mix(in srgb,var(--text) 5%,transparent);--hover-2:color-mix(in oklab,oklch(55.2% .016 285.938) 10%,transparent);color-scheme:light}
 :root[data-theme=dark]{--bg:#09090b;--surface:#141417;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;--faint:#71717a;--lead:#a1a1aa;--accent:#fff;color-scheme:dark}
@@ -723,7 +723,7 @@ code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospa
 <div class="dd me"><button type="button" class="who" aria-haspopup="true" aria-expanded="false" title="Your account and the daemon" aria-label="Your account and the daemon"><span class="face" id="me-face"></span></button><div class="menu" hidden>
 <div class="id"><span class="face big" id="me-face-big"></span><div><b id="me-name">Looking you up…</b><span id="me-sub"></span></div></div><hr>
 <a class="mi" id="me-profile" target="_blank" rel="noreferrer" hidden>${icon("user")}<span>Open profile</span>${external}</a>
-<button type="button" class="mi" data-panel="settings">${icon("settings")}<span>Settings</span><kbd>?</kbd></button>
+<button type="button" class="mi" data-settings>${icon("settings")}<span>Settings</span><kbd>?</kbd></button>
 <button type="button" class="mi" data-panel="help">${icon("help")}<span>Help</span></button>
 <a class="mi" id="me-bug" target="_blank" rel="noreferrer" href="https://github.com/bashovski/pr-report/issues/new">${icon("bug")}<span>Report a bug</span>${external}</a><hr>
 <button type="button" class="mi" data-panel="purge">${icon("trash")}<span>Purge daemon cache</span></button><hr>
@@ -792,8 +792,15 @@ function emptyState(welcome: boolean, archivedCount: number) {
 // tools on this machine. The installer opens it after an install.
 function setupPage() {
   return readFileSync(join(APP_DIR!, "index.html"), "utf8")
-    .replace("<title>PR report</title>", () => "<title>Set up Reflektor</title>")
+    .replace("<title>PR report</title>", () => "<title>Setup · Reflektor</title>")
     .replace("</head>", () => `<script>window.__PR_SETUP__=${JSON.stringify({ token: pageToken })}</script></head>`);
+}
+
+// Settings as a page of its own, opened from the inbox. A report shows the same page in place of the review.
+function settingsPage() {
+  return readFileSync(join(APP_DIR!, "index.html"), "utf8")
+    .replace("<title>PR report</title>", () => "<title>Settings · Reflektor</title>")
+    .replace("</head>", () => `<script>window.__PR_SETTINGS__=${JSON.stringify({ token: pageToken })}</script></head>`);
 }
 
 // The report's own dialogs (Settings, Help, the cache purge) for the inbox, which is not built with the viewer and
@@ -809,7 +816,7 @@ function reviewPage(r: ReviewRecord, round: number) {
   if (!entry || !existsSync(roundFile(entry))) return null;
   const config = { live: true, id: r.id, round: entry.round, token: pageToken, api: `/api/r/${encodeURIComponent(r.id)}`, agent: r.agent ?? null };
   // The page's base title (see viewer/src/lib/tab.ts), so the tab is right before the report loads.
-  const title = `${r.branch} · ${r.repo.split("/").at(-1)}${entry.round > 1 ? ` · round ${entry.round}` : ""}`;
+  const title = `${r.title || r.branch}${entry.round > 1 ? ` · Round ${entry.round}` : ""} · Reflektor`;
   return readFileSync(join(APP_DIR!, "index.html"), "utf8")
     .replace("<title>PR report</title>", () => `<title>${escapeHtml(title)}</title>`)
     .replace("</head>", () => `<script>window.__PR_REVIEW__=${JSON.stringify(config)}</script></head>`);
@@ -1287,9 +1294,10 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=3600", "x-content-type-options": "nosniff" });
     return res.end(readFileSync(FUSE_FILE));
   }
-  if (["r", "app", "setup", "panel"].includes(parts[0]) && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
+  if (["r", "app", "setup", "settings", "panel"].includes(parts[0]) && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
   if (req.method === "GET" && parts[0] === "app" && parts[1] === "assets") return sendAsset(res, parts.slice(1));
   if (req.method === "GET" && url.pathname === "/setup") return send(res, 200, setupPage(), "text/html; charset=utf-8");
+  if (req.method === "GET" && url.pathname === "/settings") return send(res, 200, settingsPage(), "text/html; charset=utf-8");
   if (req.method === "GET" && url.pathname === "/panel") return send(res, 200, panelPage(), "text/html; charset=utf-8", { framedByOwnPages: true });
   if (req.method === "GET" && parts[0] === "r" && parts[1]) {
     const r = reviews.get(parts[1]);

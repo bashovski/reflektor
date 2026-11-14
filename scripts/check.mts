@@ -312,7 +312,7 @@ try {
   const page = readFileSync(html, "utf8");
   if (page.includes("__PR_REPORT_DATA__")) fail("report data was not injected into the viewer");
   // samples/ can hold review files from local runs, which makes this a later round.
-  if (!/<title>feat\/books · library( · round \d+)?<\/title>/.test(page)) fail("the standalone page does not carry the branch · repo title");
+  if (!/<title>Save and list books in the library \(new books table, POST and GET \/books\)( · Round \d+)? · Reflektor<\/title>/.test(page)) fail("the standalone page does not carry the report title");
   if (statSync(html).size < 1_000_000) fail("the standalone page is too small; build.mts probably used the unbuilt viewer");
 
   // Checks started in the background: build does not wait and records them as running; --wait returns their results.
@@ -401,7 +401,9 @@ async function daemonFlow() {
     const base = `http://127.0.0.1:${port}`;
     const page = await (await fetch(`${base}/r/${id}`)).text();
     const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)![1]) as ReviewConfig;
-    if (!page.includes("<title>feat/books · library</title>")) fail("the review page does not carry the branch · repo title");
+    if (!page.includes("<title>Save and list books in the library (new books table, POST and GET /books) · Reflektor</title>")) fail("the review page does not carry the report title");
+    const settings = await (await fetch(`${base}/settings`)).text();
+    if (!settings.includes("<title>Settings · Reflektor</title>") || !settings.includes("window.__PR_SETTINGS__=")) fail("/settings is not the settings page");
     if (page.length > 20_000) fail(`the review page is ${page.length} bytes; it should load the app and its data, not carry them`);
     await checkAppAssets(base, page);
     // A failing command prints its reason and exits 1. Before, the error threw out of main() after a fetch, which aborted Node
@@ -489,7 +491,7 @@ async function daemonFlow() {
     if (shown[id] !== (await state()).updatedAt) fail("the inbox would reload on the stream's first state event (reload loop)");
     if ((await state()).listening) fail("a review with no waiter counts as listened to");
     if (!/<span class="av" style="background:#[0-9a-f]{6}">AL<\/span>/.test(inbox)) fail("the inbox does not show the owner's initials");
-    if (!inbox.includes("<title>(1) Reflektor</title>")) fail("the inbox title does not count the review waiting on you");
+    if (!inbox.includes("<title>(1) All reviews · Reflektor</title>")) fail("the inbox title does not count the review waiting on you");
     if (!inbox.includes('data-owner="acme-labs"')) fail("the inbox rows do not carry the owner they are grouped by");
     if (!/<span class="tag" style="background:#[0-9a-f]{6}"><svg /.test(inbox)) fail("the inbox tag has no color or icon");
     if (!inbox.includes('name="q"') || !(await (await fetch(`${base}/fuse.mjs`)).text()).includes("Fuse.js")) fail("the inbox search or its Fuse.js file is missing");
@@ -570,7 +572,7 @@ async function daemonFlow() {
     if (!(await prIs((p) => p?.state === "MERGED" && p.mergedAt === "2026-11-09T12:00:00Z"))) fail("a merge on GitHub did not reach the page state");
     const mergedInbox = await (await fetch(`${base}/`)).text();
     if (!mergedInbox.includes('data-phase="merged"') || !mergedInbox.includes(">Merged</span>") || !mergedInbox.includes('data-state="MERGED"')) fail("the inbox does not show the merged review as merged");
-    if (!mergedInbox.includes("<title>Reflektor</title>")) fail("a merged review still counts as waiting on you in the inbox title");
+    if (!mergedInbox.includes("<title>All reviews · Reflektor</title>")) fail("a merged review still counts as waiting on you in the inbox title");
     const mergedAt = polls().length;
     await sleep(1500);
     if (polls().length !== mergedAt) fail("the daemon kept polling GitHub after the pull request was merged");
@@ -693,7 +695,7 @@ async function daemonFlow() {
     if ((await post("delete", {})).status !== 409) fail("a review that is not archived could be deleted");
     await post("archive", {});
     const archivedInbox = await (await fetch(`${base}/`)).text();
-    if (!archivedInbox.includes("Archived (1)") || !archivedInbox.includes("<title>Reflektor</title>")) fail("an archived review did not move to the archived list");
+    if (!archivedInbox.includes("Archived (1)") || !archivedInbox.includes("<title>All reviews · Reflektor</title>")) fail("an archived review did not move to the archived list");
     if (!run("git", ["-C", repo, "for-each-ref", "refs/pr-report/rounds/feat-books/"]).trim()) fail("build did not keep a ref per round");
     await post("delete", {});
     if (existsSync(reviewDir)) fail("deleting an archived review left its folder");
