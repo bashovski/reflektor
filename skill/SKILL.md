@@ -156,7 +156,7 @@ Write report.json to the **Report file** path that collect printed. Its shape is
 - `title`: plain verb phrase plus a technical anchor in brackets, under 90 characters, without the tag. Example: `Stop double charges when users click Pay twice (idempotency key on POST /payments)`.
 - `summary`: at most two sentences: what users or callers get, and the main technical change.
 - `targets`: every area touched. Use the target column from collect when it is filled; otherwise judge by path and content. Lockfiles, generated files and root config files add no target on their own.
-- `reviewMinutes`: an honest estimate for reading the must-read files carefully and skimming the rest.
+- `reviewMinutes`: write 0. build fills it in: the words in the must-read sections at 200 a minute, plus 1 minute, plus 1 minute per flow.
 
 **beforeMerge:** what must happen before or at merge: migrations, env vars, deploy order, feature flags, breaking changes, uncommitted files, anything that will fail CI. At most 6 items. When an item covers several files, name them in the text and point `ref` at the main one. Empty when there is nothing.
 

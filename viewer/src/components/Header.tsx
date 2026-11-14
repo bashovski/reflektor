@@ -1,4 +1,5 @@
 import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal, Inbox, Loader2, Settings } from "lucide-react";
+import { reviewMinutes } from "../../../skill/scripts/reading.mjs";
 import { useAgent } from "../lib/agent";
 import { useChecks } from "../lib/checks";
 import { BASE_SOURCE, REVIEW, TARGETS } from "../lib/meta";
@@ -151,7 +152,7 @@ export const Hero = () => {
           <span className="inline-flex items-center gap-1.5">
             <Clock className="size-4 text-faint" />
             <span>
-              About <span className="num">{report.reviewMinutes}</span> min
+              About <span className="num">{reviewMinutes(report, diff.files)}</span> min
             </span>
           </span>
         )}

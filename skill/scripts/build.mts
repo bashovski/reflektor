@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Bundle, DiffData, DiffFile, PlanItem, PlanStatus, Ref, Review, ReviewLevel, Section, SectionKind, Target } from "../schema/types.js";
+import { reviewMinutes } from "./reading.mjs";
 import { detectAgent } from "./agent.mjs";
 import { readChecksRun } from "./checks-run.mjs";
 import { shellPath } from "./repo.mjs";
@@ -518,6 +519,7 @@ function prDescription() {
 
 // A report about part of the branch (--since, --files) cannot describe the pull request, so the
 // description from the last whole-branch build stays.
+report.reviewMinutes = reviewMinutes(report, diff.files);
 const partial = diff.scope.mode !== "branch";
 const prText = partial || args.draft ? null : prDescription();
 
