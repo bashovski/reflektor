@@ -1176,6 +1176,7 @@ async function reflektorFlow() {
     const already = uploaded();
     if (!(await waitFor(() => uploaded() === already + 1))) fail("the daemon did not publish once signed in with the pull request open");
     if (stub.uploads().at(-1)?.bundle.diff.branch.snapshot !== snapshotOf(first)) fail("the daemon did not publish the round on screen");
+    if (stub.uploads().at(-1)?.bundle.diff.branch.pr?.number !== 7) fail("the daemon did not send the pull request it knows with a round built before it");
     if (!(await waitFor(async () => Boolean((await state()).reflektor?.published?.url)))) fail("the page state does not say where the report went");
     await ticks();
     show(finished());

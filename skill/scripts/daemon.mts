@@ -57,7 +57,8 @@ type Drift = { files: string[]; fileCount: number; commits: number; branch: stri
 // A live question as the daemon keeps it. deliveredAt is left out wherever questions leave the daemon.
 type QuestionRecord = LiveQuestion & { deliveredAt?: string | null };
 // One round sent to Reflektor. A review keeps them, so the same snapshot is never sent twice.
-type Upload = { round: number; snapshot: string; organization: string; url: string; created: boolean; at: string };
+// `pr` is the pull request the upload carried: a round sent before its pull request was known goes again once it is.
+type Upload = { round: number; snapshot: string; organization: string; url: string; created: boolean; at: string; pr?: number | null };
 // The last publish to Reflektor that did not work, for the page's menu. `reason` is reflektor.mjs's code for it.
 type PublishError = { reason: string; message: string; round: number; at: string };
 // What a publish answers to review.mjs and to the page. `message` is for the reader in either.
@@ -1136,16 +1137,23 @@ async function publishNow(r: ReviewRecord, { organization = null, auto = false }
   } catch {
     return answer(false, "no_data", `The report data of round ${entry.round} could not be read.`, { round: entry.round });
   }
+  // A round built before its pull request was opened carries none. The daemon knows it by now, so Reflektor can link
+  // the report to it, comment on it and check the round against it.
+  if (!bundle.diff.branch.pr && r.pr && r.pr.state === "OPEN") {
+    bundle.diff.branch.pr = { number: r.pr.number, url: r.pr.url, title: r.pr.title ?? bundle.report.title, state: r.pr.state };
+  }
   const snapshot = bundle.diff.branch.snapshot;
+  const pr = bundle.diff.branch.pr?.number ?? null;
   const sent = r.uploads.find((u) => u.snapshot === snapshot && (!organization || u.organization.toLowerCase() === organization.toLowerCase()));
-  if (sent) return answer(true, null, `Round ${entry.round} is on Reflektor already: ${sent.url}`, { round: entry.round, url: sent.url, organization: sent.organization, already: true });
+  if (sent && (sent.pr || !pr)) return answer(true, null, `Round ${entry.round} is on Reflektor already: ${sent.url}`, { round: entry.round, url: sent.url, organization: sent.organization, already: true });
 
   r.publishing = true;
   broadcast(r);
   const outcome = await publishBundle(login, bundle, { organization });
   r.publishing = false;
   if (outcome.ok) {
-    r.uploads = [...r.uploads, { round: entry.round, snapshot, organization: outcome.organization, url: outcome.report.url, created: outcome.created, at: now() }].slice(-50);
+    const upload = { round: entry.round, snapshot, organization: outcome.organization, url: outcome.report.url, created: outcome.created, at: now(), pr };
+    r.uploads = [...r.uploads.filter((u) => !(u.snapshot === snapshot && u.organization === outcome.organization)), upload].slice(-50);
     r.publishError = null;
     r.publishRetryAt = 0;
     // An organization asked for by name is the one for this repository from now on.
@@ -1175,7 +1183,8 @@ function autoPublish(r: ReviewRecord) {
   if (!login || !entry) return;
   // Once per build of a round and per login. A try that did not work goes again when its retry time has come; a new
   // build or a new login goes at once.
-  const tried = `${entry.round}|${entry.builtAt ?? entry.publishedAt}|${login.savedAt}`;
+  // The pull request is part of it: a round that went up before its pull request was known goes again to link it.
+  const tried = `${entry.round}|${entry.builtAt ?? entry.publishedAt}|${login.savedAt}|${r.pr.number}`;
   if (r.publishTried === tried && (!r.publishRetryAt || Date.now() < r.publishRetryAt)) return;
   r.publishTried = tried;
   r.publishRetryAt = 0;
