@@ -34,7 +34,7 @@
 - **More hook points when someone needs them:** `postCollect`, `onChecksDone`, `onReviewSent`, and personal hooks in `~/.pr-report` for all of a user's repos.
 - **Checks without a base:** when no base branch is found, `untrustedAuthors()` cannot tell whose commits are on the branch. Hooks then do not run; the checks still do.
 - **A neutral `PR_REPORT_BASH`:** `gitBash()` reads only `CLAUDE_CODE_GIT_BASH_PATH` before it searches for Git Bash on Windows.
-- **Before/after screenshots** of changed UI pages, when Playwright and a dev server are available.
+- **Screenshots of changed UI**, taken with Playwright by a background subagent: spec in `docs/screenshots.md`, waiting for review.
 - **Tests on other stacks:** fake repos in Go, Python and Rust run by `pnpm check`, to prove the skill works for any stack.
 - **Reflektor in the inbox's menu:** signing in and publishing are in a report's menu, and the account in Settings. The inbox's hand-written menu has no Reflektor block yet.
 - **Auto-publish for reviews not on screen:** the daemon follows a pull request only while its review is open in a tab, or when the agent tells it (`review.mjs pr`). A pull request opened elsewhere publishes once a tab of its review is open.
