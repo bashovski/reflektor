@@ -16,6 +16,7 @@
 //        node screenshots.mjs --repo . --forget              delete the saved app settings
 //        node screenshots.mjs --repo . --prepare [--trust]   reach or start the app, then run the preScreenshots hook
 //        node screenshots.mjs --repo . --inspect <path> [--auth signed-in]   print a page's accessibility tree, save a look at it
+//        node screenshots.mjs --repo . --inspect --plan <plan.json> --after <set>:<step>   the same, after a set's steps up to that one
 //        node screenshots.mjs --repo . --login --plan <plan.json>            sign in with the hook's test credentials
 //        node screenshots.mjs --repo . --run --plan <plan.json>              take the shots, run the hooks, stop the app
 //        node screenshots.mjs --repo . --skip "<reason>"     record that no shots were taken, and why
@@ -41,10 +42,10 @@ const VIEWPORT = { width: 1280, height: 800 };
 const INSTALL = { playwright: "npm install -g playwright", chromium: "npx playwright install chromium" };
 
 type Mode = "status" | "detect" | "save" | "share" | "forget" | "prepare" | "inspect" | "login" | "run" | "skip" | "stop";
-type Args = { mode: Mode; repo: string; url: string | null; start: string | null; ready: number | null; hosts: string[]; source: string | null; from: string[]; path: string | null; auth: ShotAuth; plan: string | null; reason: string | null; trust: boolean };
+type Args = { mode: Mode; repo: string; url: string | null; start: string | null; ready: number | null; hosts: string[]; source: string | null; from: string[]; path: string | null; auth: ShotAuth; plan: string | null; after: string | null; reason: string | null; trust: boolean };
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { mode: "status", repo: ".", url: null, start: null, ready: null, hosts: [], source: null, from: [], path: null, auth: "signed-out", plan: null, reason: null, trust: false };
+  const args: Args = { mode: "status", repo: ".", url: null, start: null, ready: null, hosts: [], source: null, from: [], path: null, auth: "signed-out", plan: null, after: null, reason: null, trust: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -63,7 +64,9 @@ function parseArgs(argv: string[]): Args {
       args.auth = value;
     } else if (a === "--inspect") {
       args.mode = "inspect";
-      args.path = next();
+      if (argv[i + 1] && !argv[i + 1].startsWith("--")) args.path = next();
+    } else if (a === "--after") {
+      args.after = next();
     } else if (a === "--skip") {
       args.mode = "skip";
       args.reason = next();
@@ -495,7 +498,15 @@ async function act(session: Session, page: Page, action: Action) {
   } catch (e) {
     if ((e as Error)?.name !== "TimeoutError") throw e;
     const [kind] = Object.keys(action);
-    throw new Error(kind === "goto" ? `${targetOf(action)} did not finish loading in time` : `Nothing on the page matched ${targetOf(action)} in time (${kind})`);
+    if (kind === "goto") throw new Error(`${targetOf(action)} did not finish loading in time`);
+    // Playwright's call log says whether the selector found an element, and what kept it from acting on it then.
+    const log = String((e as Error).message).split("\n");
+    const found = log.some((line) => /resolved to|locator resolved/.test(line));
+    const noise = /waiting for|waiting \d+ms|attempting|retrying|scrolling|element is visible, enabled and stable/;
+    const reason = [...log].reverse().find((line) => /^\s*-\s/.test(line) && !noise.test(line))?.trim().replace(/^-\s*/, "");
+    throw new Error(
+      found ? `Found ${targetOf(action)}, but could not ${kind} it in time${reason ? `: ${reason}` : ""}` : `Nothing on the page matched ${targetOf(action)} in time (${kind})`,
+    );
   }
 }
 
@@ -638,14 +649,36 @@ if (args.mode === "inspect" || args.mode === "login") {
       const at = await login(s, readPlan());
       console.log(`Signed in. The page after signing in: ${at}. Signed-in sets and --inspect --auth signed-in now use this session.`);
     } else {
-      if (args.auth === "signed-in" && !existsSync(files.state)) throw new Error("No signed-in session yet. See what --prepare said about signing in.");
-      const { context, page, errors } = await newPage(s, args.auth);
-      await act(s, page, { goto: args.path! });
+      // With --after, the page is where a set's steps leave it: the plan's actions up to and with that step.
+      let replay: { set: PlanSet; steps: PlanStep[] } | null = null;
+      if (args.after) {
+        const [setId, stepText] = args.after.split(":");
+        const set = readPlan().sets?.find((x) => x.id === setId);
+        const upTo = Number(stepText);
+        if (!set || !(upTo >= 1 && upTo <= set.steps.length)) throw new Error(`--after needs <set id>:<step number> from the plan, got ${args.after}`);
+        replay = { set, steps: set.steps.slice(0, upTo) };
+      } else if (!args.path) throw new Error("--inspect needs a path, or --plan with --after <set>:<step>");
+      const auth = replay?.set.auth ?? args.auth;
+      if (auth === "signed-in" && !existsSync(files.state)) throw new Error("No signed-in session. Run --prepare again: the hooks after a --run may have ended the last one.");
+      const { context, page, errors } = await newPage(s, auth);
+      if (replay) {
+        for (const [n, step] of replay.steps.entries()) {
+          for (const action of step.do) {
+            try {
+              await act(s, page, action);
+            } catch (e) {
+              throw new Error(`step ${n + 1}: ${short(e)}`);
+            }
+          }
+        }
+      } else await act(s, page, { goto: args.path! });
       await settle(page);
       mkdirSync(files.inspect, { recursive: true });
-      const picture = join(files.inspect, `${args.path!.replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "") || "home"}-${args.auth}.png`);
+      const name = replay ? `${replay.set.id}-after-${replay.steps.length}` : args.path!.replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "") || "home";
+      const picture = join(files.inspect, `${name}-${auth}.png`);
       await page.screenshot({ path: picture, animations: "disabled", caret: "hide" });
-      console.log(`Address: ${page.url()}${new URL(page.url()).pathname !== new URL(args.path!, `${s.base}/`).pathname ? "  (redirected)" : ""}`);
+      const asked = replay ? null : new URL(args.path!, `${s.base}/`).pathname;
+      console.log(`Address: ${page.url()}${asked && new URL(page.url()).pathname !== asked ? "  (redirected)" : ""}`);
       console.log(`Title: ${await page.title()}`);
       console.log(`Picture: ${shellPath(picture)}`);
       const tree = await page.locator("body").ariaSnapshot().catch(async () => (await page.locator("body").innerText()).slice(0, 8000));

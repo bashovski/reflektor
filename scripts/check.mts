@@ -1021,6 +1021,9 @@ async function screenshotsFlow() {
       ],
     }),
   );
+  shots("--login", "--plan", plan);
+  const after = shots("--inspect", "--plan", plan, "--after", "add-book:2");
+  if (!after.includes('dialog "Add a book"') || !after.includes("add-book-after-2-signed-in.png")) fail(`--inspect --after did not show the page where the steps leave it:\n${after}`);
   const ranOut = shots("--run", "--plan", plan);
   const done = readRun();
   const all = done.sets.flatMap((set) => set.shots);
