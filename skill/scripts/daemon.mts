@@ -564,12 +564,14 @@ const prChip = (pr: LivePr | null) => {
   return `<span class="pr" data-state="${escapeHtml(pr.state)}" style="--c:${color}" title="Pull request #${Number(pr.number)}, ${label}${pr.title ? `: ${escapeHtml(pr.title)}` : ""}">${icon(name)}#${Number(pr.number)}</span>`;
 };
 
-// The review icon from viewer/src/lib/favicon.ts in gray, with a red dot while a review waits on you.
+// The Reflektor mark on black, as in viewer/src/lib/favicon.ts, with a red dot while a review waits on you.
 const inboxIcon = (dot: boolean) =>
   `data:image/svg+xml,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#52525b"/>` +
-      `<path transform="translate(8 8) scale(2)" d="M20 14.5a2 2 0 0 1-2 2H8l-4 3.5V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" fill="none" stroke="white" stroke-width="2.6" stroke-linejoin="round"/>` +
-      (dot ? `<circle cx="50" cy="14" r="15" fill="white"/><circle cx="50" cy="14" r="11" fill="#ef4444"/>` : "") +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">` +
+      `<defs><linearGradient id="g" x1="19.6879" y1="27.1008" x2="49.2671" y2="47.3976" gradientUnits="userSpaceOnUse"><stop offset="0.110577" stop-color="#9F81E4"/><stop offset="0.302769" stop-color="#7D7AE2"/><stop offset="0.539773" stop-color="#8D92E4"/><stop offset="0.782594" stop-color="#C2E1CC"/></linearGradient></defs>` +
+      `<rect width="64" height="64" rx="12" fill="#09090b"/>` +
+      `<g transform="translate(14.6 12) scale(0.7407)"><path d="M24.7525 4.95049V9.90099H19.802V4.95049H24.7525V0H34.6535V4.95049H39.604V14.8515H29.703V4.95049H24.7525ZM24.7525 44.5545V49.5049H0V44.5545H4.9505V9.90099H0V4.95049H14.8515V9.90099H19.802V14.8515H14.8515V44.5545H24.7525Z" fill="#fafafa"/><path d="M46.0493 21.9025C40.1087 37.0018 46.3251 53.8367 39.4899 53.8367C32.6548 53.8367 19.3167 46.3122 19.3167 39.477C19.3167 32.6416 21.0211 31.3119 27.8563 31.3119C34.6914 31.3119 41.5939 17.4505 46.0493 21.9025Z" fill="url(#g)"/></g>` +
+      (dot ? `<circle cx="52" cy="12" r="12" fill="#09090b"/><circle cx="52" cy="12" r="9" fill="#ef4444"/>` : "") +
       `</svg>`,
   )}`;
 
