@@ -23,7 +23,7 @@ export type ReflektorStub = {
   url: string;
   requests: StubRequest[];
   // The uploads (POST /reports) so far, as parsed bodies.
-  uploads(): { organization?: string; bundle: { diff: { branch: { snapshot: string } }; round: number; draft?: boolean } }[];
+  uploads(): { organization?: string; bundle: { diff: { branch: { snapshot: string; pr?: { number: number } | null } }; round: number; draft?: boolean } }[];
   organizations(list: StubOrganization[]): void;
   device(answers: StubAnswer[], options?: { then?: "approved" | "pending"; interval?: number; expiresIn?: number }): void;
   failNext(path: string, answer: StubAnswer): void;

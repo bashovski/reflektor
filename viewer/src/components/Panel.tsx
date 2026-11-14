@@ -2,10 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { describeAgent } from "../lib/agent";
 import type { PanelName } from "../lib/panel";
 import { HelpPanel } from "./Help";
-import { SettingsDialog } from "./Settings";
 import { PurgeDialog } from "./UserMenu";
 
-const NAMES: PanelName[] = ["settings", "help", "purge"];
+const NAMES: PanelName[] = ["help", "purge"];
 
 // The page behind /panel (see lib/panel.ts): nothing but the dialogs, over a see-through page. The page that frames
 // this one says which dialog to open, and hears back when it is closed so it can put the frame away. Both sides
@@ -48,7 +47,6 @@ export const Panel = () => {
 
   return (
     <>
-      <SettingsDialog open={open === "settings"} onClose={closeOf("settings")} />
       {/* There is no review here to name an agent, so Help speaks of "your agent". */}
       <HelpPanel open={open === "help"} onClose={closeOf("help")} agent={describeAgent(null)} />
       <PurgeDialog open={open === "purge"} onClose={closeOf("purge")} />

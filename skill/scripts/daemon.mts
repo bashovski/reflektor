@@ -57,7 +57,8 @@ type Drift = { files: string[]; fileCount: number; commits: number; branch: stri
 // A live question as the daemon keeps it. deliveredAt is left out wherever questions leave the daemon.
 type QuestionRecord = LiveQuestion & { deliveredAt?: string | null };
 // One round sent to Reflektor. A review keeps them, so the same snapshot is never sent twice.
-type Upload = { round: number; snapshot: string; organization: string; url: string; created: boolean; at: string };
+// `pr` is the pull request the upload carried: a round sent before its pull request was known goes again once it is.
+type Upload = { round: number; snapshot: string; organization: string; url: string; created: boolean; at: string; pr?: number | null };
 // The last publish to Reflektor that did not work, for the page's menu. `reason` is reflektor.mjs's code for it.
 type PublishError = { reason: string; message: string; round: number; at: string };
 // What a publish answers to review.mjs and to the page. `message` is for the reader in either.
@@ -564,12 +565,14 @@ const prChip = (pr: LivePr | null) => {
   return `<span class="pr" data-state="${escapeHtml(pr.state)}" style="--c:${color}" title="Pull request #${Number(pr.number)}, ${label}${pr.title ? `: ${escapeHtml(pr.title)}` : ""}">${icon(name)}#${Number(pr.number)}</span>`;
 };
 
-// The review icon from viewer/src/lib/favicon.ts in gray, with a red dot while a review waits on you.
+// The Reflektor mark on black, as in viewer/src/lib/favicon.ts, with a red dot while a review waits on you.
 const inboxIcon = (dot: boolean) =>
   `data:image/svg+xml,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#52525b"/>` +
-      `<path transform="translate(8 8) scale(2)" d="M20 14.5a2 2 0 0 1-2 2H8l-4 3.5V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" fill="none" stroke="white" stroke-width="2.6" stroke-linejoin="round"/>` +
-      (dot ? `<circle cx="50" cy="14" r="15" fill="white"/><circle cx="50" cy="14" r="11" fill="#ef4444"/>` : "") +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">` +
+      `<defs><linearGradient id="g" x1="19.6879" y1="27.1008" x2="49.2671" y2="47.3976" gradientUnits="userSpaceOnUse"><stop offset="0.110577" stop-color="#9F81E4"/><stop offset="0.302769" stop-color="#7D7AE2"/><stop offset="0.539773" stop-color="#8D92E4"/><stop offset="0.782594" stop-color="#C2E1CC"/></linearGradient></defs>` +
+      `<rect width="64" height="64" rx="12" fill="#09090b"/>` +
+      `<g transform="translate(14.6 12) scale(0.7407)"><path d="M24.7525 4.95049V9.90099H19.802V4.95049H24.7525V0H34.6535V4.95049H39.604V14.8515H29.703V4.95049H24.7525ZM24.7525 44.5545V49.5049H0V44.5545H4.9505V9.90099H0V4.95049H14.8515V9.90099H19.802V14.8515H14.8515V44.5545H24.7525Z" fill="#fafafa"/><path d="M46.0493 21.9025C40.1087 37.0018 46.3251 53.8367 39.4899 53.8367C32.6548 53.8367 19.3167 46.3122 19.3167 39.477C19.3167 32.6416 21.0211 31.3119 27.8563 31.3119C34.6914 31.3119 41.5939 17.4505 46.0493 21.9025Z" fill="url(#g)"/></g>` +
+      (dot ? `<circle cx="52" cy="12" r="12" fill="#09090b"/><circle cx="52" cy="12" r="9" fill="#ef4444"/>` : "") +
       `</svg>`,
   )}`;
 
@@ -608,6 +611,17 @@ const choices = (name: string, legend: string, options: [string, string][]) =>
 
 // The inbox. `welcome` is set when the setup page hands over to it, so a first-timer is told they are
 // done and how to start; without it, an empty inbox just says how to start.
+// Reflektor's pages next to the logo, as in the platform's top bar and the viewer's PlatformNav. Each opens in a new tab.
+const GITHUB_MARK = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>`;
+function platformLinks() {
+  const app = (reflektorStatus().appUrl ?? "https://reflektor.dev").replace(/\/+$/, "");
+  const pages = [["/docs", "Docs"], ["/examples", "Examples"], ["/pricing", "Pricing"]];
+  return (
+    pages.map(([path, label]) => `<a href="${escapeHtml(app + path)}" target="_blank" rel="noreferrer">${label}</a>`).join("") +
+    `<a href="https://github.com/bashovski/pr-report" target="_blank" rel="noreferrer">${GITHUB_MARK}GitHub</a>`
+  );
+}
+
 function inboxPage(welcome = false) {
   const all = [...reviews.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const active = all.filter((r) => !r.archived);
@@ -657,7 +671,7 @@ function inboxPage(welcome = false) {
   // review page saved is applied in the head, before the first paint; the page's script runs at the end of the body.
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 ${inlineScript(appScript("inbox-theme.js"))}
-<title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}Reflektor</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}">${FUSE_FILE ? '<link rel="modulepreload" href="/fuse.mjs">' : ""}<style>
+<title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}All reviews · Reflektor</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}">${FUSE_FILE ? '<link rel="modulepreload" href="/fuse.mjs">' : ""}<style>
 ${FONT_CSS}
 :root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--faint:#83838c;--lead:#52525b;--accent:#18181b;--hover:color-mix(in srgb,var(--text) 5%,transparent);--hover-2:color-mix(in oklab,oklch(55.2% .016 285.938) 10%,transparent);color-scheme:light}
 :root[data-theme=dark]{--bg:#09090b;--surface:#141417;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;--faint:#71717a;--lead:#a1a1aa;--accent:#fff;color-scheme:dark}
@@ -667,13 +681,13 @@ main{padding-top:32px;padding-bottom:48px}h1{margin:0 0 8px;font-size:26px;font-
 .nav{position:sticky;top:0;z-index:30;border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--bg) 85%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}.nav .wrap{display:flex;align-items:center;gap:12px;height:56px}
 .brand{display:inline-flex;flex:none;padding:4px;border-radius:2px}.brand:hover{background:var(--hover-2)}.logo{display:inline-flex;height:24px;color:var(--accent)}.logo svg{display:block;height:100%;width:auto}
 .grow{flex:1}
+.sep{flex:none;width:1px;height:20px;background:var(--border)}.links{display:flex;align-items:center;gap:2px;min-width:0}.links a{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:2px;color:var(--muted);font-size:14px;font-weight:500;text-decoration:none}.links a:hover{color:var(--text);background:var(--hover-2)}.links svg{width:15px;height:15px;fill:currentColor}@media (max-width:559px){.sep,.links{display:none}}
 .me{margin-left:4px}.who{display:flex;align-items:center;padding:0;border:0;border-radius:50%;background:none;cursor:pointer}.who[aria-expanded=true]{box-shadow:0 0 0 2px color-mix(in oklab,oklch(70.5% .015 286.067) 40%,transparent)}
 .face{display:inline-grid;place-items:center;flex:none;width:28px;height:28px;border-radius:50%;object-fit:cover;background:color-mix(in oklab,oklch(55.2% .016 285.938) 20%,transparent);color:#fff;font:600 11px/1 "Geist Variable",ui-sans-serif,system-ui,sans-serif}.face.big{width:36px;height:36px;font-size:14px}
 .me .menu{box-sizing:border-box;width:288px;font-size:14px}.id{display:flex;align-items:center;gap:12px;padding:8px 10px}.id div{min-width:0}.id b,.id span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.id b{font-weight:500}.id span{color:var(--muted);font-size:12px}
 .me hr{height:1px;margin:4px 0;border:0;background:var(--border)}
 .mi{display:flex;align-items:center;gap:12px;box-sizing:border-box;width:100%;padding:8px 10px;border:0;border-radius:2px;background:none;color:inherit;font:inherit;text-align:left;text-decoration:none;cursor:pointer}.mi[hidden]{display:none}.mi:hover,.mi:focus-visible{background:var(--hover-2)}.mi>svg{width:16px;height:16px;color:var(--muted)}.mi>span:not(.ext){flex:1}.ext{display:inline-flex;color:var(--faint);opacity:0}.mi:hover .ext,.mi:focus-visible .ext{opacity:1}
 .mi kbd{padding:0 6px;border:1px solid var(--border);border-radius:2px;background:var(--hover-2);color:var(--muted);font:12px/1.5 "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace}
-.star{display:none;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--border);border-radius:2px;color:inherit;font-size:12px;font-weight:500;line-height:16px;text-decoration:none;white-space:nowrap}.star:hover{background:var(--hover-2)}.star svg{color:var(--muted)}@media (min-width:768px){.star{display:inline-flex}}
 iframe.panel{position:fixed;inset:0;z-index:100;width:100%;height:100%;border:0;background:transparent}iframe.panel[hidden]{display:none}
 .status{display:flex;align-items:center;gap:8px;padding:8px 10px;color:var(--muted);font-size:12px}.status i{flex:none;width:8px;height:8px;border-radius:50%;background:oklch(69.6% .17 162.48)}.status.down i{background:oklch(63.7% .237 25.331)}
 svg{width:14px;height:14px;flex:none}
@@ -717,11 +731,11 @@ code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospa
 .hint .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding-top:8px;padding-bottom:8px;line-height:20px}.hint .wrap>svg{width:16px;height:16px;color:oklch(54.1% .281 293.009)}:root[data-theme=dark] .hint .wrap>svg{color:oklch(70.2% .183 293.541)}
 .hint a{color:oklch(49.1% .27 292.581);font-weight:500;text-decoration:none;text-underline-offset:2px}.hint a:hover{text-decoration:underline}:root[data-theme=dark] .hint a{color:oklch(81.1% .111 293.571)}
 .hint button{display:inline-flex;margin-left:auto;padding:4px;border:0;border-radius:2px;background:none;color:var(--muted);cursor:pointer}.hint button:hover{background:var(--hover-2)}.hint button svg{width:16px;height:16px}</style></head><body>
-<header class="nav"><div class="wrap">${LOGO && `<a class="brand" href="/" title="All reviews" aria-label="All reviews"><span class="logo" aria-hidden="true">${LOGO}</span></a>`}<span class="grow"></span><a class="star" href="https://github.com/bashovski/pr-report" target="_blank" rel="noreferrer">${icon("star")}<span>Star us on GitHub</span></a>
+<header class="nav"><div class="wrap">${LOGO && `<a class="brand" href="/" title="All reviews" aria-label="All reviews"><span class="logo" aria-hidden="true">${LOGO}</span></a>`}<span class="sep" aria-hidden="true"></span><nav class="links" aria-label="Reflektor">${platformLinks()}</nav><span class="grow"></span>
 <div class="dd me"><button type="button" class="who" aria-haspopup="true" aria-expanded="false" title="Your account and the daemon" aria-label="Your account and the daemon"><span class="face" id="me-face"></span></button><div class="menu" hidden>
 <div class="id"><span class="face big" id="me-face-big"></span><div><b id="me-name">Looking you up…</b><span id="me-sub"></span></div></div><hr>
 <a class="mi" id="me-profile" target="_blank" rel="noreferrer" hidden>${icon("user")}<span>Open profile</span>${external}</a>
-<button type="button" class="mi" data-panel="settings">${icon("settings")}<span>Settings</span><kbd>?</kbd></button>
+<button type="button" class="mi" data-settings>${icon("settings")}<span>Settings</span><kbd>?</kbd></button>
 <button type="button" class="mi" data-panel="help">${icon("help")}<span>Help</span></button>
 <a class="mi" id="me-bug" target="_blank" rel="noreferrer" href="https://github.com/bashovski/pr-report/issues/new">${icon("bug")}<span>Report a bug</span>${external}</a><hr>
 <button type="button" class="mi" data-panel="purge">${icon("trash")}<span>Purge daemon cache</span></button><hr>
@@ -790,8 +804,15 @@ function emptyState(welcome: boolean, archivedCount: number) {
 // tools on this machine. The installer opens it after an install.
 function setupPage() {
   return readFileSync(join(APP_DIR!, "index.html"), "utf8")
-    .replace("<title>PR report</title>", () => "<title>Set up Reflektor</title>")
+    .replace("<title>PR report</title>", () => "<title>Setup · Reflektor</title>")
     .replace("</head>", () => `<script>window.__PR_SETUP__=${JSON.stringify({ token: pageToken })}</script></head>`);
+}
+
+// Settings as a page of its own, opened from the inbox. A report shows the same page in place of the review.
+function settingsPage() {
+  return readFileSync(join(APP_DIR!, "index.html"), "utf8")
+    .replace("<title>PR report</title>", () => "<title>Settings · Reflektor</title>")
+    .replace("</head>", () => `<script>window.__PR_SETTINGS__=${JSON.stringify({ token: pageToken })}</script></head>`);
 }
 
 // The report's own dialogs (Settings, Help, the cache purge) for the inbox, which is not built with the viewer and
@@ -807,7 +828,7 @@ function reviewPage(r: ReviewRecord, round: number) {
   if (!entry || !existsSync(roundFile(entry))) return null;
   const config = { live: true, id: r.id, round: entry.round, token: pageToken, api: `/api/r/${encodeURIComponent(r.id)}`, agent: r.agent ?? null };
   // The page's base title (see viewer/src/lib/tab.ts), so the tab is right before the report loads.
-  const title = `${r.branch} · ${r.repo.split("/").at(-1)}${entry.round > 1 ? ` · round ${entry.round}` : ""}`;
+  const title = `${r.title || r.branch}${entry.round > 1 ? ` · Round ${entry.round}` : ""} · Reflektor`;
   return readFileSync(join(APP_DIR!, "index.html"), "utf8")
     .replace("<title>PR report</title>", () => `<title>${escapeHtml(title)}</title>`)
     .replace("</head>", () => `<script>window.__PR_REVIEW__=${JSON.stringify(config)}</script></head>`);
@@ -1116,16 +1137,23 @@ async function publishNow(r: ReviewRecord, { organization = null, auto = false }
   } catch {
     return answer(false, "no_data", `The report data of round ${entry.round} could not be read.`, { round: entry.round });
   }
+  // A round built before its pull request was opened carries none. The daemon knows it by now, so Reflektor can link
+  // the report to it, comment on it and check the round against it.
+  if (!bundle.diff.branch.pr && r.pr && r.pr.state === "OPEN") {
+    bundle.diff.branch.pr = { number: r.pr.number, url: r.pr.url, title: r.pr.title ?? bundle.report.title, state: r.pr.state };
+  }
   const snapshot = bundle.diff.branch.snapshot;
+  const pr = bundle.diff.branch.pr?.number ?? null;
   const sent = r.uploads.find((u) => u.snapshot === snapshot && (!organization || u.organization.toLowerCase() === organization.toLowerCase()));
-  if (sent) return answer(true, null, `Round ${entry.round} is on Reflektor already: ${sent.url}`, { round: entry.round, url: sent.url, organization: sent.organization, already: true });
+  if (sent && (sent.pr || !pr)) return answer(true, null, `Round ${entry.round} is on Reflektor already: ${sent.url}`, { round: entry.round, url: sent.url, organization: sent.organization, already: true });
 
   r.publishing = true;
   broadcast(r);
   const outcome = await publishBundle(login, bundle, { organization });
   r.publishing = false;
   if (outcome.ok) {
-    r.uploads = [...r.uploads, { round: entry.round, snapshot, organization: outcome.organization, url: outcome.report.url, created: outcome.created, at: now() }].slice(-50);
+    const upload = { round: entry.round, snapshot, organization: outcome.organization, url: outcome.report.url, created: outcome.created, at: now(), pr };
+    r.uploads = [...r.uploads.filter((u) => !(u.snapshot === snapshot && u.organization === outcome.organization)), upload].slice(-50);
     r.publishError = null;
     r.publishRetryAt = 0;
     // An organization asked for by name is the one for this repository from now on.
@@ -1155,7 +1183,8 @@ function autoPublish(r: ReviewRecord) {
   if (!login || !entry) return;
   // Once per build of a round and per login. A try that did not work goes again when its retry time has come; a new
   // build or a new login goes at once.
-  const tried = `${entry.round}|${entry.builtAt ?? entry.publishedAt}|${login.savedAt}`;
+  // The pull request is part of it: a round that went up before its pull request was known goes again to link it.
+  const tried = `${entry.round}|${entry.builtAt ?? entry.publishedAt}|${login.savedAt}|${r.pr.number}`;
   if (r.publishTried === tried && (!r.publishRetryAt || Date.now() < r.publishRetryAt)) return;
   r.publishTried = tried;
   r.publishRetryAt = 0;
@@ -1285,9 +1314,10 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=3600", "x-content-type-options": "nosniff" });
     return res.end(readFileSync(FUSE_FILE));
   }
-  if (["r", "app", "setup", "panel"].includes(parts[0]) && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
+  if (["r", "app", "setup", "settings", "panel"].includes(parts[0]) && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
   if (req.method === "GET" && parts[0] === "app" && parts[1] === "assets") return sendAsset(res, parts.slice(1));
   if (req.method === "GET" && url.pathname === "/setup") return send(res, 200, setupPage(), "text/html; charset=utf-8");
+  if (req.method === "GET" && url.pathname === "/settings") return send(res, 200, settingsPage(), "text/html; charset=utf-8");
   if (req.method === "GET" && url.pathname === "/panel") return send(res, 200, panelPage(), "text/html; charset=utf-8", { framedByOwnPages: true });
   if (req.method === "GET" && parts[0] === "r" && parts[1]) {
     const r = reviews.get(parts[1]);

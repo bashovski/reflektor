@@ -400,11 +400,15 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
     toggle(b.closest(".dd")!, false);
     openPanel(b.dataset.panel!);
   });
+  document.addEventListener("click", (e) => {
+    if (!(e.target as Element).closest("[data-settings]")) return;
+    location.href = "/settings";
+  });
   // "?" opens Settings, as in a report.
   document.addEventListener("keydown", (e) => {
     if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey || (e.target as Element).closest("input,textarea")) return;
     e.preventDefault();
-    openPanel("settings");
+    location.href = "/settings";
   });
   // How long the daemon has run, worded as in the report's menu: its two largest units, never rounded up.
   const upFor = (since: string) => {
