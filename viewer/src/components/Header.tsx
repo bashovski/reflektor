@@ -2,36 +2,14 @@ import { CircleX, Clock, FileCode2, FlaskConical, GitBranch, GitCommitHorizontal
 import { reviewMinutes } from "../../../skill/scripts/reading.mjs";
 import { useAgent } from "../lib/agent";
 import { useChecks } from "../lib/checks";
-import { BASE_SOURCE, PROJECT, REVIEW, TARGETS } from "../lib/meta";
+import { BASE_SOURCE, REVIEW, TARGETS } from "../lib/meta";
 import { usePr } from "../lib/pr";
-import { PLATFORM_PAGES, useAppUrl } from "../lib/reflektor";
 import { useReport } from "../lib/state";
 import { OwnerMenu } from "./OwnerMenu";
 import { PrDescription } from "./PrDescription";
 import { PrStatePill } from "./PullRequest";
 import { UserMenu } from "./UserMenu";
-import { cx, Dot, GitHubMark, LocCount, Logo, ProgressRing, TagPill } from "./ui";
-
-const navLink = "inline-flex items-center gap-1.5 rounded-control px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-500/10 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100";
-
-// Reflektor's pages, as in the platform's top bar. Each opens in a new tab, so the review stays where it is.
-const PlatformLinks = () => {
-  const app = useAppUrl();
-  return (
-    <nav aria-label="Reflektor" className="ml-auto hidden items-center gap-0.5 xl:flex">
-      {PLATFORM_PAGES.map((page) => (
-        <a key={page.path} href={`${app}${page.path}`} target="_blank" rel="noreferrer" className={navLink}>
-          {page.label}
-        </a>
-      ))}
-      <a href={PROJECT.repo} target="_blank" rel="noreferrer" className={navLink}>
-        <GitHubMark className="size-3.5" />
-        GitHub
-      </a>
-      <span aria-hidden className="mx-1.5 h-5 w-px shrink-0 bg-[var(--border)]" />
-    </nav>
-  );
-};
+import { cx, Dot, LocCount, Logo, ProgressRing, TagPill } from "./ui";
 
 export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp: () => void }) => {
   const { bundle, viewedCount } = useReport();
@@ -60,9 +38,8 @@ export const TopBar = ({ onSettings, onHelp }: { onSettings: () => void; onHelp:
           <span className="text-faint">→</span>
           {branch.base}
         </span>
-        <PlatformLinks />
         {/* How far the review is, visible wherever the reader has scrolled. */}
-        <span className="num ml-auto inline-flex xl:ml-0 items-center gap-1.5 text-xs text-muted" title={`${viewedCount} of ${total} files viewed`}>
+        <span className="num ml-auto inline-flex items-center gap-1.5 text-xs text-muted" title={`${viewedCount} of ${total} files viewed`}>
           <ProgressRing value={total ? viewedCount / total : 0} className="size-4" />
           {viewedCount}/{total}
         </span>

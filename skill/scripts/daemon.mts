@@ -610,6 +610,17 @@ const choices = (name: string, legend: string, options: [string, string][]) =>
 
 // The inbox. `welcome` is set when the setup page hands over to it, so a first-timer is told they are
 // done and how to start; without it, an empty inbox just says how to start.
+// Reflektor's pages next to the logo, as in the platform's top bar and the viewer's PlatformNav. Each opens in a new tab.
+const GITHUB_MARK = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>`;
+function platformLinks() {
+  const app = (reflektorStatus().appUrl ?? "https://reflektor.dev").replace(/\/+$/, "");
+  const pages = [["/docs", "Docs"], ["/examples", "Examples"], ["/pricing", "Pricing"]];
+  return (
+    pages.map(([path, label]) => `<a href="${escapeHtml(app + path)}" target="_blank" rel="noreferrer">${label}</a>`).join("") +
+    `<a href="https://github.com/bashovski/pr-report" target="_blank" rel="noreferrer">${GITHUB_MARK}GitHub</a>`
+  );
+}
+
 function inboxPage(welcome = false) {
   const all = [...reviews.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const active = all.filter((r) => !r.archived);
@@ -669,13 +680,13 @@ main{padding-top:32px;padding-bottom:48px}h1{margin:0 0 8px;font-size:26px;font-
 .nav{position:sticky;top:0;z-index:30;border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--bg) 85%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}.nav .wrap{display:flex;align-items:center;gap:12px;height:56px}
 .brand{display:inline-flex;flex:none;padding:4px;border-radius:2px}.brand:hover{background:var(--hover-2)}.logo{display:inline-flex;height:24px;color:var(--accent)}.logo svg{display:block;height:100%;width:auto}
 .grow{flex:1}
+.sep{flex:none;width:1px;height:20px;background:var(--border)}.links{display:flex;align-items:center;gap:2px;min-width:0}.links a{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:2px;color:var(--muted);font-size:14px;font-weight:500;text-decoration:none}.links a:hover{color:var(--text);background:var(--hover-2)}.links svg{width:15px;height:15px;fill:currentColor}@media (max-width:559px){.sep,.links{display:none}}
 .me{margin-left:4px}.who{display:flex;align-items:center;padding:0;border:0;border-radius:50%;background:none;cursor:pointer}.who[aria-expanded=true]{box-shadow:0 0 0 2px color-mix(in oklab,oklch(70.5% .015 286.067) 40%,transparent)}
 .face{display:inline-grid;place-items:center;flex:none;width:28px;height:28px;border-radius:50%;object-fit:cover;background:color-mix(in oklab,oklch(55.2% .016 285.938) 20%,transparent);color:#fff;font:600 11px/1 "Geist Variable",ui-sans-serif,system-ui,sans-serif}.face.big{width:36px;height:36px;font-size:14px}
 .me .menu{box-sizing:border-box;width:288px;font-size:14px}.id{display:flex;align-items:center;gap:12px;padding:8px 10px}.id div{min-width:0}.id b,.id span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.id b{font-weight:500}.id span{color:var(--muted);font-size:12px}
 .me hr{height:1px;margin:4px 0;border:0;background:var(--border)}
 .mi{display:flex;align-items:center;gap:12px;box-sizing:border-box;width:100%;padding:8px 10px;border:0;border-radius:2px;background:none;color:inherit;font:inherit;text-align:left;text-decoration:none;cursor:pointer}.mi[hidden]{display:none}.mi:hover,.mi:focus-visible{background:var(--hover-2)}.mi>svg{width:16px;height:16px;color:var(--muted)}.mi>span:not(.ext){flex:1}.ext{display:inline-flex;color:var(--faint);opacity:0}.mi:hover .ext,.mi:focus-visible .ext{opacity:1}
 .mi kbd{padding:0 6px;border:1px solid var(--border);border-radius:2px;background:var(--hover-2);color:var(--muted);font:12px/1.5 "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace}
-.star{display:none;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--border);border-radius:2px;color:inherit;font-size:12px;font-weight:500;line-height:16px;text-decoration:none;white-space:nowrap}.star:hover{background:var(--hover-2)}.star svg{color:var(--muted)}@media (min-width:768px){.star{display:inline-flex}}
 iframe.panel{position:fixed;inset:0;z-index:100;width:100%;height:100%;border:0;background:transparent}iframe.panel[hidden]{display:none}
 .status{display:flex;align-items:center;gap:8px;padding:8px 10px;color:var(--muted);font-size:12px}.status i{flex:none;width:8px;height:8px;border-radius:50%;background:oklch(69.6% .17 162.48)}.status.down i{background:oklch(63.7% .237 25.331)}
 svg{width:14px;height:14px;flex:none}
@@ -719,7 +730,7 @@ code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospa
 .hint .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding-top:8px;padding-bottom:8px;line-height:20px}.hint .wrap>svg{width:16px;height:16px;color:oklch(54.1% .281 293.009)}:root[data-theme=dark] .hint .wrap>svg{color:oklch(70.2% .183 293.541)}
 .hint a{color:oklch(49.1% .27 292.581);font-weight:500;text-decoration:none;text-underline-offset:2px}.hint a:hover{text-decoration:underline}:root[data-theme=dark] .hint a{color:oklch(81.1% .111 293.571)}
 .hint button{display:inline-flex;margin-left:auto;padding:4px;border:0;border-radius:2px;background:none;color:var(--muted);cursor:pointer}.hint button:hover{background:var(--hover-2)}.hint button svg{width:16px;height:16px}</style></head><body>
-<header class="nav"><div class="wrap">${LOGO && `<a class="brand" href="/" title="All reviews" aria-label="All reviews"><span class="logo" aria-hidden="true">${LOGO}</span></a>`}<span class="grow"></span><a class="star" href="https://github.com/bashovski/pr-report" target="_blank" rel="noreferrer">${icon("star")}<span>Star us on GitHub</span></a>
+<header class="nav"><div class="wrap">${LOGO && `<a class="brand" href="/" title="All reviews" aria-label="All reviews"><span class="logo" aria-hidden="true">${LOGO}</span></a>`}<span class="sep" aria-hidden="true"></span><nav class="links" aria-label="Reflektor">${platformLinks()}</nav><span class="grow"></span>
 <div class="dd me"><button type="button" class="who" aria-haspopup="true" aria-expanded="false" title="Your account and the daemon" aria-label="Your account and the daemon"><span class="face" id="me-face"></span></button><div class="menu" hidden>
 <div class="id"><span class="face big" id="me-face-big"></span><div><b id="me-name">Looking you up…</b><span id="me-sub"></span></div></div><hr>
 <a class="mi" id="me-profile" target="_blank" rel="noreferrer" hidden>${icon("user")}<span>Open profile</span>${external}</a>

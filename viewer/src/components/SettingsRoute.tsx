@@ -1,5 +1,6 @@
 import { Inbox } from "lucide-react";
 import { settingsReturn } from "../lib/settings-page";
+import { PlatformNav } from "./PlatformNav";
 import { SettingsPage } from "./Settings";
 import { Logo } from "./ui";
 
@@ -15,8 +16,7 @@ export const SettingsRoute = () => {
             <a href="/" title="All reviews" aria-label="All reviews" className="inline-flex shrink-0 rounded-control p-1 hover:bg-zinc-500/10">
               <Logo className="h-6" />
             </a>
-            <span aria-hidden className="h-5 w-px shrink-0 bg-[var(--border)]" />
-            <span className="text-sm font-medium">Settings</span>
+            <PlatformNav />
             <a href="/" className="ml-auto inline-flex items-center gap-1.5 rounded-control px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
               <Inbox className="size-3.5" /> All reviews
             </a>
