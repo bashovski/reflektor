@@ -1,12 +1,17 @@
-import { Camera, ChevronLeft, ChevronRight, ImageOff, Loader2, X } from "lucide-react";
+import { Camera, ChevronDown, ChevronLeft, ChevronRight, ImageOff, Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScreenshotsRun, Shot, ShotSet, ShotShape } from "../../../skill/schema/types";
+import { PREF_KEYS, storage } from "../lib/prefs";
 import { shotSrc, useScreenshots } from "../lib/screenshots";
 import { Card, cx, RefLink, SectionTitle } from "./ui";
 
 // Pictures of the changed UI, taken by screenshots.mts from the agent's plan while the report was written. A set is
 // the screens of a flow in order, the states of one page, or a single change. A click opens a shot full size, and the
 // arrows step through every shot in the report.
+//
+// Folded by default to one strip of small pictures, so the section takes little room above the code; the viewer still
+// shows each caption and its code links. Unfolded, each set gets a card with its summary, captions and links. The
+// reader's choice is kept in this browser.
 
 const SHAPES: Record<ShotShape, string> = { flow: "Flow", states: "States", single: "Single change" };
 
@@ -142,6 +147,50 @@ const Lightbox = ({ entries, at, onMove, onClose }: { entries: Entry[]; at: numb
   );
 };
 
+// The folded view: every set's pictures in one row that scrolls sideways, the set's title above its own.
+const Strip = ({ run, entries, busy, onOpen }: { run: ScreenshotsRun; entries: Entry[]; busy: boolean; onOpen: (index: number, el: HTMLElement) => void }) => (
+  <Card className="px-3 py-3 sm:px-4">
+    <ol className="flex gap-5 overflow-x-auto pb-1">
+      {run.sets.map((set) => (
+        <li key={set.id} className="shrink-0">
+          <span className="mb-1.5 block truncate text-xs text-muted" title={set.title}>
+            {set.title}
+          </span>
+          <ol className="flex gap-2">
+            {set.shots.map((shot, n) => {
+              const index = entries.findIndex((e) => e.shot === shot);
+              const label = `${set.shape === "flow" ? `Step ${n + 1}: ` : ""}${shot.caption}`;
+              return (
+                <li key={shot.id} className="w-36 shrink-0">
+                  {index >= 0 ? (
+                    <button
+                      type="button"
+                      title={label}
+                      aria-label={`Open screenshot: ${label}`}
+                      onClick={(e) => onOpen(index, e.currentTarget)}
+                      className="group block w-full overflow-hidden border border-[var(--border)] bg-[var(--surface-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    >
+                      <img src={entries[index].src} alt={shot.caption} loading="lazy" className="aspect-[16/10] w-full object-cover object-top transition-opacity group-hover:opacity-90" />
+                    </button>
+                  ) : (
+                    <span title={shot.error ?? label} className="flex aspect-[16/10] w-full items-center justify-center border border-[var(--border)] bg-[var(--surface-2)]">
+                      {busy && shot.status === "pending" ? (
+                        <Loader2 className="size-4 animate-spin text-agent-500" />
+                      ) : (
+                        <ImageOff className={cx("size-4", shot.status === "failed" ? "text-danger-500" : "text-faint")} />
+                      )}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </li>
+      ))}
+    </ol>
+  </Card>
+);
+
 const summaryOf = (run: ScreenshotsRun) => {
   const shots = run.sets.flatMap((s) => s.shots);
   const taken = shots.filter((s) => s.status === "taken").length;
@@ -155,7 +204,16 @@ const summaryOf = (run: ScreenshotsRun) => {
 export const Screenshots = () => {
   const run = useScreenshots();
   const [at, setAt] = useState<number | null>(null);
+  const [open, setOpenState] = useState(() => storage.get<boolean>(PREF_KEYS.screenshotsOpen, false));
   const opener = useRef<HTMLElement | null>(null);
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    storage.set(PREF_KEYS.screenshotsOpen, next);
+  };
+  const openAt = (index: number, el: HTMLElement) => {
+    opener.current = el;
+    setAt(index);
+  };
 
   const entries = useMemo<Entry[]>(() => {
     if (!run) return [];
@@ -177,7 +235,25 @@ export const Screenshots = () => {
 
   return (
     <div id="screenshots">
-      <SectionTitle right={<span className="text-xs text-muted">{summaryOf(run)}</span>}>
+      <SectionTitle
+        right={
+          <span className="inline-flex items-center gap-3">
+            <span className="text-xs text-muted">{summaryOf(run)}</span>
+            {run.sets.length > 0 && (
+              <button
+                type="button"
+                aria-expanded={open}
+                aria-controls="screenshots-body"
+                onClick={() => setOpen(!open)}
+                className="inline-flex items-center gap-1 rounded-control px-1.5 py-0.5 text-xs text-zinc-600 hover:bg-zinc-500/10 active:scale-[0.97] dark:text-zinc-400"
+              >
+                {open ? "Collapse" : "Expand"}
+                <ChevronDown className={cx("size-3.5 transition-transform", open && "rotate-180")} />
+              </button>
+            )}
+          </span>
+        }
+      >
         <span className="inline-flex items-center gap-2">
           <Camera className="size-4" /> Screenshots
         </span>
@@ -193,36 +269,38 @@ export const Screenshots = () => {
         <p className="mb-3 text-xs text-warn-600 dark:text-warn-400">The run ended before its last screenshot, so some were not taken.</p>
       )}
 
-      <div className="space-y-3">
-        {run.sets.map((set) => (
-          <Card key={set.id} id={`shots-${set.id}`} className="px-4 py-4 sm:px-5">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h3 className="font-semibold">{set.title}</h3>
-              <span className="label-caps text-[11px] text-muted">{SHAPES[set.shape]}</span>
-              <span className="label-caps text-[11px] text-faint">{set.auth === "signed-in" ? "Signed in" : "Signed out"}</span>
-            </div>
-            {set.summary && <p className="mt-0.5 text-sm text-muted">{set.summary}</p>}
-            <ol className="mt-4 grid gap-x-4 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">
-              {set.shots.map((shot, n) => {
-                const index = entries.findIndex((e) => e.shot === shot);
-                return (
-                  <ShotCard
-                    key={shot.id}
-                    set={set}
-                    shot={shot}
-                    number={n + 1}
-                    src={index >= 0 ? entries[index].src : null}
-                    running={busy && shot.status === "pending"}
-                    onOpen={(el) => {
-                      opener.current = el;
-                      setAt(index);
-                    }}
-                  />
-                );
-              })}
-            </ol>
-          </Card>
-        ))}
+      <div id="screenshots-body">
+        {!open && run.sets.length > 0 && <Strip run={run} entries={entries} busy={busy} onOpen={openAt} />}
+        {open && (
+          <div className="space-y-3">
+            {run.sets.map((set) => (
+              <Card key={set.id} id={`shots-${set.id}`} className="px-4 py-4 sm:px-5">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h3 className="font-semibold">{set.title}</h3>
+                  <span className="label-caps text-[11px] text-muted">{SHAPES[set.shape]}</span>
+                  <span className="label-caps text-[11px] text-faint">{set.auth === "signed-in" ? "Signed in" : "Signed out"}</span>
+                </div>
+                {set.summary && <p className="mt-0.5 text-sm text-muted">{set.summary}</p>}
+                <ol className="mt-4 grid gap-x-4 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">
+                  {set.shots.map((shot, n) => {
+                    const index = entries.findIndex((e) => e.shot === shot);
+                    return (
+                      <ShotCard
+                        key={shot.id}
+                        set={set}
+                        shot={shot}
+                        number={n + 1}
+                        src={index >= 0 ? entries[index].src : null}
+                        running={busy && shot.status === "pending"}
+                        onOpen={(el) => openAt(index, el)}
+                      />
+                    );
+                  })}
+                </ol>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
       <Lightbox entries={entries} at={at !== null && at < entries.length ? at : null} onMove={setAt} onClose={close} />
     </div>
