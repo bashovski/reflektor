@@ -163,6 +163,10 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
     return `${selectors} { box-shadow: inset -3px 0 0 color-mix(in srgb, var(--color-danger-500) 85%, transparent); }`;
   }, [coverage]);
 
+  // The page owns the selection (selectedLines below), so during a drag on the gutter's + the diff only reports the
+  // range and draws nothing itself. Keeping the range here colors the rows while the drag is still going.
+  const [dragging, setDragging] = useState<SelectedLineRange | null>(null);
+
   const options = useMemo<FileDiffOptions<AnnotationMeta, undefined>>(
     () => ({
       theme: renderTheme,
@@ -176,17 +180,24 @@ export const FileCard = ({ sectionFile }: { sectionFile: SectionFile }) => {
       unsafeCSS: uncoveredCss,
       enableGutterUtility: editable,
       onGutterUtilityClick: (range: SelectedLineRange) => onGutter.current(range),
+      onLineSelectionStart: setDragging,
+      onLineSelectionChange: setDragging,
+      onLineSelectionEnd: () => setDragging(null),
     }),
     [renderTheme, resolvedTheme, diffStyle, uncoveredCss, editable],
   );
 
   const focused = focus?.path === path && focus.line ? focus : null;
+  // The lines a new comment is about stay colored while its box is open.
+  const composing = composer?.target.type === "line" && composer.target.path === path && !composer.editingId && inView(composer.target) ? composer.target : null;
   const selectedLines = useMemo<SelectedLineRange | null>(() => {
+    if (dragging) return dragging;
+    if (composing) return { start: composing.start, end: composing.end, side: composing.side === "old" ? "deletions" : "additions" };
     if (selected) return selected;
     if (!focused?.line) return null;
     const side = focused.side === "old" ? "deletions" : "additions";
     return { start: focused.line, end: focused.line, side };
-  }, [focused, selected]);
+  }, [dragging, composing?.start, composing?.end, composing?.side, focused, selected]);
 
   const renderAnnotation = useCallback((a: DiffLineAnnotation<AnnotationMeta>) => {
     const m = a.metadata;
