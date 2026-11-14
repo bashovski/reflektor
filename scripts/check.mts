@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import type { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
+import { createHash } from "node:crypto";
 import type { AgentInfo, Bundle, ChecksRun, DiffData, DiffFile, HookName, InboxData, LiveQuestion, PrState, Report, RepoConfig } from "../skill/schema/types.js";
 import { githubPr, startGithubStub } from "./github-stub.mjs";
 import { STUB_TOKEN, STUB_USER, type StubAnswer, startReflektorStub } from "./reflektor-stub.mjs";
@@ -1183,6 +1184,30 @@ async function reflektorFlow() {
       fail("the upload sent paths on this machine");
     const twice = await publish(bundle);
     if (!twice.ok || twice.created) fail("an upload of a snapshot the platform had already did not say so");
+
+    // Screenshots: the bundle goes without local paths or pictures inside it, then the pictures the report lacks go one
+    // by one, and none again once it has them. With "upload": false in the repo config, the report goes without them.
+    const shotsDir = join(tmp, "reflektor-shots");
+    mkdirSync(join(shotsDir, "shots"), { recursive: true });
+    const picture = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("pixels")]);
+    const pictureName = `${createHash("sha1").update(picture).digest("hex").slice(0, 16)}.png`;
+    writeFileSync(join(shotsDir, "shots", pictureName), picture);
+    const shot = { id: "s-1", caption: "A shot", refs: [], status: "taken" as const, file: `shots/${pictureName}`, width: 10, height: 10, error: null, src: "data:image/png;base64,AA" };
+    const withShots: Bundle = {
+      ...bundle,
+      diff: { ...bundle.diff, branch: { ...bundle.diff.branch, snapshot: "shots-snapshot" } },
+      screenshots: { status: "done", result: "passed", startedAt: null, ranAt: null, headSha: "x", skipped: null, file: join(shotsDir, "screenshots.json"), sets: [{ id: "s", shape: "single", title: "S", summary: null, auth: "signed-out", shots: [shot] }] },
+    };
+    const puts = () => stub.requests.filter((q) => q.method === "PUT" && q.path.endsWith(`/screenshots/${pictureName}`));
+    const shotsOut = await publish(withShots);
+    const shotsBody = stub.uploads().at(-1)?.bundle as unknown as Bundle;
+    if (!shotsOut.ok || shotsOut.screenshots?.sent !== 1 || puts().length !== 1 || !puts()[0].bytes.equals(picture)) fail(`the screenshots did not go up after the report: ${JSON.stringify(shotsOut)}`);
+    if (shotsBody.screenshots?.file !== "" || "src" in (shotsBody.screenshots?.sets[0].shots[0] ?? {})) fail("the upload sent a local path or a picture inside the bundle");
+    await publish(withShots);
+    if (puts().length !== 1) fail("a picture Reflektor already had was sent again");
+    const optedOut: Bundle = { ...withShots, diff: { ...withShots.diff, branch: { ...withShots.diff.branch, snapshot: "shots-off" }, config: { ...(withShots.diff.config ?? {}), screenshots: { upload: false } } } };
+    const off = await publish(optedOut);
+    if (!off.ok || off.screenshots || (stub.uploads().at(-1)?.bundle as unknown as Bundle).screenshots !== null) fail("screenshots went to Reflektor for a repo that turned uploading off");
 
     // Several organizations: the one asked for, else the one saved for the repo, else the list to choose from.
     stub.organizations([acme, beta]);

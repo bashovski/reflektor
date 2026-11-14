@@ -35,7 +35,10 @@ export type Repository = { host: string; owner: string; name: string };
 // What POST /auth/device answers. Both times are in seconds.
 export type DeviceStart = { deviceCode: string; userCode: string; verificationUri: string; verificationUriComplete: string; expiresIn: number; interval: number };
 // What POST /reports answers: 201 for a new round, 200 with `created: false` when that snapshot was there already.
-export type Uploaded = { report: { id: string; url: string }; round: number; created: boolean };
+export type Uploaded = { report: { id: string; url: string }; round: number; created: boolean; screenshots?: ScreenshotsUploaded };
+// The round's screenshots after the report went up: how many pictures were sent, and why some were not. A picture
+// Reflektor already has is not sent again.
+export type ScreenshotsUploaded = { sent: number; failed: number; error: string | null };
 // A call that did not work. `code` is the API's own error ("repository_not_approved", "slow_down") or one of these:
 // "network" (no answer), "unauthorized" (401: the token was revoked), "bad_url" (a setting that is not a usable URL),
 // "bad_answer" (an answer without what the contract promises), "http" (any other status).
@@ -310,11 +313,56 @@ export async function preflight(login: ReflektorLogin, repository: Repository): 
 
 // Paths on this machine (the repo's folder, its git dir, the checks file) mean nothing to Reflektor and say where the
 // user keeps their code, so they are blanked before the bundle leaves.
+// Screenshots go with the report unless the repo's .pr-report.json says "screenshots": { "upload": false }: then the
+// report goes without them, so nothing on the page points at pictures Reflektor does not have.
+const sendsScreenshots = (bundle: Bundle) => Boolean(bundle.screenshots) && bundle.diff.config?.screenshots?.upload !== false;
+
 export const withoutLocalPaths = (bundle: Bundle): Bundle => ({
   ...bundle,
   diff: { ...bundle.diff, repo: { ...bundle.diff.repo, root: "", gitDir: "" } },
   projectChecks: bundle.projectChecks ? { ...bundle.projectChecks, file: "" } : null,
+  screenshots:
+    sendsScreenshots(bundle) && bundle.screenshots
+      ? { ...bundle.screenshots, file: "", sets: bundle.screenshots.sets.map((set) => ({ ...set, shots: set.shots.map(({ src: _src, ...shot }) => shot) })) }
+      : null,
 });
+
+// Sends the pictures of a published round that Reflektor does not have yet, from the folder of screenshots.json.
+// Never throws: a picture that did not go up only leaves its spot empty on the page.
+async function uploadScreenshots(login: ReflektorLogin, bundle: Bundle, reportId: string): Promise<ScreenshotsUploaded | undefined> {
+  if (!sendsScreenshots(bundle) || !bundle.screenshots?.file) return undefined;
+  const folder = dirname(bundle.screenshots.file);
+  const names = [...new Set(bundle.screenshots.sets.flatMap((set) => set.shots.flatMap((shot) => (shot.status === "taken" && shot.file ? [shot.file.split("/").pop()!] : []))))];
+  if (!names.length) return undefined;
+  const base = `/reports/${encodeURIComponent(reportId)}/screenshots`;
+  let sent = 0;
+  let failed = 0;
+  let error: string | null = null;
+  try {
+    const { missing } = await call<{ missing: string[] }>(login.apiUrl, `${base}/missing`, { method: "POST", token: login.token, json: { names } });
+    for (const name of Array.isArray(missing) ? missing : []) {
+      const file = join(folder, "shots", name);
+      try {
+        if (!existsSync(file)) throw new Error(`${name} is not on this machine any more`);
+        const res = await fetch(`${login.apiUrl}${base}/${encodeURIComponent(name)}`, {
+          method: "PUT",
+          headers: { authorization: `Bearer ${login.token}`, "content-type": "image/png", "user-agent": "pr-report" },
+          body: readFileSync(file),
+          signal: AbortSignal.timeout(UPLOAD_MS),
+        });
+        if (!res.ok) throw refusal(res, await res.json().catch(() => null));
+        sent++;
+      } catch (e) {
+        failed++;
+        error ??= (e as Error).message;
+      }
+    }
+  } catch (e) {
+    failed = names.length;
+    error = (e as Error).message;
+  }
+  return { sent, failed, error };
+}
 
 // The bundle as the viewer gets it, without local paths, gzipped. `organization` may be left out when one organization
 // approves the repo.
@@ -349,7 +397,9 @@ export async function publishBundle(login: ReflektorLogin, bundle: Bundle, { org
     if (organization && !chosen)
       return { ok: false, reason: "unknown_organization", message: `${organization} is not one of your organizations that approve ${key}. Those are: ${list}.`, organizations };
     if (!chosen) return { ok: false, reason: "organization_required", message: `Several of your organizations approve ${key}. Choose one: ${list}.`, organizations };
-    return { ok: true, organization: chosen.slug, ...(await upload(login, bundle, chosen.slug)) };
+    const uploaded = await upload(login, bundle, chosen.slug);
+    const screenshots = await uploadScreenshots(login, bundle, uploaded.report.id);
+    return { ok: true, organization: chosen.slug, ...uploaded, ...(screenshots ? { screenshots } : {}) };
   } catch (e) {
     const error = e as ReflektorError;
     return { ok: false, reason: error.code ?? "http", message: error.message, organizations: error.organizations, retryAfterMs: error.retryAfterMs };

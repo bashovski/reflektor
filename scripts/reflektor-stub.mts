@@ -40,6 +40,8 @@ export function startReflektorStub(): Promise<ReflektorStub> {
   const failures = new Map<string, StubAnswer>();
   // Rounds per snapshot, the way the platform dedupes an upload of the same code.
   const rounds = new Map<string, number>();
+  // Screenshots uploaded so far, by name.
+  const pictures = new Map<string, Buffer>();
 
   const server = createServer((req, res) => {
     const chunks: Buffer[] = [];
@@ -92,6 +94,18 @@ export function startReflektorStub(): Promise<ReflektorStub> {
         const round = known ?? rounds.size + 1;
         rounds.set(snapshot, round);
         return reply({ status: known ? 200 : 201, body: { report: { id: "rep_1", url: `http://${req.headers.host}/${org.slug}/reports/rep_1` }, round, created: !known } });
+      }
+      // Screenshots of a published report: which pictures it lacks, and one picture at a time.
+      const shots = url.pathname.match(/^\/reports\/([^/]+)\/screenshots\/(.+)$/);
+      if (shots && req.method === "POST" && shots[2] === "missing") {
+        const names = ((json as { names?: string[] } | null)?.names ?? []).filter((name) => !pictures.has(name));
+        return reply({ status: 200, body: { missing: names } });
+      }
+      if (shots && req.method === "PUT") {
+        if (req.headers["content-type"] !== "image/png") return reply({ status: 415, body: { error: "unsupported" } });
+        pictures.set(shots[2], bytes);
+        res.writeHead((entry.status = 204));
+        return res.end();
       }
       reply({ status: 404, body: { error: "not_found" } });
     });

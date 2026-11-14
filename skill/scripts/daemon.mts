@@ -1168,6 +1168,10 @@ async function publishNow(r: ReviewRecord, { organization = null, auto = false }
   if (!bundle.diff.branch.pr && r.pr && r.pr.state === "OPEN") {
     bundle.diff.branch.pr = { number: r.pr.number, url: r.pr.url, title: r.pr.title ?? bundle.report.title, state: r.pr.state };
   }
+  // Screenshots are taken while the report is written, so the round's data may hold them half done. The newest run of
+  // the same commit goes instead.
+  const shots = readScreenshotsRun(r.screenshotsFile);
+  if (shots && shots.headSha === bundle.diff.branch.headSha) bundle.screenshots = { ...shots, file: r.screenshotsFile };
   const snapshot = bundle.diff.branch.snapshot;
   const pr = bundle.diff.branch.pr?.number ?? null;
   const sent = r.uploads.find((u) => u.snapshot === snapshot && (!organization || u.organization.toLowerCase() === organization.toLowerCase()));
@@ -1187,7 +1191,20 @@ async function publishNow(r: ReviewRecord, { organization = null, auto = false }
     if (organization && repository) rememberOrganization(repository, outcome.organization);
     console.log(`Reflektor: published ${r.id} round ${entry.round} to ${outcome.organization} (its round ${outcome.round}): ${outcome.report.url}`);
     save(r);
-    return answer(true, null, `Published round ${entry.round} to Reflektor (${outcome.organization}): ${outcome.report.url}`, { round: entry.round, url: outcome.report.url, organization: outcome.organization });
+    const pictures = outcome.screenshots;
+    const shotsNote = !pictures
+      ? ""
+      : pictures.failed
+        ? ` ${pictures.failed} ${pictures.failed === 1 ? "screenshot" : "screenshots"} did not go up: ${pictures.error}`
+        : pictures.sent
+          ? ` Sent ${pictures.sent} ${pictures.sent === 1 ? "screenshot" : "screenshots"}.`
+          : "";
+    if (pictures?.failed) console.log(`Reflektor: ${pictures.failed} screenshots of ${r.id} did not go up: ${pictures.error}`);
+    return answer(true, null, `Published round ${entry.round} to Reflektor (${outcome.organization}): ${outcome.report.url}${shotsNote}`, {
+      round: entry.round,
+      url: outcome.report.url,
+      organization: outcome.organization,
+    });
   }
   r.publishError = { reason: outcome.reason, message: outcome.message, round: entry.round, at: now() };
   if (auto) r.publishRetryAt = Date.now() + (outcome.retryAfterMs ?? (TRANSIENT.has(outcome.reason) ? PUBLISH_RETRY_MS : PUBLISH_QUIET_MS));
@@ -1207,6 +1224,9 @@ function autoPublish(r: ReviewRecord) {
   const login = readLogin();
   const entry = finalRound(r);
   if (!login || !entry) return;
+  // Not while screenshots are being taken: Reflektor keeps the first publish of a commit, so it waits for all of them.
+  // The screenshots watcher calls again when they end.
+  if (r.screenshots?.status === "running" || r.screenshots?.status === "preparing") return;
   // Once per build of a round and per login. A try that did not work goes again when its retry time has come; a new
   // build or a new login goes at once.
   // The pull request is part of it: a round that went up before its pull request was known goes again to link it.
@@ -1814,6 +1834,7 @@ setInterval(() => {
     if (JSON.stringify(next) === JSON.stringify(r.screenshots ?? null)) continue;
     r.screenshots = next;
     broadcast(r);
+    autoPublish(r);
   }
 }, 1000).unref();
 
