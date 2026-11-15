@@ -732,7 +732,7 @@ function updateFlow() {
   writeFileSync(join(dir, "report.json"), readFileSync(join(root, "samples/report.json")));
   build("r1.json");
   const round1 = JSON.parse(readFileSync(join(dir, "r1.json"), "utf8")) as Bundle;
-  writeFileSync(join(dir, "review-1.json"), JSON.stringify({ version: 1, round: 1, branch: "feat/books", headSha: round1.diff.branch.headSha, snapshot: round1.diff.branch.snapshot, comments: [] }));
+  writeFileSync(join(dir, "review-1.json"), JSON.stringify({ version: 1, round: 1, branch: "feat/books", headSha: round1.diff.branch.headSha, snapshot: round1.diff.branch.snapshot, comments: [], report: join(dir, "r1.json") }));
   const description = readFileSync(join(dir, "pr-description.md"), "utf8");
 
   // The fix: two lines on top of book.service.ts, and a change to its line 19.
@@ -752,8 +752,10 @@ function updateFlow() {
   if (!collect("--update").includes("0 line references moved")) fail("collecting the next round twice moved the references twice");
   if (service(readReport()).files.find((f) => f.path.endsWith("book.service.ts"))!.lineNotes![0].line !== 8) fail("a second collect changed the moved references");
 
+  writeFileSync(join(dir, "report.json"), JSON.stringify({ ...readReport(), review: { round: 1, replies: [] } }));
   build("r2.json");
   const round2 = JSON.parse(readFileSync(join(dir, "r2.json"), "utf8")) as Bundle;
+  if (round2.previousReview?.round !== 1 || "report" in round2.previousReview) fail("round 2 does not carry round 1's review, or carries the local path of its report");
   if (round2.round !== 2 || round2.diff.files.length !== round1.diff.files.length) fail("round 2 does not show the whole branch");
   if (round2.diff.sinceRound?.round !== 1 || round2.diff.sinceRound.files.map((f) => f.path).join() !== "apps/api/src/books/book.service.ts") fail("round 2 does not carry the change since round 1");
   if (!round2.prDescription || readFileSync(join(dir, "pr-description.md"), "utf8") === description) fail("a whole-branch round did not rewrite the PR description");
@@ -1182,6 +1184,9 @@ async function reflektorFlow() {
     if (body.organization !== "acme" || JSON.stringify(body.bundle) !== JSON.stringify(client.withoutLocalPaths(bundle))) fail("the upload's body is not the gzipped bundle with its organization");
     if (body.bundle?.diff.repo.root !== "" || body.bundle?.diff.repo.gitDir !== "" || (body.bundle?.projectChecks && body.bundle.projectChecks.file !== ""))
       fail("the upload sent paths on this machine");
+    const reviewed = { round: 1, branch: "feat/books", headSha: "a".repeat(40), snapshot: "b".repeat(40), submittedAt: "2026-11-15T00:00:00Z", comments: [] };
+    const carried = client.withoutLocalPaths({ ...bundle, previousReview: { version: 1, ...reviewed, report: "/home/dev/books/.git/pr-report/r1.json" } as Bundle["previousReview"] });
+    if (!carried.previousReview || "report" in carried.previousReview) fail("the upload sent the local path of the report a review was sent on");
     const twice = await publish(bundle);
     if (!twice.ok || twice.created) fail("an upload of a snapshot the platform had already did not say so");
 
