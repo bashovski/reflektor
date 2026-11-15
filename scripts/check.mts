@@ -418,6 +418,15 @@ async function daemonFlow() {
       const err = String(e.stderr ?? "");
       if (e.status !== 1 || !err.includes("report file not found") || err.includes("Assertion failed") || err.includes("    at ")) fail(`a failing review.mts command did not end cleanly (exit ${e.status}):\n${err}`);
     }
+    writeFileSync(join(reviewDir, "last.json"), JSON.stringify({ round: 1, headSha: "a".repeat(40) }));
+    try {
+      review("open", "--report", join(reviewDir, "last.json"));
+      fail("review.mts open with a file that is not a report did not fail");
+    } catch (error) {
+      const err = String((error as ExecError).stderr ?? "");
+      if (!err.includes("last.json is not a report built by build.mjs")) fail(`opening a file that is not a report did not say so:\n${err}`);
+    }
+    rmSync(join(reviewDir, "last.json"), { force: true });
     const post = (path: string, body: unknown) =>
       fetch(`${base}${config.api}/${path}`, { method: "POST", headers: { "x-review-token": config.token, "content-type": "application/json" }, body: JSON.stringify(body) });
     const state = async (): Promise<LiveState> => {
@@ -634,8 +643,19 @@ async function daemonFlow() {
     if (afterFix.phase !== "working") fail("a fixed comment ended the round before the next round was published");
     if (!review("resume", "--id", id).includes("Every comment in round 1 has a status")) fail("resume did not say the fix loop only needs the next round");
 
+    // Round 1's screenshots finish, then round 2's run starts. screenshots.json now holds round 2's run, and round 1's
+    // page still shows its own finished run.
+    const shotsFile = join(reviewDir, "screenshots.json");
+    const shotsRun = (status: string, headSha: string) => ({ version: 1, status, result: status === "done" ? "passed" : null, startedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), ranAt: null, headSha, skipped: null, sets: [] });
+    writeFileSync(shotsFile, JSON.stringify(shotsRun("done", "round1")));
+    await sleep(1500);
     build(join(reviewDir, "round2.json"));
     if (!review("open", "--report", join(reviewDir, "round2.json")).includes("round 2")) fail("publishing the next build did not start round 2");
+    writeFileSync(shotsFile, JSON.stringify(shotsRun("preparing", "round2")));
+    await sleep(1500);
+    const round1Shots = ((await (await fetch(`${base}${config.api}/bundle?round=1`, { headers: { "x-review-token": config.token } })).json()) as Bundle).screenshots;
+    if (round1Shots?.status !== "done" || round1Shots.headSha !== "round1") fail(`round 1's page did not keep its finished screenshots once round 2's run started: ${JSON.stringify(round1Shots)}`);
+    rmSync(shotsFile, { force: true });
     const round2 = await state();
     if (round2.round !== 2 || round2.phase !== "reviewing") fail(`round 2 is not open for review: ${JSON.stringify({ round: round2.round, phase: round2.phase })}`);
 
@@ -1000,13 +1020,18 @@ async function screenshotsFlow() {
 
   shots("--save", "--url", `http://127.0.0.1:${port}`, "--start", `PORT=${port} node server.mjs`, "--source", "the dev script", "--from", "package.json");
   const prepared = shots("--prepare");
-  if (!prepared.includes(`App ready at http://127.0.0.1:${port} (started by this script`) || !prepared.includes("the hook wrote test credentials")) fail(`screenshots --prepare:\n${prepared}`);
+  if (!prepared.includes(`App ready at http://127.0.0.1:${port} (started by this script`) || !prepared.includes("the hook wrote test credentials") || !prepared.includes(join(data, "screenshots/plan.json"))) fail(`screenshots --prepare:\n${prepared}`);
 
   const plan = join(tmp, "shots-plan.json");
+  const loginBlock = { path: "/login", do: [{ fill: ["role=textbox[name='Email']", "$username"] }, { fill: ["role=textbox[name='Password']", "$password"] }, { click: "role=button[name='Sign in']" }] };
+  writeFileSync(plan, JSON.stringify({ login: loginBlock, sets: [] }));
+  shots("--login", "--plan", plan);
+  const signedIn = shots("--inspect", "/books", "--auth", "signed-in");
+  if (!signedIn.includes("Add book")) fail(`a plan with only its login block did not sign in for --inspect:\n${signedIn}`);
   writeFileSync(
     plan,
     JSON.stringify({
-      login: { path: "/login", do: [{ fill: ["role=textbox[name='Email']", "$username"] }, { fill: ["role=textbox[name='Password']", "$password"] }, { click: "role=button[name='Sign in']" }] },
+      login: loginBlock,
       sets: [
         {
           id: "add-book",
@@ -1170,6 +1195,8 @@ async function reflektorFlow() {
     const asked = stub.requests.length;
     const draft = await publish({ ...bundle, draft: true });
     if (draft.ok || draft.reason !== "draft" || stub.requests.length !== asked) fail("a draft was published, or Reflektor was asked about it");
+    const noRemote = await publish({ ...bundle, diff: { ...bundle.diff, repo: { ...bundle.diff.repo, host: null, owner: null } } });
+    if (noRemote.ok || noRemote.reason !== "no_remote" || !noRemote.message.includes("make the report again") || stub.requests.length !== asked) fail(`a report without a remote did not say to make it again: ${JSON.stringify(noRemote)}`);
     stub.organizations([]);
     const unapproved = await publish(bundle);
     if (unapproved.ok || unapproved.reason !== "not_approved" || posts("/reports") !== 0) fail(`a repo no organization approves was uploaded: ${JSON.stringify(unapproved)}`);

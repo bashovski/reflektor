@@ -388,7 +388,7 @@ const sameSlug = (a: string | null | undefined, b: string | null | undefined) =>
 export async function publishBundle(login: ReflektorLogin, bundle: Bundle, { organization = null }: { organization?: string | null } = {}): Promise<PublishOutcome> {
   if (bundle.draft) return { ok: false, reason: "draft", message: "This round is still a draft: the agent has not finished the report." };
   const repository = repositoryOf(bundle);
-  if (!repository) return { ok: false, reason: "no_remote", message: "This repo has no remote that names its host and owner, so Reflektor cannot tell which repository it is." };
+  if (!repository) return { ok: false, reason: "no_remote", message: "This report was made without a remote that names the repository's host and owner, so Reflektor cannot tell which repository it is. Add the remote, then make the report again: the repository is read when the report is made, so adding the remote alone is not enough." };
   const key = repositoryKey(repository);
   try {
     const organizations = await preflight(login, repository);
