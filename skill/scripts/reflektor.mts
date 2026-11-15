@@ -16,7 +16,7 @@ import { homedir, hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { gzip } from "node:zlib";
-import type { Bundle } from "../schema/types.js";
+import type { Bundle, Review } from "../schema/types.js";
 import { replaceFile } from "./repo.mjs";
 import { readSettings, type Settings } from "./settings.mjs";
 
@@ -317,10 +317,17 @@ export async function preflight(login: ReflektorLogin, repository: Repository): 
 // report goes without them, so nothing on the page points at pictures Reflektor does not have.
 const sendsScreenshots = (bundle: Bundle) => Boolean(bundle.screenshots) && bundle.diff.config?.screenshots?.upload !== false;
 
+// Bundles built before build.mjs dropped it still carry the local path of the report a review was sent on.
+const withoutReportPath = (review: Review): Review => {
+  const { report: _report, ...rest } = review as Review & { report?: string };
+  return rest;
+};
+
 export const withoutLocalPaths = (bundle: Bundle): Bundle => ({
   ...bundle,
   diff: { ...bundle.diff, repo: { ...bundle.diff.repo, root: "", gitDir: "" } },
   projectChecks: bundle.projectChecks ? { ...bundle.projectChecks, file: "" } : null,
+  previousReview: bundle.previousReview ? withoutReportPath(bundle.previousReview) : null,
   screenshots:
     sendsScreenshots(bundle) && bundle.screenshots
       ? { ...bundle.screenshots, file: "", sets: bundle.screenshots.sets.map((set) => ({ ...set, shots: set.shots.map(({ src: _src, ...shot }) => shot) })) }
@@ -381,7 +388,7 @@ const sameSlug = (a: string | null | undefined, b: string | null | undefined) =>
 export async function publishBundle(login: ReflektorLogin, bundle: Bundle, { organization = null }: { organization?: string | null } = {}): Promise<PublishOutcome> {
   if (bundle.draft) return { ok: false, reason: "draft", message: "This round is still a draft: the agent has not finished the report." };
   const repository = repositoryOf(bundle);
-  if (!repository) return { ok: false, reason: "no_remote", message: "This repo has no remote that names its host and owner, so Reflektor cannot tell which repository it is." };
+  if (!repository) return { ok: false, reason: "no_remote", message: "This report was made without a remote that names the repository's host and owner, so Reflektor cannot tell which repository it is. Add the remote, then make the report again: the repository is read when the report is made, so adding the remote alone is not enough." };
   const key = repositoryKey(repository);
   try {
     const organizations = await preflight(login, repository);

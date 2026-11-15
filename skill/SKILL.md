@@ -353,6 +353,7 @@ It publishes this branch's newest finished round and prints where it went, or wh
 - **Several organizations:** ask the user which one and run it again with `--org`.
 - **Not signed in:** run `review.mjs login` in the background and tell the user to approve the code it prints in the browser tab it opens, then publish again.
 - **No review for this branch, or only a draft:** say there is no finished report to push yet, and offer to build one (the steps above).
+- **No remote:** the report was collected before the repo had a remote naming its host and owner. Ask the user to add one (or for its URL, and add it), then collect, build and open the report again (step 8.5 with `--update`, or from step 3 when there is no review) and publish that round. Adding the remote alone does not change a report already collected.
 - **Repository not approved:** nothing was uploaded; an admin of the organization has to approve the repository on Reflektor first.
 - **Network or server error:** say what it printed. Pushing again later is safe.
 

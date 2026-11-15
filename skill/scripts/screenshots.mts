@@ -627,9 +627,10 @@ if (args.mode === "prepare") {
 
   console.log(`App ready at ${url}${started ? " (started by this script; --run stops it)" : " (already running)"}`);
   if (auth === "state") console.log("Signed in: the preScreenshots hook saved a session, so signed-in sets and --inspect --auth signed-in use it.");
-  else if (auth === "credentials") console.log('Signed in: the hook wrote test credentials. Add "login" steps to the plan (the login page, with "$username" and "$password" in the fills) and run --login --plan before inspecting signed-in pages.');
+  else if (auth === "credentials") console.log(`Signed in: not yet, the hook wrote test credentials. Inspect the login page signed out, write a plan with only its "login" block ("$username" and "$password" in the fills), then run ${cmd("--login --plan <plan.json>")} before inspecting signed-in pages.`);
   else if (hook.failed) console.log("Signed in: no. The preScreenshots hook failed, so signed-in sets will be skipped.");
   else console.log("Signed in: no. There is no preScreenshots hook, so only signed-out pages can be shown.");
+  console.log(`Plan file, when you were given no scratch folder: ${shellPath(files.plan)}`);
   console.log(`Next: look at the pages with ${cmd("--inspect /path [--auth signed-in]")}, write the plan, then ${cmd("--run --plan <plan.json>")}`);
   process.exit(0);
 }

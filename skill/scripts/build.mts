@@ -380,7 +380,9 @@ if (report.review) {
   if (!existsSync(file)) {
     warnings.push(`review: ${file} does not exist, so the replies cannot be shown`);
   } else {
-    previousReview = JSON.parse(readFileSync(file, "utf8")) as Review;
+    // The review file also names the report it was sent on, as a local path; the bundle keeps only the review.
+    const { report: _report, ...sent } = JSON.parse(readFileSync(file, "utf8")) as Review & { report?: string };
+    previousReview = sent;
     const ids = new Set(previousReview.comments.map((c) => c.id));
     report.review.replies = (report.review.replies ?? []).filter((r, i) => {
       oneOf(r.status, REPLY_STATUS, `review.replies[${i}].status`);

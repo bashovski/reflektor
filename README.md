@@ -1,4 +1,6 @@
 # pr-report
+[![skills.sh](https://skills.sh/b/bashovski/reflektor)](https://skills.sh/bashovski/reflektor)
+![GitHub branch status](https://img.shields.io/github/checks-status/bashovski/stampede/master)
 
 A skill for coding agents that turns a branch into a review report in your browser. It is built and tested with Claude Code, and installs for Codex and other agents that read the open [Agent Skills](https://agentskills.io) format. The report has:
 

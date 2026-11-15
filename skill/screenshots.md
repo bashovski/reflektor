@@ -44,7 +44,28 @@ When the subagent ends, the page already shows its shots. Its answer lists them.
 node "<skill dir>/scripts/screenshots.mjs" --repo . --prepare
 ```
 
-This reaches the app or starts it, then runs the project's `preScreenshots` hook, which can sign a test user in. Its last lines say whether signed-in pages can be shown. If it says it stopped and recorded why, end here and report that reason.
+This reaches the app or starts it, then runs the project's `preScreenshots` hook, which can sign a test user in. Its last lines say whether signed-in pages can be shown, and where to write the plan when the main agent gave you no scratch folder. If it says it stopped and recorded why, end here and report that reason.
+
+When it says the hook wrote test credentials, sign in before you look at signed-in pages:
+
+1. Inspect the login page signed out: `--inspect /login` (or wherever the app signs in).
+2. Start the plan with only its `login` block, at the top level next to `sets`. `$username` and `$password` stand for the credentials; never write the real ones:
+
+   ```json
+   {
+     "login": {
+       "path": "/login",
+       "do": [
+         { "fill": ["role=textbox[name='Email']", "$username"] },
+         { "fill": ["role=textbox[name='Password']", "$password"] },
+         { "click": "role=button[name='Sign in']" }
+       ]
+     },
+     "sets": []
+   }
+   ```
+
+3. Run `--login --plan <plan.json>`. It prints the page after signing in. From then on, `--inspect --auth signed-in` uses that session. Add the sets in step 3 below.
 
 ### 2. Decide what to show
 
@@ -76,7 +97,7 @@ node "<skill dir>/scripts/screenshots.mjs" --repo . --inspect --plan <plan.json>
 
 ### 3. Write the plan
 
-Write `plan.json` in the scratch folder you were given, or next to `screenshots.json` when you have none:
+Write `plan.json` in the scratch folder you were given, or at the path `--prepare` printed when you have none. When you signed in with a `login` block in step 1, add the sets to that same file:
 
 ```json
 {
@@ -103,7 +124,7 @@ Write `plan.json` in the scratch folder you were given, or next to `screenshots.
 - **Actions:** `goto` (a path on the app), `click`, `fill` ([selector, text]), `press` (a key, or [selector, key]), `select` ([selector, value]), `check`, `uncheck`, `hover`, `waitFor` (a selector), `scroll` (a selector or pixels). Steps of a set run in one browser tab, one after another, so a flow carries on from the step before.
 - **Selectors** are Playwright's. Prefer `role=button[name='Save']` and `text=Saved` over CSS. A quoted `name` must be the element's whole accessible name, as the tree prints it; for part of a name, use a pattern: `role=menuitem[name=/View all reports/i]`.
 - **`fullPage: true`** on a step takes the whole page instead of the window.
-- **Signed in:** `"auth": "signed-in"` uses the test login from `--prepare`. When it said the hook wrote credentials instead of a session, add `"login": { "path": "/login", "do": [{ "fill": ["role=textbox[name='Email']", "$username"] }, { "fill": ["role=textbox[name='Password']", "$password"] }, { "click": "role=button[name='Sign in']" }] }` to the plan. `$username` and `$password` stand for the credentials; never write the real ones. Run `--login --plan <plan.json>` once before you inspect signed-in pages.
+- **Signed in:** `"auth": "signed-in"` uses the test login from `--prepare`. When the hook wrote credentials instead of a session, the plan needs the `login` block from step 1; `--run` signs in with it before the signed-in sets.
 
 ### Captions
 
@@ -112,7 +133,7 @@ Every word in the plan is shown to the reviewer.
 - **Set title:** what the user does or sees, in a few words: "Inviting a teammate".
 - **Set summary:** one sentence on what the change does for the user. Required for a flow.
 - **Shot caption (`shot`):** what changed on this screen, not what the screen is. "Invite button added to the Organizations header", not "The Organizations page". About 12 words at most. In a flow, the captions read as steps, in order.
-- **Refs:** up to 3 per shot, as `path:line`, the changed lines behind what is on screen. Only files the branch changes; others are left out.
+- **Refs:** up to 3 per shot, as `path:line`, the changed lines behind what is on screen. Line numbers are in the new version of the file, as in the report. Only files the branch changes; others are left out.
 - **Never** credentials, session data, or personal data the app shows. Write "a test user", not a name or an email.
 
 ### 4. Take the shots

@@ -42,7 +42,9 @@ type RegistryEntry = { id: string; dir: string; title: string; tag: Tag; repo: s
 // Where a review's current round stands. The inbox adds "merged" on top (statusOf).
 type Phase = "reviewing" | "sent" | "planning" | "working" | "done";
 // One published round: the data file build.mjs wrote. Rounds from older daemons name an exported page in `html` instead and may lack builtAt.
-type RoundEntry = { round: number; file?: string; html?: string; builtAt?: string; publishedAt: string; draft?: boolean };
+// `screenshots`: the round's last finished screenshots run. screenshots.json holds only the newest run, so an earlier
+// round keeps its own here once the next round's run replaces it.
+type RoundEntry = { round: number; file?: string; html?: string; builtAt?: string; publishedAt: string; draft?: boolean; screenshots?: ScreenshotsRun };
 // The agent's progress on one comment, kept by comment id.
 type CommentStatus = { status: "working" | "fixed" | "answered" | "wontfix" | "noted"; text: string | null; ref?: Ref; at: string };
 // One step of the agent's plan, covering one or more comments. The reviewer may change its kind or skip it.
@@ -1168,10 +1170,10 @@ async function publishNow(r: ReviewRecord, { organization = null, auto = false }
   if (!bundle.diff.branch.pr && r.pr && r.pr.state === "OPEN") {
     bundle.diff.branch.pr = { number: r.pr.number, url: r.pr.url, title: r.pr.title ?? bundle.report.title, state: r.pr.state };
   }
-  // Screenshots are taken while the report is written, so the round's data may hold them half done. The newest run of
-  // the same commit goes instead.
-  const shots = readScreenshotsRun(r.screenshotsFile);
-  if (shots && shots.headSha === bundle.diff.branch.headSha) bundle.screenshots = { ...shots, file: r.screenshotsFile };
+  // Screenshots are taken while the report is written, so the round's data may hold them half done. The round's last
+  // finished run goes instead, else the newest run of the same commit.
+  const shots = entry.screenshots ?? readScreenshotsRun(r.screenshotsFile);
+  if (shots && (entry.screenshots || shots.headSha === bundle.diff.branch.headSha)) bundle.screenshots = { ...shots, file: r.screenshotsFile };
   const snapshot = bundle.diff.branch.snapshot;
   const pr = bundle.diff.branch.pr?.number ?? null;
   const sent = r.uploads.find((u) => u.snapshot === snapshot && (!organization || u.organization.toLowerCase() === organization.toLowerCase()));
@@ -1460,7 +1462,14 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     if (!file || !existsSync(file)) return send(res, 400, { error: "report file not found" });
     const raw = roundText(file);
     if (!raw || !raw.startsWith("{")) return send(res, 400, { error: "the report has no data; build it with build.mjs" });
-    const bundle = JSON.parse(raw) as Bundle;
+    let bundle: Bundle | null = null;
+    try {
+      bundle = JSON.parse(raw) as Bundle;
+    } catch {
+      bundle = null;
+    }
+    if (!bundle?.diff?.repo?.name || !bundle.diff.branch?.head || typeof bundle.round !== "number")
+      return send(res, 400, { error: `${basename(file)} is not a report built by build.mjs. Pass the file build.mjs printed: <branch>-<sha>-r<round>.json, or the draft from --draft.` });
     const dir = dirname(file);
     const repo = [bundle.diff.repo.owner, bundle.diff.repo.name].filter(Boolean).join("/");
     const branch = bundle.diff.branch.head;
@@ -1485,7 +1494,7 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     const republished = Boolean(before);
     // The round's first build that is not a draft. The project's postRun hook runs for it only, so once a round.
     const firstReal = !bundle.draft && (!before || before.draft === true);
-    r.rounds = [...r.rounds.filter((x) => x.round !== round), { round, file, builtAt: bundle.builtAt, publishedAt: now(), ...(bundle.draft ? { draft: true } : {}) }].sort(
+    r.rounds = [...r.rounds.filter((x) => x.round !== round), { round, file, builtAt: bundle.builtAt, publishedAt: now(), ...(bundle.draft ? { draft: true } : {}), ...(before?.screenshots ? { screenshots: before.screenshots } : {}) }].sort(
       (a, b) => a.round - b.round,
     );
     // A new build matches the code again; a rebuild answers the reviewer's request for one.
@@ -1639,8 +1648,12 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     if (action === "bundle") {
       const entry = r.rounds.find((x) => x.round === Number(url.searchParams.get("round"))) ?? r.rounds.at(-1);
       const raw = entry ? roundText(roundFile(entry)) : null;
-      // Already JSON text, so send it as is.
-      return raw ? send(res, 200, raw, "application/json; charset=utf-8") : send(res, 404, { error: "no such round" });
+      if (!raw) return send(res, 404, { error: "no such round" });
+      // The round's data holds the screenshots as they were at its build, often still being taken.
+      if (!entry!.screenshots) return send(res, 200, raw, "application/json; charset=utf-8");
+      const bundle = JSON.parse(raw) as Bundle;
+      bundle.screenshots = { ...entry!.screenshots, file: r.screenshotsFile };
+      return send(res, 200, bundle);
     }
     return send(res, 404, { error: "not found" });
   }
@@ -1833,6 +1846,11 @@ setInterval(() => {
     const next = readScreenshotsRun(r.screenshotsFile);
     if (JSON.stringify(next) === JSON.stringify(r.screenshots ?? null)) continue;
     r.screenshots = next;
+    const latest = r.rounds.at(-1);
+    if (latest && next && (next.status === "done" || next.status === "stopped")) {
+      latest.screenshots = next;
+      save(r);
+    }
     broadcast(r);
     autoPublish(r);
   }
