@@ -19,7 +19,9 @@
     "newLine": "lf",
     "noEmitOnError": true,
     "typeRoots": ["./viewer/node_modules/@types"],
-    "types": ["node"]
+    "types": ["node"],
+    // screenshots.mts loads the project's own Playwright at run time and takes only its types from the viewer's packages.
+    "paths": { "playwright-core": ["./viewer/node_modules/playwright-core/index.d.ts"] }
   },
   "include": ["skill/scripts"]
 }

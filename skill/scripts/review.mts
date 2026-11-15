@@ -178,6 +178,8 @@ const describe = (t: CommentTarget) => {
       return t.path;
     case "report":
       return "the whole change";
+    case "screenshot":
+      return `the screenshot "${t.caption}" (${t.file} in the review's folder${t.pin ? `, pinned at ${Math.round(t.pin.x * 100)}% across and ${Math.round(t.pin.y * 100)}% down` : ""})`;
     default:
       return `${t.type}: ${t.text ?? ""}`;
   }
@@ -218,6 +220,7 @@ function explain(event: ReviewEvent, review: EventReview) {
     console.log(`Live question ${q.id} in review ${review.id}`);
     console.log(`About: ${describe(q.target)}`);
     if (q.target.type === "line") console.log(["```", q.target.code, "```"].join("\n"));
+    if (q.target.type === "screenshot") console.log(`Picture: ${shellPath(join(review.dir, q.target.file))} (look at it before you answer)`);
     if (q.target.fix) console.log(`Suggested fix shown with it: ${q.target.fix}`);
     console.log(`Question: ${q.text}`);
     console.log(`\nAnswer: ${self} answer --id ${review.id} --question ${q.id} --text "<answer>"`);

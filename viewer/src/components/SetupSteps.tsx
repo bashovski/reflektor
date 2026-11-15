@@ -7,6 +7,7 @@ import { useAgentSettings } from "../lib/settings";
 import { afterSetup, markSetupDone } from "../lib/setup";
 import { codeThemesFor, HIGHLIGHTER, type ThemeMode } from "../lib/themes";
 import Dither, { type DitherProps } from "../vendor/react-bits/Dither";
+import { ScreenshotsSetup } from "./ScreenshotsSetup";
 import { Choice, SubagentSwitch } from "./Settings";
 import { cx, Kbd, Logo } from "./ui";
 
@@ -159,6 +160,18 @@ export const SpeedStep = () => {
     </div>
   );
 };
+
+// Screenshots of the changed UI, taken with Playwright while the report is written. Off until turned on here or in
+// Settings, where the same check and switch are.
+export const ScreenshotsStep = () => (
+  <div className="space-y-3">
+    <p className="text-sm text-muted">
+      When a change touches the UI, your agent can open your app with Playwright and take screenshots of what changed: the screens of a flow in order,
+      the states of a page, or the one thing that changed. They show up in the report while it is being written. Change it any time in Settings.
+    </p>
+    <ScreenshotsSetup />
+  </div>
+);
 
 export const ThemeStep = () => {
   const { theme, setTheme } = usePrefs();

@@ -22,6 +22,7 @@ import { ProjectChecks } from "./ProjectChecks";
 import { MergedBanner } from "./PullRequest";
 import { ReviewBar } from "./ReviewBar";
 import { RoundBanner } from "./RoundBanner";
+import { Screenshots } from "./Screenshots";
 import { Sections } from "./Sections";
 import { SettingsPage } from "./Settings";
 import { SetupBanner } from "./SetupBanner";
@@ -45,7 +46,7 @@ const useShortcuts = (onHelp: () => void, off: boolean) => {
         }
         return;
       }
-      if (e.metaKey || e.ctrlKey || e.altKey || modal || inField) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || modal || inField || target.closest("dialog")) return;
 
       const index = current ? orderedFiles.indexOf(current) : -1;
       const go = (i: number) => {
@@ -183,6 +184,7 @@ const Layout = () => {
             <ProjectChecks />
             <Findings />
             <Flows />
+            <Screenshots />
             <Contracts />
             <Sections />
             <Coverage />

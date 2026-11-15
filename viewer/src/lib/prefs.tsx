@@ -15,6 +15,7 @@ export const PREF_KEYS = {
   diffStyle: "pr-report:diff-style",
   codeThemeDark: "pr-report:code-theme-dark",
   codeThemeLight: "pr-report:code-theme-light",
+  screenshotsOpen: "pr-report:screenshots-open",
 } as const;
 
 export const storage = {

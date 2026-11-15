@@ -5,6 +5,7 @@ import { useAgent } from "../lib/agent";
 import { COMMENT_KINDS } from "../lib/meta";
 import { scrollBehavior } from "../lib/motion";
 import { describeTarget, targetKey, useReview } from "../lib/review";
+import { SHOW_SHOT_EVENT } from "./Screenshots";
 import { useReport } from "../lib/state";
 import { Composer } from "./Comments";
 import { PlanPanel } from "./PlanPanel";
@@ -98,6 +99,7 @@ export const ReviewBar = () => {
     const t = c.target;
     if (t.type === "line") return jumpTo({ path: t.path, line: t.end, side: t.side });
     if (t.type === "file") return jumpTo({ path: t.path });
+    if (t.type === "screenshot") return window.dispatchEvent(new CustomEvent(SHOW_SHOT_EVENT, { detail: t.file }));
     const anchor = targetAnchor(t, bundle.report.sections);
     if (!anchor) return;
     if (anchor.section !== undefined && anchor.section >= 0) setSectionOpen(anchor.section, true);

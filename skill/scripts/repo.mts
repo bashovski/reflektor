@@ -192,3 +192,34 @@ export function runShell(command: string, { cwd, env = process.env, timeoutMs }:
     child.on("error", (e) => finish({ error: e.message }));
   });
 }
+
+// Starts a long-running command from the project (a dev server) in the same shell as runShell, and leaves it running
+// after this script exits. Its output goes to `log`. Returns the pid, for stopTree. Never throws: null when it could
+// not start.
+export function startShell(command: string, { cwd, env = process.env, log }: { cwd: string; env?: NodeJS.ProcessEnv; log: number }): number | null {
+  const windows = process.platform === "win32";
+  const shell = windows ? (windowsShell ??= gitBash() ?? true) : true;
+  try {
+    const child = spawn(command, { shell, cwd, env, detached: true, windowsHide: true, stdio: ["ignore", log, log] });
+    child.unref();
+    return child.pid ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Stops a process started by startShell, with everything it started: a dev server runs under a package manager.
+export function stopTree(pid: number): void {
+  if (process.platform === "win32") {
+    spawn("taskkill", ["/pid", String(pid), "/t", "/f"], { stdio: "ignore", windowsHide: true });
+    return;
+  }
+  for (const target of [-pid, pid]) {
+    try {
+      process.kill(target, "SIGTERM");
+      return;
+    } catch {
+      // Not a process group leader, or already gone: try the process itself.
+    }
+  }
+}

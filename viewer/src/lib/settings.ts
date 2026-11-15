@@ -6,6 +6,8 @@ import { pageToken } from "./panel";
 export type AgentSettings = {
   // Split the reading and writing of a report between subagents that work at the same time.
   subagents: boolean;
+  // Take screenshots of the changed UI with Playwright while the report is written.
+  screenshots: boolean;
   // Publish a branch's report to Reflektor while its pull request is open, once the reader is signed in there.
   reflektorAutoPublish: boolean;
   // The Reflektor API to sign in with, for a self-hosted Reflektor. Empty means Reflektor's own.

@@ -70,6 +70,8 @@ export const targetKey = (t: CommentTarget): string => {
       return `before-merge:${t.index}`;
     case "plan-item":
       return `plan:${t.index}`;
+    case "screenshot":
+      return `shot:${t.file}:${t.pin ? `${t.pin.x.toFixed(4)},${t.pin.y.toFixed(4)}` : "whole"}`;
     case "report":
       return "report";
   }
@@ -94,6 +96,8 @@ export const describeTarget = (t: CommentTarget): string => {
       return `Before you merge: ${clip(t.text)}`;
     case "plan-item":
       return `Plan: ${clip(t.text)}`;
+    case "screenshot":
+      return `Screenshot${t.pin ? ", pinned" : ""}: ${clip(t.caption)}`;
     case "report":
       return "Whole report";
   }
@@ -127,6 +131,8 @@ const toMarkdown = (bundle: Bundle, round: number, comments: ReviewComment[]) =>
         return "Before you merge";
       case "plan-item":
         return `Plan item (${t.status})`;
+      case "screenshot":
+        return `Screenshot "${t.caption}" (${t.file} in the review folder${t.pin ? `, pinned at ${Math.round(t.pin.x * 100)}% across and ${Math.round(t.pin.y * 100)}% down` : ""})`;
       case "report":
         return "The whole change";
     }

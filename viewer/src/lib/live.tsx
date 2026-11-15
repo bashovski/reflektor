@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
-import type { AgentInfo, Bundle, ChecksRun, CommentKind, LiveQuestion, PrState, Ref, ReviewComment } from "../../../skill/schema/types";
+import type { AgentInfo, Bundle, ChecksRun, CommentKind, ScreenshotsRun, LiveQuestion, PrState, Ref, ReviewComment } from "../../../skill/schema/types";
 
 // Live state of a review, streamed from the pr-report daemon.
 //
@@ -43,6 +43,8 @@ export type LiveState = {
   submitted: ReviewComment[];
   // The project checks as they run; null when there are none.
   checks: ChecksRun | null;
+  // Screenshots of the changed UI as they are taken; null when there are none. Missing in states from an older daemon.
+  screenshots?: ScreenshotsRun | null;
   // Build time of the current round's data. It changes when the agent publishes the round again.
   roundBuiltAt: string | null;
   lastAgentActivity: string | null;

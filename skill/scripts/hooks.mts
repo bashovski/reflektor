@@ -5,6 +5,13 @@
 //   postRun     review.mjs open, at the first publish of a round that is not a draft. A failure is a warning.
 //   onApproved  review.mjs wait or resume, when the reviewer finishes with nothing left to fix. A failure is a warning.
 //
+// Four more belong to screenshots.mjs, which takes pictures of the changed UI:
+//
+//   preScreenshots       before the first shot, to seed test data and sign a test user in. A failure skips the signed-in shots.
+//   onScreenshotsPassed  every planned shot was taken. A failure is a warning.
+//   onScreenshotsFailed  a shot failed, or the run could not start. A failure is a warning.
+//   postScreenshots      always, after the one of the two above. A failure is a warning.
+//
 // A hook is one command or a list, run one after another in the repo's root, in the same shell as the
 // project checks (repo.mjs runShell). A failing command ends its list, and so does the time limit below.
 // What a hook prints is shown to the agent. The daemon and the page never run a command.
@@ -14,6 +21,12 @@
 // PR_REPORT_REPORT (report.json: what the agent wrote), PR_REPORT_URL (the review page) and, when the
 // build wrote one, PR_REPORT_PR_TEXT (pr-description.md: the title line, then the body). The two files'
 // types are DiffData and Report in schema/types.ts.
+//
+// The screenshot hooks also get PR_REPORT_APP_URL (the app's address) and PR_REPORT_SCREENSHOTS_DIR (where the shots
+// go). preScreenshots gets two paths it may write: PR_REPORT_AUTH_STATE, for a Playwright storage state of a signed-in
+// test user, or PR_REPORT_AUTH_CREDENTIALS, for {"username", "password"} of one, which the run then signs in with
+// through the app's own login page. The three after the run get PR_REPORT_SCREENSHOTS (screenshots.json) and
+// PR_REPORT_SCREENSHOTS_RESULT (passed or failed).
 //
 // Hooks run code from the branch (.pr-report.json and the scripts it names), so they follow the checks'
 // trust rule: when the branch has commits by someone the user has not trusted for this repo
@@ -27,7 +40,15 @@ import { remoteOf, runShell, untrustedAuthors } from "./repo.mjs";
 
 // Code generation in preRun can be slow; the others should be quick. PR_REPORT_HOOK_SECONDS overrides
 // all three, for tests.
-const LIMIT_SECONDS: Record<HookName, number> = { preRun: 300, postRun: 120, onApproved: 120 };
+const LIMIT_SECONDS: Record<HookName, number> = {
+  preRun: 300,
+  postRun: 120,
+  onApproved: 120,
+  preScreenshots: 300,
+  onScreenshotsPassed: 120,
+  onScreenshotsFailed: 120,
+  postScreenshots: 120,
+};
 
 const readJson = (file: string): unknown => {
   try {

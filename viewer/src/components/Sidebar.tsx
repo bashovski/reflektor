@@ -1,6 +1,7 @@
-import { Braces, Check, FlaskConical, Route } from "lucide-react";
+import { Braces, Camera, Check, FlaskConical, Route } from "lucide-react";
 import { useEffect, useState } from "react";
 import { REVIEW, SECTIONS } from "../lib/meta";
+import { useScreenshots } from "../lib/screenshots";
 import { scrollBehavior } from "../lib/motion";
 import { sectionDomId, useReport } from "../lib/state";
 import { cx, Digit, Meter } from "./ui";
@@ -42,6 +43,8 @@ export const Sidebar = () => {
   const { report, diff } = bundle;
   const total = diff.stats.files;
   const active = useActiveSection(shownSections.map((s) => s.index));
+  const screenshots = useScreenshots();
+  const shots = screenshots?.sets.flatMap((set) => set.shots) ?? [];
 
   const goToSection = (index: number) => {
     setSectionOpen(index, true);
@@ -114,6 +117,21 @@ export const Sidebar = () => {
           <Braces className="size-3.5" />
           <span>
             <span className="num">{report.contracts.length}</span> {report.contracts.length === 1 ? "type or constant" : "types and constants"}
+          </span>
+        </a>
+      )}
+
+      {screenshots && (
+        <a href="#screenshots" className="flex items-center gap-2 rounded-control px-2 py-1.5 text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
+          <Camera className="size-3.5" />
+          <span>
+            {shots.length ? (
+              <>
+                <span className="num">{shots.filter((x) => x.status === "taken").length}</span> {shots.length === 1 ? "screenshot" : "screenshots"}
+              </>
+            ) : (
+              "Screenshots"
+            )}
           </span>
         </a>
       )}
