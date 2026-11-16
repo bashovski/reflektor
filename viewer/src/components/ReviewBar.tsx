@@ -11,6 +11,7 @@ import { Composer } from "./Comments";
 import { PlanPanel } from "./PlanPanel";
 import { RichText } from "./RichText";
 import { cx, FileIcon, Kbd, KEY_LABELS, MOD_KEY, Meter, Pill } from "./ui";
+import { useChangeWords } from "../lib/pr";
 
 const REPORT_TARGET: CommentTarget = { type: "report" };
 
@@ -107,6 +108,7 @@ export const ReviewBar = () => {
   };
   const review = useReview();
   const agent = useAgent();
+  const words = useChangeWords();
   const problems = useProblems();
   // Re-render every 5 seconds so the warnings about a missing agent can appear without a new event.
   const [, setTick] = useState(0);
@@ -142,8 +144,8 @@ export const ReviewBar = () => {
         ? `This is round ${round}. Round ${review.latestRound} is newer.`
         : review.phase === "done"
           ? total
-            ? `Review finished. ${agent.Name} handled all ${total} ${total === 1 ? "comment" : "comments"} without changing code, so there is no new round. ${agent.Name} can open the PR now.`
-            : `Review finished. ${agent.Name} can open the PR now.`
+            ? `Review finished. ${agent.Name} handled all ${total} ${total === 1 ? "comment" : "comments"} without changing code, so there is no new round. ${agent.Name} can open the ${words.short} now.`
+            : `Review finished. ${agent.Name} can open the ${words.short} now.`
           : review.phase === "sent" && unheard
             ? `Sent round ${round} with ${total} ${total === 1 ? "comment" : "comments"}.`
             : review.phase === "sent"

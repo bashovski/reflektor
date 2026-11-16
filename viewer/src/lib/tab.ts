@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { setFavicon, type TabIcon } from "./favicon";
 import { type LiveState, useLive } from "./live";
-import { useMerged } from "./pr";
+import type { ChangeWords } from "./meta";
+import { useChangeWords, useMerged } from "./pr";
 import { useReview } from "./review";
 import { useReport } from "./state";
 
@@ -13,12 +14,12 @@ import { useReport } from "./state";
 const BLINK_MS = 1200;
 
 // What changed that the reviewer should come back for.
-function newsBetween(before: LiveState, after: LiveState): string | null {
+function newsBetween(before: LiveState, after: LiveState, words: ChangeWords): string | null {
   if (after.round > before.round) return `Round ${after.round} ready`;
   if (after.phase === "planning" && before.phase !== "planning") return "Plan ready";
   if (after.phase === "done" && before.phase !== "done") return "Review finished";
-  if (after.pr?.state === "MERGED" && before.pr?.state !== "MERGED") return "Pull request merged";
-  if (after.pr && !before.pr) return `Pull request #${after.pr.number} opened`;
+  if (after.pr?.state === "MERGED" && before.pr?.state !== "MERGED") return `${words.Name} merged`;
+  if (after.pr && !before.pr) return `${words.Name} ${words.ref(after.pr.number)} opened`;
   const answered = (s: LiveState) => s.questions.filter((q) => q.answer).length;
   if (answered(after) > answered(before)) return "Question answered";
   if (before.checks?.status === "running" && after.checks && after.checks.status !== "running") {
@@ -30,15 +31,16 @@ function newsBetween(before: LiveState, after: LiveState): string | null {
 
 function useNewsWhileAway() {
   const { live } = useLive();
+  const words = useChangeWords();
   const [news, setNews] = useState({ count: 0, last: "" });
   const previous = useRef(live);
 
   useEffect(() => {
     const before = previous.current;
     previous.current = live;
-    const message = before && live ? newsBetween(before, live) : null;
+    const message = before && live ? newsBetween(before, live, words) : null;
     if (message && !document.hasFocus()) setNews((n) => ({ count: n.count + 1, last: message }));
-  }, [live]);
+  }, [live, words]);
 
   useEffect(() => {
     const clear = () => {

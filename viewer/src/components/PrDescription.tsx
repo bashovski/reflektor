@@ -2,6 +2,7 @@ import { Check, ClipboardCopy, FileText, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAgent } from "../lib/agent";
 import { useReport } from "../lib/state";
+import { useChangeWords } from "../lib/pr";
 
 const copyText = async (text: string) => {
   try {
@@ -41,6 +42,7 @@ export const PrDescription = () => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDialogElement>(null);
   const pr = bundle.prDescription;
+  const words = useChangeWords();
 
   useEffect(() => {
     if (open && !ref.current?.open) ref.current?.showModal();
@@ -56,7 +58,7 @@ export const PrDescription = () => {
         className="inline-flex items-center gap-1.5 rounded-control px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400"
       >
         <FileText className="size-3.5" />
-        PR description
+        {words.short} description
       </button>
       <dialog
         ref={ref}
@@ -66,8 +68,10 @@ export const PrDescription = () => {
       >
         <div className="flex h-full flex-col">
           <div className="flex items-center gap-3 border-b border-[var(--border)] px-5 py-3">
-            <h2 className="font-semibold">PR description</h2>
-            <span className="text-xs text-muted">Markdown, ready to paste. {agent.Name} can also open the PR with it.</span>
+            <h2 className="font-semibold">{words.short} description</h2>
+            <span className="text-xs text-muted">
+              Markdown, ready to paste. {agent.Name} can also open the {words.short} with it.
+            </span>
             <button type="button" onClick={() => setOpen(false)} className="ml-auto rounded-control p-1 text-muted hover:bg-zinc-500/10" title="Close (Esc)">
               <X className="size-4" />
             </button>

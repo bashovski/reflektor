@@ -82,7 +82,7 @@ type SavedState = Pick<ReviewRecord, "rounds" | "phase" | "statuses" | "plan" | 
   events: (EventData & { seq: number; at: string; deliveredAt: string | null; handledAt?: string | null })[];
 };
 // The repo and the code a round was built from, read from its data file (roundFacts).
-type RoundFacts = { builtAt?: string; root: string; gitDir: string; branch: string; headSha: string; snapshot: string; host: string | null; owner: string | null; name: string; upstream: { ref: string; ahead: number } | null };
+type RoundFacts = { builtAt?: string; root: string; gitDir: string; branch: string; headSha: string; snapshot: string; host: string | null; owner: string | null; name: string; forge: string | null; upstream: { ref: string; ahead: number } | null };
 // What roundFacts keeps when the round's data could not be read: no root, so nothing is checked.
 type NoFacts = { builtAt?: string; root: null; host?: undefined };
 // A review: one branch in one repo, across rounds. The optional fields at the end are kept in memory only.
@@ -937,6 +937,7 @@ function roundFacts(r: ReviewRecord) {
       host: diff.repo.host ?? null,
       owner: diff.repo.owner ?? null,
       name: diff.repo.name,
+      forge: diff.repo.web?.forge ?? null,
       upstream: diff.branch.upstream ?? null,
     };
   } catch {
@@ -1073,6 +1074,30 @@ const ghPr = (cwd: string | undefined, ref: string) =>
     },
   );
 
+// The newest merge request from this branch on GitLab, through glab, which knows the host and the login. glab's
+// placeholders need the right working folder, so the project's path goes in the URL instead.
+type GitLabMr = { iid: number; web_url: string; title?: string | null; state: string; target_branch?: string | null; merged_at?: string | null };
+
+const glabMr = (f: RoundFacts) => {
+  const query = new URLSearchParams({ source_branch: f.branch, order_by: "created_at", sort: "desc", per_page: "1" });
+  const path = `projects/${encodeURIComponent(`${f.owner}/${f.name}`)}/merge_requests?${query}`;
+  return run("glab", ["api", "--hostname", f.host ?? "gitlab.com", path], { cwd: existsSync(f.root ?? "") ? f.root : undefined, windowsHide: true, timeout: 15_000 }).then(
+    (x): LivePr | null => {
+      const [mr] = JSON.parse(x.stdout) as GitLabMr[];
+      if (!mr) return null;
+      return {
+        number: Number(mr.iid),
+        url: mr.web_url,
+        title: mr.title ?? null,
+        state: mr.state === "merged" ? "MERGED" : mr.state === "opened" ? "OPEN" : "CLOSED",
+        base: mr.target_branch ?? null,
+        mergedAt: mr.merged_at ?? null,
+        checkedAt: now(),
+      };
+    },
+  );
+};
+
 // Keeps what GitHub said, and tells open pages and the inbox when it differs from what they show.
 function setPr(r: ReviewRecord, pr: LivePr | null) {
   // A pull request does not go away. An empty answer with one known means the lookup missed it
@@ -1103,22 +1128,32 @@ function seedPr(r: ReviewRecord, bundle: Bundle) {
 // doubling otherwise (offline, logged out) until it goes quiet.
 async function checkPr(r: ReviewRecord) {
   const f = roundFacts(r);
-  if (f?.host !== "github.com" || !f.owner || f.branch === "HEAD") return;
+  if (!f?.root || !f.owner || f.branch === "HEAD") return;
+  const onGitLab = f.forge === "gitlab";
+  if (f.host !== "github.com" && !onGitLab) return;
   if (r.pr?.state === "MERGED" || r.prBusy || Date.now() < (r.prNextAt ?? 0)) return;
   r.prBusy = true;
   try {
-    const auth = await githubToken();
-    if (!auth.token && !auth.gh) {
-      r.prNextAt = Infinity;
-      return;
+    let found: LivePr | null | undefined;
+    if (onGitLab) {
+      found = await glabMr(f).catch((e: { code?: string }) => {
+        if (e.code === "ENOENT") r.prNextAt = Infinity;
+        throw e;
+      });
+    } else {
+      const auth = await githubToken();
+      if (!auth.token && !auth.gh) {
+        r.prNextAt = Infinity;
+        return;
+      }
+      found = auth.token ? await restPr(r, f, auth.token) : await ghPr(existsSync(f.root ?? "") ? f.root : undefined, f.branch);
     }
-    const found = auth.token ? await restPr(r, f, auth.token) : await ghPr(existsSync(f.root ?? "") ? f.root : undefined, f.branch);
     r.prFailures = 0;
     if (found !== undefined) setPr(r, found);
     r.prNextAt = Date.now() + (!r.pr && f.upstream ? 0 : PR_POLL_MS);
   } catch (e) {
     r.prFailures = (r.prFailures ?? 0) + 1;
-    r.prNextAt = Date.now() + ((e as GitHubError).retryAfterMs ?? Math.min(PR_POLL_MS * 2 ** r.prFailures, PR_QUIET_MS));
+    if (r.prNextAt !== Infinity) r.prNextAt = Date.now() + ((e as GitHubError).retryAfterMs ?? Math.min(PR_POLL_MS * 2 ** r.prFailures, PR_QUIET_MS));
   } finally {
     r.prBusy = false;
   }

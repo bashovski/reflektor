@@ -3,7 +3,7 @@ import { reviewMinutes } from "../../../skill/scripts/reading.mjs";
 import { useAgent } from "../lib/agent";
 import { useChecks } from "../lib/checks";
 import { BASE_SOURCE, REVIEW, TARGETS } from "../lib/meta";
-import { usePr } from "../lib/pr";
+import { useChangeWords, usePr } from "../lib/pr";
 import { useReport } from "../lib/state";
 import { OwnerMenu } from "./OwnerMenu";
 import { PrDescription } from "./PrDescription";
@@ -72,6 +72,7 @@ export const Hero = () => {
   const { diff, report } = bundle;
   const { branch, scope, stats, commits, coverage } = diff;
   const pr = usePr();
+  const words = useChangeWords();
 
   const failedChecks = useChecks()?.results.filter((r) => r.status !== "passed").length ?? 0;
   const levelCounts = report.sections.reduce(
@@ -92,7 +93,7 @@ export const Hero = () => {
         <span className="inline-flex items-center gap-1.5">
           <GitBranch className="size-3.5" />
           <span className="font-mono">{branch.head}</span> into <span className="font-mono">{branch.base}</span>
-          <span className="text-faint">({BASE_SOURCE[branch.baseSource]})</span>
+          <span className="text-faint">({branch.baseSource === "open-pr" ? `from the open ${words.short}` : BASE_SOURCE[branch.baseSource]})</span>
         </span>
         <details className="group relative">
           <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 hover:text-zinc-800 dark:hover:text-zinc-200">
@@ -115,7 +116,7 @@ export const Hero = () => {
         {pr && (
           <a href={pr.url} target="_blank" rel="noreferrer" title={pr.title ?? undefined} className="inline-flex items-center gap-1.5 underline-offset-2 hover:underline">
             <span>
-              PR <span className="num">#{pr.number}</span>
+              {words.short} <span className="num">{words.ref(pr.number)}</span>
             </span>
             <PrStatePill state={pr.state} className="py-0 text-[11px]" />
           </a>
