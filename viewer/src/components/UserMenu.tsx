@@ -97,7 +97,7 @@ export const PurgeDialog = ({ open, onClose }: { open: boolean; onClose: () => v
       <div className="space-y-3 px-5 py-4">
         <h2 className="font-semibold">Purge the daemon&rsquo;s cache?</h2>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Avatars and account details under <code className="font-mono text-xs">~/.pr-report/cache</code> are deleted and fetched again when needed. Reviews and saved checks are not touched.
+          Avatars and account details under <code className="font-mono text-xs">~/.reflektor/cache</code> are deleted and fetched again when needed. Reviews and saved checks are not touched.
         </p>
         {result && <p className="text-sm">{result}</p>}
         <div className="flex justify-end gap-2 pt-1">
@@ -142,7 +142,7 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
   const forge = repo.web?.forge ? FORGE_NAMES[repo.web.forge] : null;
   const linkStatus = LINKS[link];
 
-  // A new pr-report: a dot on the avatar and an item at the top of the menu until it is installed, and the modal by
+  // A new reflektor: a dot on the avatar and an item at the top of the menu until it is installed, and the modal by
   // itself once per version when the daemon says to ask. An auto-opened modal closes again when another tab answered it.
   const update = useUpdate();
   const [updating, setUpdating] = useState<"auto" | "menu" | null>(null);
@@ -200,7 +200,7 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
                   <CircleArrowUp />
                   <span className="min-w-0 flex-1">
                     <span className="block">{pending.status === "required" ? "Update needed" : "Update available"}</span>
-                    <span className="block truncate text-xs text-muted">pr-report {pending.status === "required" ? `${pending.minimum} or newer` : pending.latest}</span>
+                    <span className="block truncate text-xs text-muted">reflektor {pending.status === "required" ? `${pending.minimum} or newer` : pending.latest}</span>
                   </span>
                 </button>
               </MenuItem>

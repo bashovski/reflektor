@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Writes skill/THIRD-PARTY-NOTICES.md: the license of every package that ships inside pr-report, with its
+// Writes skill/THIRD-PARTY-NOTICES.md: the license of every package that ships inside reflektor, with its
 // text. The viewer bundles its runtime dependencies into assets/, the file icons come from
 // atom-material-icons, and Tailwind generates the stylesheet, so all of those are covered. Apache-2.0,
 // MIT, ISC and OFL all ask for their license text to travel with the code.
@@ -101,7 +101,7 @@ if (missing.length) {
 
 const header =
   `# Third-party notices\n\n` +
-  `pr-report ships the open source packages below inside the skill: the viewer bundles its dependencies into \`assets/\`, ` +
+  `reflektor ships the open source packages below inside the skill: the viewer bundles its dependencies into \`assets/\`, ` +
   `the inbox serves Fuse.js, the file type icons come from atom-material-icons, Tailwind CSS generated the stylesheet, ` +
   `and the setup wizard's background is source copied from React Bits. ` +
   `Each one's license follows. This file is written by \`scripts/build-notices.mts\` from the installed packages and from \`viewer/src/vendor\`.\n\n`;

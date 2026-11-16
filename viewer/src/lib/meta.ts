@@ -221,7 +221,7 @@ export const changeWords = (forge: Forge | null | undefined): ChangeWords => (fo
 export const BASE_SOURCE: Record<BaseSource, string> = {
   argument: "you picked it",
   "open-pr": "from the open PR",
-  config: "from .pr-report.json",
+  config: "from .reflektor.json",
   "default-branch": "repo default branch",
   guess: "best guess",
 };
@@ -253,4 +253,4 @@ export const FINDING_KINDS: Record<FindingKind, { label: string; icon: LucideIco
 };
 
 // Where the project lives, for the help and bug report links in the user menu.
-export const PROJECT = { repo: "https://github.com/bashovski/pr-report", issues: "https://github.com/bashovski/pr-report/issues/new", readme: "https://github.com/bashovski/pr-report#readme" };
+export const PROJECT = { repo: "https://github.com/bashovski/reflektor", issues: "https://github.com/bashovski/reflektor/issues/new", readme: "https://github.com/bashovski/reflektor#readme" };

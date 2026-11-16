@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The agent's side of a review. Talks to the pr-report daemon and starts it when needed.
+// The agent's side of a review. Talks to the reflektor daemon and starts it when needed.
 //
 //   open    --report <json> [--open]     publish a report (a new review, or the next round of one)
 //   wait    --id <review>                block until the reviewer does something; run in the background
@@ -18,7 +18,7 @@
 //
 // Reflektor, where an organization reads its members' reports (reflektor.mjs):
 //
-//   login   [--no-open]                   sign in in the browser (device flow); the token goes to ~/.pr-report/reflektor.json
+//   login   [--no-open]                   sign in in the browser (device flow); the token goes to ~/.reflektor/reflektor.json
 //   logout                                sign out here: deletes that file and nothing else
 //   whoami                                the account this machine publishes as
 //   publish [--id <review>] [--repo .] [--org <slug>]   this branch's newest finished round, now. With an open pull
@@ -80,21 +80,21 @@ type PlanFile = { steps: unknown[] };
 type PublishAnswer = { ok: boolean; reason: string | null; message: string; round: number | null; url: string | null; organization: string | null; organizations?: Organization[]; already?: boolean };
 
 const here = dirname(fileURLToPath(import.meta.url));
-const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
+const HOME = process.env.REFLEKTOR_HOME ?? join(homedir(), ".reflektor");
 const daemonScript = join(here, "daemon.mjs");
 const daemonFile = join(HOME, "daemon.json");
 // Read from disk each time: a waiter that started before the skill was rebuilt must take the new daemon as current,
 // not shut it down as out of date.
 const expectedVersion = () => readVersion();
 
-// An installed release this script is no longer part of: pr-report was updated (or rolled back) while it ran, so the
+// An installed release this script is no longer part of: reflektor was updated (or rolled back) while it ran, so the
 // daemon belongs to the other version and must not be replaced by this one's.
 const superseded = () => {
   const install = readInstall();
   return Boolean(install && isRelease() && install.version !== readVersion());
 };
 const updatedMessage = (version = readInstall()?.version ?? "a new version") =>
-  `pr-report was updated to ${version} while this was running, so it stopped here. Comments and drafts are saved. Tell the user, then continue with /pr-report resume (review.mjs resume), which uses the new version.`;
+  `reflektor was updated to ${version} while this was running, so it stopped here. Comments and drafts are saved. Tell the user, then continue with /reflektor resume (review.mjs resume), which uses the new version.`;
 // GET /api/update in daemon.mjs.
 type UpdateAnswer = UpdateInfo & { state: string; error: string | null; target: string | null; waiting: number };
 // The line every answer the agent relays ends with while an update waits (updates.mjs).
@@ -209,7 +209,7 @@ const describe = (t: CommentTarget) => {
   }
 };
 
-// The path the agent ran this with, not where it resolves to: a release is a link to ~/.pr-report/versions/<version>/,
+// The path the agent ran this with, not where it resolves to: a release is a link to ~/.reflektor/versions/<version>/,
 // and the commands printed here must keep working after an update moves the link.
 const self = `node "${shellPath(process.argv[1] && /review\.mjs$/.test(process.argv[1]) ? process.argv[1] : join(here, "review.mjs"))}"`;
 
@@ -220,9 +220,9 @@ async function branchReview(info: DaemonInfo): Promise<string | null> {
   const gitDir = resolve(git("rev-parse", "--show-toplevel"), git("rev-parse", "--git-dir"));
   const branch = git("rev-parse", "--abbrev-ref", "HEAD");
   const { data } = await api<ReviewList>(info, "GET", "/api/reviews");
-  const mine = data.reviews.filter((r) => r.branch === branch && (r.dir === join(gitDir, "pr-report") || r.dir.startsWith(gitDir)));
+  const mine = data.reviews.filter((r) => r.branch === branch && (r.dir === join(gitDir, "reflektor") || r.dir.startsWith(gitDir)));
   const id = mine.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id;
-  if (!id) console.log(`No review of ${branch} is open. Run /pr-report to start one.`);
+  if (!id) console.log(`No review of ${branch} is open. Run /reflektor to start one.`);
   return id ?? null;
 }
 
@@ -290,7 +290,7 @@ async function handOver(event: ReviewEvent, review: EventReview, info: DaemonInf
   explain(event, review);
   if (!reviewDone(event)) return;
   const hooks = await runReportHooks("onApproved", { dir: review.dir, round: event.round, url: `http://127.0.0.1:${info.port}/r/${review.id}` });
-  if (hooks.failed) console.log("warning: the onApproved hook in .pr-report.json failed; tell the user what it printed.");
+  if (hooks.failed) console.log("warning: the onApproved hook in .reflektor.json failed; tell the user what it printed.");
   if (hooks.ran && !hooks.failed)
     console.log("The project's onApproved hook ran; its output is above. Tell the user what it did. If it opened a pull request, tell the review page with the pr command; if not, offer to open the PR (ask first).");
   else console.log("Offer to open the PR (ask first).");
@@ -323,7 +323,7 @@ async function main() {
     // The project's postRun hook, once a round: at its first build that is not a draft (hooks.mjs).
     if (data.firstReal) {
       const hooks = await runReportHooks("postRun", { dir: data.dir, round: data.round, url: data.url });
-      if (hooks.failed) console.log("warning: the postRun hook in .pr-report.json failed. The report is published; tell the user what the hook printed.");
+      if (hooks.failed) console.log("warning: the postRun hook in .reflektor.json failed. The report is published; tell the user what the hook printed.");
     }
     // Nothing in this shell says which agent this is, so the page speaks of "your agent" until it is told.
     if (!agent) console.log(`note: the page does not know which agent you are. Add --agent-name "<the product you run in>" to review.mjs commands so it can say.`);
@@ -349,9 +349,9 @@ async function main() {
         result = await api<NextEvent>(info, "GET", `/api/r/${encodeURIComponent(args.id)}/next-event`);
         failures = 0;
       } catch (e) {
-        // An update stops every waiter: the daemon answers "pr-report-updated", or is gone and a newer version is
+        // An update stops every waiter: the daemon answers "reflektor-updated", or is gone and a newer version is
         // installed. Exit code 3 tells the agent this is not a failure.
-        if ((e as Error).message === "pr-report-updated" || superseded()) {
+        if ((e as Error).message === "reflektor-updated" || superseded()) {
           console.log(updatedMessage());
           process.exitCode = 3;
           return;
@@ -493,24 +493,24 @@ async function main() {
     if (data.reason === "unauthorized" || data.reason === "signed_out") console.log(`Sign in again with: ${self} login`);
     process.exitCode = 1;
   } else if (command === "version") {
-    console.log(`pr-report ${readVersion()}${isRelease() ? "" : " (a build from a checkout, which does not update itself)"}`);
+    console.log(`reflektor ${readVersion()}${isRelease() ? "" : " (a build from a checkout, which does not update itself)"}`);
     const install = readInstall();
     if (install) console.log(`Installed release: ${install.version} for ${install.targets.join(", ")}${install.previous ? `; rollback goes to ${install.previous}` : ""}.`);
     const info = await ensureDaemon();
     const { data } = await api<UpdateAnswer>(info, "POST", "/api/update/check");
     if (data.status === "required") console.log(`Update needed: Reflektor takes reports from ${data.minimum} or newer. Run: ${self} update`);
-    else if (data.status === "available") console.log(`pr-report ${data.latest} is available. Run: ${self} update`);
+    else if (data.status === "available") console.log(`reflektor ${data.latest} is available. Run: ${self} update`);
     else if (data.latest) console.log(`Up to date (the newest release is ${data.latest}).`);
     else console.log("No release information yet.");
   } else if (command === "update") {
-    if (!managedInstall() && process.env.PR_REPORT_UPDATE_CHECK !== "1") {
-      console.log("This pr-report is a build from a checkout, so it does not update itself. Update it with: git pull && pnpm build && pnpm run deploy");
+    if (!managedInstall() && process.env.REFLEKTOR_UPDATE_CHECK !== "1") {
+      console.log("This reflektor is a build from a checkout, so it does not update itself. Update it with: git pull && pnpm build && pnpm run deploy");
       process.exitCode = 1;
       return;
     }
     const info = await ensureDaemon();
     let { data } = await api<UpdateAnswer>(info, "POST", "/api/update");
-    console.log("Updating pr-report. Open pages reload, and agents waiting on a review stop and say so.");
+    console.log("Updating reflektor. Open pages reload, and agents waiting on a review stop and say so.");
     for (let i = 0; i < 600 && !["failed", "restarting"].includes(data.state); i++) {
       await sleep(500);
       data = (await api<UpdateAnswer>(info, "GET", "/api/update").catch(() => ({ data: { ...data, state: "restarting" } }))).data;
@@ -520,13 +520,13 @@ async function main() {
       process.exitCode = 1;
       return;
     }
-    console.log(`Installed pr-report ${data.target ?? readInstall()?.version}. The daemon restarted on it.`);
-    console.log("An agent session that already loaded pr-report keeps the old instructions until its next /pr-report.");
+    console.log(`Installed reflektor ${data.target ?? readInstall()?.version}. The daemon restarted on it.`);
+    console.log("An agent session that already loaded reflektor keeps the old instructions until its next /reflektor.");
   } else if (command === "rollback") {
     const back = rollback();
     const info = readJson(daemonFile) as DaemonInfo | null;
     if (info) await api(info, "POST", "/api/shutdown").catch(() => {});
-    console.log(`Back on pr-report ${back.version}. The daemon starts on it with the next command.`);
+    console.log(`Back on reflektor ${back.version}. The daemon starts on it with the next command.`);
   } else if (command === "stop") {
     const info = readJson(daemonFile) as DaemonInfo | null;
     if (!info || !existsSync(daemonFile)) console.log("The daemon is not running.");

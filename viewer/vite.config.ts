@@ -5,10 +5,10 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin, transformWithOxc } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 
-const PLACEHOLDER = "__PR_REPORT_DATA__";
+const PLACEHOLDER = "__REFLEKTOR_DATA__";
 
 const sampleData = (): Plugin => ({
-  name: "pr-report-sample-data",
+  name: "reflektor-sample-data",
   apply: "serve",
   transformIndexHtml(html) {
     const file = resolve(import.meta.dirname, "../samples/bundle.json");
@@ -33,7 +33,7 @@ async function plainScript(file: string) {
 }
 
 const bootTheme = (): Plugin => ({
-  name: "pr-report-boot-theme",
+  name: "reflektor-boot-theme",
   async transformIndexHtml(html) {
     return html.replace("<!-- src/boot/theme.ts -->", `<script>\n${await plainScript("src/boot/theme.ts")}</script>`);
   },
@@ -41,7 +41,7 @@ const bootTheme = (): Plugin => ({
 
 // dist/app/inbox.js and inbox-theme.js, which install.mts copies with the app and the daemon reads.
 const inboxScripts = (): Plugin => ({
-  name: "pr-report-inbox-scripts",
+  name: "reflektor-inbox-scripts",
   apply: "build",
   async generateBundle() {
     for (const [fileName, file] of [

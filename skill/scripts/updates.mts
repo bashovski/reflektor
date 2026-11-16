@@ -1,5 +1,5 @@
-// Knowing about new versions. The daemon asks Reflektor once an hour (GET <api>/pr-report/version) and keeps the
-// answer in ~/.pr-report/update.json; the pages and review.mjs read it from there.
+// Knowing about new versions. The daemon asks Reflektor once an hour (GET <api>/skill/version) and keeps the
+// answer in ~/.reflektor/update.json; the pages and review.mjs read it from there.
 //
 // The file holds only what Reflektor said and what the reader did, never "an update is needed": that would be wrong
 // the moment the version changes. The status is worked out on every read, from the file and the running version:
@@ -9,7 +9,7 @@
 //   none        up to date, or nothing known yet
 //
 // "Later" snoozes one version for a day. A newer release than the snoozed one asks again at once, and a required
-// update ignores the snooze. Builds from a checkout never look for updates (PR_REPORT_UPDATE_CHECK=1 makes one look,
+// update ignores the snooze. Builds from a checkout never look for updates (REFLEKTOR_UPDATE_CHECK=1 makes one look,
 // for trying the modal), and neither does a machine where install.json is missing.
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -70,7 +70,7 @@ export function writeUpdateFile(patch: Partial<UpdateFile>): UpdateFile {
 
 // A release installed with install.sh or by an update, running as the version install.json names.
 export const managedInstall = () => isRelease() && readInstall() !== null;
-export const checksEnabled = (env: NodeJS.ProcessEnv = process.env) => env.PR_REPORT_UPDATE_CHECK === "1" || (env.PR_REPORT_UPDATE_CHECK !== "0" && managedInstall());
+export const checksEnabled = (env: NodeJS.ProcessEnv = process.env) => env.REFLEKTOR_UPDATE_CHECK === "1" || (env.REFLEKTOR_UPDATE_CHECK !== "0" && managedInstall());
 
 export function updateInfo(file = readUpdateFile(), current = skillVersion(), at = Date.now()): UpdateInfo {
   const known = checksEnabled();
@@ -100,8 +100,8 @@ export async function checkForUpdate(apiUrl: string): Promise<boolean> {
   const file = readUpdateFile();
   let res: Response;
   try {
-    res = await fetch(`${apiUrl}/pr-report/version`, {
-      headers: { accept: "application/json", "user-agent": "pr-report", "x-pr-report-version": skillVersion(), ...(file.etag ? { "if-none-match": file.etag } : {}) },
+    res = await fetch(`${apiUrl}/skill/version`, {
+      headers: { accept: "application/json", "user-agent": "reflektor", "x-reflektor-version": skillVersion(), ...(file.etag ? { "if-none-match": file.etag } : {}) },
       signal: AbortSignal.timeout(CALL_MS),
     });
   } catch (e) {
@@ -141,7 +141,7 @@ export const noteMinimum = (minimum: string) => (isVersion(minimum) ? writeUpdat
 
 // The line review.mjs ends its answers with while an update is waiting, for the agent to pass on once.
 export function terminalLine(info = updateInfo()): string | null {
-  if (info.status === "required") return `pr-report ${info.minimum} or newer is needed to publish to Reflektor (this is ${info.current}). Update from the report's menu, or run review.mjs update.`;
-  if (info.status === "available") return `pr-report ${info.latest} is available (this is ${info.current}). Update from the report's menu, or run review.mjs update.`;
+  if (info.status === "required") return `Publishing needs reflektor ${info.minimum} or newer (this is ${info.current}). Update from the report's menu, or run review.mjs update.`;
+  if (info.status === "available") return `reflektor ${info.latest} is available (this is ${info.current}). Update from the report's menu, or run review.mjs update.`;
   return null;
 }

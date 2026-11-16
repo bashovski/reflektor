@@ -1,7 +1,7 @@
 // The reader's settings that the agent has to know about.
 //
 // How the page looks (theme, code theme, diff view) is kept in the browser, where only the page needs it. These are
-// kept on disk, in ~/.pr-report/settings.json, because the scripts and the daemon read them: the page writes them
+// kept on disk, in ~/.reflektor/settings.json, because the scripts and the daemon read them: the page writes them
 // through the daemon (/api/settings), collect.mjs tells the agent what they say, and the daemon and review.mjs read
 // the Reflektor ones (reflektor.mjs).
 
@@ -10,7 +10,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { replaceFile } from "./repo.mjs";
 
-const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
+const HOME = process.env.REFLEKTOR_HOME ?? join(homedir(), ".reflektor");
 const FILE = join(HOME, "settings.json");
 
 // Every setting with the value it has until someone changes it. A key that is not listed here is never read or

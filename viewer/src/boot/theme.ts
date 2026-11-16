@@ -3,7 +3,7 @@
 (() => {
   let saved: unknown = "system";
   try {
-    saved = JSON.parse(localStorage.getItem("pr-report:theme") ?? '"system"');
+    saved = JSON.parse(localStorage.getItem("reflektor:theme") ?? '"system"');
   } catch {}
   const system = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   document.documentElement.dataset.theme = saved === "dark" || saved === "light" ? saved : system;

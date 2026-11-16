@@ -538,7 +538,7 @@ function prDescription() {
     lines.push("## Review", "", `Review round ${report.review.round}: ${previousReview.comments.length} comments, ${fixed} fixed.`, "");
   }
 
-  lines.push("<sub>Written from a pr-report review report.</sub>");
+  lines.push("<sub>Written from a reflektor review report.</sub>");
   return { title, body: lines.join("\n") };
 }
 
@@ -574,11 +574,11 @@ writeFileSync(out, JSON.stringify(bundle));
 // The standalone page: the viewer with this report's data inside, for keeping or sending.
 const htmlOut = args.html ? resolve(args.html) : args.open ? out.replace(/\.json$/, ".html") : null;
 if (htmlOut) {
-  // The package ships the standalone page as assets/viewer.html (scripts/build-skill.mts in the pr-report repo).
+  // The package ships the standalone page as assets/viewer.html (scripts/build-skill.mts in the reflektor repo).
   const viewerPath = args.viewer ?? [join(here, "../assets/viewer.html")].find(existsSync);
   if (!viewerPath) throw new Error("Viewer not found. Build it with `pnpm build` or pass --viewer.");
   const html = readFileSync(viewerPath, "utf8");
-  if (!html.includes("__PR_REPORT_DATA__")) throw new Error(`${viewerPath} has no data placeholder`);
+  if (!html.includes("__REFLEKTOR_DATA__")) throw new Error(`${viewerPath} has no data placeholder`);
   // The page's base title (see viewer/src/lib/tab.ts), so the tab is right while the page loads.
   const title = `${report.title || diff.branch.head}${round > 1 ? ` · Round ${round}` : ""} · Reflektor`.replace(
     /[&<>]/g,
@@ -589,7 +589,7 @@ if (htmlOut) {
     htmlOut,
     html
       .replace("<title>PR report</title>", () => `<title>${title}</title>`)
-      .replace("__PR_REPORT_DATA__", () => JSON.stringify(withPictures(bundle)).replace(/</g, "\\u003c")),
+      .replace("__REFLEKTOR_DATA__", () => JSON.stringify(withPictures(bundle)).replace(/</g, "\\u003c")),
   );
 }
 const prFile = join(dirname(out), "pr-description.md");
@@ -603,10 +603,10 @@ writeFileSync(state, JSON.stringify({ headSha: diff.branch.headSha, snapshot: di
 // round, so the next round can show what changed since this one. Refs are invisible to branches and tags.
 if (diff.branch.snapshot) {
   try {
-    execFileSync("git", ["update-ref", "refs/pr-report/last", diff.branch.snapshot], { cwd: diff.repo.root, stdio: "ignore" });
-    execFileSync("git", ["update-ref", `refs/pr-report/rounds/${slug}/r${round}`, diff.branch.snapshot], { cwd: diff.repo.root, stdio: "ignore" });
+    execFileSync("git", ["update-ref", "refs/reflektor/last", diff.branch.snapshot], { cwd: diff.repo.root, stdio: "ignore" });
+    execFileSync("git", ["update-ref", `refs/reflektor/rounds/${slug}/r${round}`, diff.branch.snapshot], { cwd: diff.repo.root, stdio: "ignore" });
   } catch {
-    warnings.push("Could not save refs/pr-report/last; --since last may fail after git garbage collection.");
+    warnings.push("Could not save refs/reflektor/last; --since last may fail after git garbage collection.");
   }
 }
 
@@ -616,7 +616,7 @@ if (htmlOut) console.log(`Standalone page: ${shellPath(htmlOut)}`);
 console.log(
   `${report.sections.length} sections, ${diff.files.length} files, ${steps.filter((st) => st.verified).length}/${steps.length} flow steps verified, ${warnings.length} warnings`,
 );
-console.log("Saved this run for --since last (refs/pr-report/last)");
+console.log("Saved this run for --since last (refs/reflektor/last)");
 if (prText) console.log(`PR description: ${shellPath(prFile)} (first line is the title)`);
 if (diff.sinceRound) {
   const n = diff.sinceRound.files.length;

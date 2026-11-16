@@ -3,7 +3,7 @@ import type { Bundle, CommentKind, CommentTarget, LiveQuestion, ReviewComment } 
 import { type AgentPlan, type CommentStatus, type LiveState, type Phase, useLive } from "./live";
 import { SECTIONS } from "./meta";
 
-// Review comments live here. Served by the pr-report daemon, the page saves them to the repo's git
+// Review comments live here. Served by the reflektor daemon, the page saves them to the repo's git
 // folder, asks live questions, and sends the review to the agent. Opened as a plain file, comments stay
 // in this browser and can be copied.
 
@@ -171,7 +171,7 @@ export const ReviewProvider = ({ bundle, children }: { bundle: Bundle; children:
   const mode = config ? "server" : "local";
   const round = bundle.round;
   const { repo, branch } = bundle.diff;
-  const storageKey = `pr-report:review:${repo.owner ?? ""}/${repo.name}:${branch.snapshot}`;
+  const storageKey = `reflektor:review:${repo.owner ?? ""}/${repo.name}:${branch.snapshot}`;
 
   // A round can be edited only while it is the latest one and has not been sent.
   const current = !live || live.round === round;

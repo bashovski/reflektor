@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// Puts a pr-report package in place for one or more agents, and keeps track of which release is installed. It ships
+// Puts a reflektor package in place for one or more agents, and keeps track of which release is installed. It ships
 // inside the skill, so an installed skill can update itself without the repo: the daemon and `review.mjs update` call
 // activate(), install.sh and install.ps1 run this file after unpacking a release, and the repo's deploy.mts uses
 // installTarget() for a build from a checkout.
 //
-//   claude     Claude Code: ~/.claude/skills/pr-report, a link (a junction on Windows) to the package
+//   claude     Claude Code: ~/.claude/skills/reflektor, a link (a junction on Windows) to the package
 //   agents     agents that read ~/.agents/skills (Codex and others): a copy with its own SKILL.md (portable-skill.mjs)
 //   <folder>   any other skills folder: a copy, like agents
 //
-// A release lives in ~/.pr-report/versions/<version>/, one folder per version, so an update never writes over files a
+// A release lives in ~/.reflektor/versions/<version>/, one folder per version, so an update never writes over files a
 // running daemon or script is using: it unpacks the new version next to the old one and moves the links.
-// ~/.pr-report/install.json names the release in use, the one before it (for rollback) and the targets. A build from
+// ~/.reflektor/install.json names the release in use, the one before it (for rollback) and the targets. A build from
 // a checkout has no install.json, which is how the daemon knows not to look for updates.
 //
 //   node install.mjs activate [--target claude|agents|<folder>]... [--no-open]
@@ -66,7 +66,7 @@ export function skillsFolder(name: string): string {
 export function installTarget(pkg: string, name: string, { copy = false } = {}): Installed {
   const claude = name === "claude";
   const skills = skillsFolder(name);
-  const target = join(skills, "pr-report");
+  const target = join(skills, "reflektor");
   const how = claude && !copy ? "link" : "copy";
   mkdirSync(skills, { recursive: true });
 
@@ -79,7 +79,7 @@ export function installTarget(pkg: string, name: string, { copy = false } = {}):
   if (existing?.isSymbolicLink()) unlinkSync(target);
   else if (existing) {
     const skillFile = join(target, "SKILL.md");
-    if (!existsSync(skillFile) || !/^name: pr-report$/m.test(readFileSync(skillFile, "utf8"))) throw new Error(`${target} exists and is not this skill. Move it away first.`);
+    if (!existsSync(skillFile) || !/^name: reflektor$/m.test(readFileSync(skillFile, "utf8"))) throw new Error(`${target} exists and is not this skill. Move it away first.`);
     if (realpathSync(target) === realpathSync(pkg)) throw new Error(`${target} points at the package itself. Remove that link by hand, then run this again.`);
     rmSync(target, { recursive: true, force: true });
   }
@@ -96,7 +96,7 @@ export const targetLabel = (t: Installed) => (t.claude ? "Claude Code" : t.name 
 // Code), and records it in install.json with the version it replaces.
 export function activate(version: string, targets?: string[]): { installed: Installed[]; previous: string | null } {
   const pkg = versionDir(version);
-  if (buildInfo(pkg).version !== version) throw new Error(`pr-report ${version} is not unpacked in ${pkg}.`);
+  if (buildInfo(pkg).version !== version) throw new Error(`reflektor ${version} is not unpacked in ${pkg}.`);
   const before = readInstall();
   const names = targets?.length ? targets : before?.targets.length ? before.targets : ["claude"];
   const installed = names.map((name) => installTarget(pkg, name));
@@ -108,8 +108,8 @@ export function activate(version: string, targets?: string[]): { installed: Inst
 // Back to the release before this one. Throws when there is none, or it was removed.
 export function rollback(): { version: string; installed: Installed[] } {
   const now = readInstall();
-  if (!now?.previous) throw new Error("There is no earlier pr-report release to go back to.");
-  if (buildInfo(versionDir(now.previous)).version !== now.previous) throw new Error(`pr-report ${now.previous} is no longer on this machine.`);
+  if (!now?.previous) throw new Error("There is no earlier reflektor release to go back to.");
+  if (buildInfo(versionDir(now.previous)).version !== now.previous) throw new Error(`reflektor ${now.previous} is no longer on this machine.`);
   const { installed } = activate(now.previous, now.targets);
   return { version: now.previous, installed };
 }
@@ -159,7 +159,7 @@ if (process.argv[1] && process.argv[2] === "activate" && realpathSync(process.ar
   try {
     if (!version) throw new Error(`${SKILL_DIR} has no build.json with a version.`);
     const { installed } = activate(version, targets);
-    for (const t of installed) console.log(`Installed pr-report ${version} for ${targetLabel(t)} (${t.how}): ${t.target}`);
+    for (const t of installed) console.log(`Installed reflektor ${version} for ${targetLabel(t)} (${t.how}): ${t.target}`);
     const review = join(versionDir(version), "scripts", "review.mjs");
     if (installed.some((t) => t.first) && !argv.includes("--no-open")) {
       const r = spawnSync(process.execPath, [review, "setup"], { encoding: "utf8" });
@@ -167,9 +167,9 @@ if (process.argv[1] && process.argv[2] === "activate" && realpathSync(process.ar
       else console.log(`Could not open the setup page (${(r.stderr || r.stdout).trim()}). Open it later with: node "${review}" setup`);
     }
     console.log("");
-    if (installed.some((t) => t.claude)) console.log("Next, in Claude Code: open it in a repo, on a branch with changes, and type /pr-report. Start a new session if it does not know /pr-report yet.");
-    if (installed.some((t) => !t.claude)) console.log("Next, in another agent: open it in a repo, on a branch with changes, and ask for a PR report. In Codex, type $pr-report.");
-    console.log("pr-report tells you when a new version is out, and updates from the report's menu.");
+    if (installed.some((t) => t.claude)) console.log("Next, in Claude Code: open it in a repo, on a branch with changes, and type /reflektor. Start a new session if it does not know /reflektor yet.");
+    if (installed.some((t) => !t.claude)) console.log("Next, in another agent: open it in a repo, on a branch with changes, and ask for a PR report. In Codex, type $reflektor.");
+    console.log("reflektor tells you when a new version is out, and updates from the report's menu.");
   } catch (e) {
     console.error(`error: ${(e as Error).message}`);
     process.exit(1);

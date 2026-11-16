@@ -1,5 +1,5 @@
 // A stand-in for GitHub's REST API on a local port, for the check suites. The daemon asks it for the
-// books repo's pull requests (PR_REPORT_GITHUB_API points at it), and the check scripts what it
+// books repo's pull requests (REFLEKTOR_GITHUB_API points at it), and the check scripts what it
 // answers: no pull request, then an open one, then a merged one, or a rate limit. ETags work as on
 // GitHub: a request whose If-None-Match names the current answer gets 304 and no body.
 

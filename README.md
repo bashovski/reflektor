@@ -59,7 +59,7 @@ The full documentation is at [reflektor.dev/docs](https://reflektor.dev/docs):
 - [Install](https://reflektor.dev/docs#install)
 - [Your first report](https://reflektor.dev/docs#first-report)
 - [Review rounds](https://reflektor.dev/docs#review-rounds)
-- [pr-report flags](https://reflektor.dev/docs#cli-flags)
+- [reflektor flags](https://reflektor.dev/docs#cli-flags)
 - [Publishing a report to your team](https://reflektor.dev/docs#publish-report)
 
 ## Examples

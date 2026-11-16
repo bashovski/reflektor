@@ -70,7 +70,7 @@ EOF
 mkdir -p scripts
 cat > scripts/e2e-login.sh <<'EOF'
 #!/bin/sh
-printf '{"username":"tester@example.test","password":"secret"}' > "$PR_REPORT_AUTH_CREDENTIALS"
+printf '{"username":"tester@example.test","password":"secret"}' > "$REFLEKTOR_AUTH_CREDENTIALS"
 EOF
 git add -A
 git commit -q -m "Add a book from the list"

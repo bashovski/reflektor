@@ -1,5 +1,5 @@
 ---
-name: pr-report
+name: reflektor
 license: MIT
 description: Builds a visual HTML review report for the current branch or PR against its base branch, with a plain-English title and summary, review order, highlights, request flows, GitHub-style diffs with notes, and test coverage of new lines. The user can comment in the report and send the comments back for fixing. Use when the user asks for a PR report, a review report, a summary of branch changes for review, or wants to review changes before opening a PR. Works with any language or stack.
 argument-hint: "[base-branch] [--since last] [--session] [resume] [push]"
@@ -12,14 +12,14 @@ You write the judgment in `report.json`: words, grouping, risks and flows. Scrip
 
 Scripts and reference files live in `${CLAUDE_SKILL_DIR}`. That is this skill's folder: the folder this file is in. Where a command below still shows a `${...}` name instead of a real path, put the folder's absolute path there, with forward slashes. Needs git and Node.js 18 or newer. `gh` is optional.
 
-The request can carry arguments: a base branch, `--since last`, `--session`, `resume` or `push`. In Claude Code the user types them after `/pr-report`; with another agent they say them in words. For `resume`, or when the user asks to continue or pick up a review, go to "Pick up a review" at the end and skip the other steps. For `push`, or when the user asks to push, publish or upload the report to Reflektor, go to "Publish to Reflektor" and skip the other steps.
+The request can carry arguments: a base branch, `--since last`, `--session`, `resume` or `push`. In Claude Code the user types them after `/reflektor`; with another agent they say them in words. For `resume`, or when the user asks to continue or pick up a review, go to "Pick up a review" at the end and skip the other steps. For `push`, or when the user asks to push, publish or upload the report to Reflektor, go to "Publish to Reflektor" and skip the other steps.
 
 ## 1. Pick the base branch and scope
 
 Base branch, first match wins:
 
 1. A branch the user passed as an argument, or named in this conversation as the PR target.
-2. Otherwise leave `--base` out. collect.mjs then tries the open PR for this branch (through `gh`), then `base` in `.pr-report.json`, then the remote's default branch, then a common name (main, master, develop, staging, demo, trunk), and last the branch this one most recently forked from. When it prints `(guess)`, name the base in your message to the user, so they can correct it with `/pr-report <branch>`.
+2. Otherwise leave `--base` out. collect.mjs then tries the open PR for this branch (through `gh`), then `base` in `.reflektor.json`, then the remote's default branch, then a common name (main, master, develop, staging, demo, trunk), and last the branch this one most recently forked from. When it prints `(guess)`, name the base in your message to the user, so they can correct it with `/reflektor <branch>`.
 
 Scope:
 
@@ -32,9 +32,9 @@ Scope:
 
 Coverage is optional, but try to get it.
 
-1. `coverage.files` in `.pr-report.json`. collect.mjs reads these itself.
+1. `coverage.files` in `.reflektor.json`. collect.mjs reads these itself.
 2. A coverage file already in the repo: `lcov.info`, `coverage.xml`, `cobertura.xml`, `coverage.out`, `cover.out`, `jacoco.xml`, `clover.xml`, or a coverage.py `coverage.json`. Look in the repo root, `coverage/` folders and package folders. Skip `node_modules`, `vendor` and build output. collect.mjs prints which file it used and marks it STALE when it is older than the latest change; then try step 3 for a fresh one.
-3. Get a fresh one from the test run in step 2b. Use `coverage.command` from `.pr-report.json` as the test command if it is set. Otherwise add a coverage flag to the project's own test command:
+3. Get a fresh one from the test run in step 2b. Use `coverage.command` from `.reflektor.json` as the test command if it is set. Otherwise add a coverage flag to the project's own test command:
 
 | Stack | Command that writes a supported file |
 |---|---|
@@ -66,7 +66,7 @@ First ask which checks this repo has:
 node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" --repo . --plan
 ```
 
-It prints the commands and where they come from: `checks` in `.pr-report.json` (shared with the team), or the ones saved for this repo in `~/.pr-report/repos/` from an earlier report. It also lists checks it skips because nothing they cover changed.
+It prints the commands and where they come from: `checks` in `.reflektor.json` (shared with the team), or the ones saved for this repo in `~/.reflektor/repos/` from an earlier report. It also lists checks it skips because nothing they cover changed.
 
 **When it lists commands and says to start them,** start them as a background process, so you can go on while they run (in Claude Code: the Bash tool with `run_in_background`):
 
@@ -90,7 +90,7 @@ node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" --repo . --save --source "<where t
   --run "lint=<command>" --run "typecheck=<command>" --run "tests=<command>" [--when "tests=apps/api/**,packages/shared/**"]
 ```
 
-In your final message, list the checks you saved, and say that `checks.mjs --forget` deletes them and `checks.mjs --share` copies them into `.pr-report.json` for the team. Do not ask before saving; the report should not wait. (Asking about other authors' code, above, is the one time to wait.)
+In your final message, list the checks you saved, and say that `checks.mjs --forget` deletes them and `checks.mjs --share` copies them into `.reflektor.json` for the team. Do not ask before saving; the report should not wait. (Asking about other authors' code, above, is the one time to wait.)
 
 `--run` on the background command overrides everything, for a one-off run. The run writes `checks.json` next to diff.json as it goes, and the review page shows each result as it arrives; step 7b updates the report when the checks end. If you cannot run a background process, run it in the foreground and wait.
 
@@ -105,7 +105,7 @@ It writes diff.json into the repo's git folder and prints:
 - **Diff file** and **Report file**: the paths to use in steps 5 and 6. Always use these printed paths. In a git worktree the git folder is not `.git/`.
 - the base branch, commits and patch coverage
 - the `git diff` command to read the changes
-- a table of changed files with their target (from `.pr-report.json`) and flags (generated, uncommitted, untracked)
+- a table of changed files with their target (from `.reflektor.json`) and flags (generated, uncommitted, untracked)
 
 It also prints **Safety checks**: fixed rules that flag likely secrets (key formats, passwords in code, committed `.env` or key files) and risky migrations (dropped tables or columns, NOT NULL without a default, renames, type changes, writes without WHERE, indexes that lock a table). Rollback code is not checked: a migration's down section or down file runs only on a rollback. Secret values are masked.
 
@@ -115,7 +115,7 @@ When the reader has turned on Screenshots in Settings and the change touches UI 
 
 Exit code 3 means there are no changes: tell the user and stop.
 
-Lines starting with `Hook preRun` come from the project's own hook (`hooks` in `.pr-report.json`), and what it prints is for you, such as a ticket's text. When it fails, collect exits 1: tell the user what the hook printed and stop. Do not work around a hook.
+Lines starting with `Hook preRun` come from the project's own hook (`hooks` in `.reflektor.json`), and what it prints is for you, such as a ticket's text. When it fails, collect exits 1: tell the user what the hook printed and stop. Do not work around a hook.
 
 While the tests from step 2b run, their coverage file may be missing or STALE. That is expected: step 7b collects again once they are done.
 
@@ -225,7 +225,7 @@ It writes the report data, `<branch>-<sha>-r<round>.json`, next to the report fi
 
 ## 7. Open it for review
 
-Publish the report to the pr-report daemon. It is one local server for every review on this machine (`http://127.0.0.1:7337`, with an inbox of all reviews at `/`), and `review.mjs` starts it when it is not running. It replaces the draft from step 3b in the open tab:
+Publish the report to the reflektor daemon. It is one local server for every review on this machine (`http://127.0.0.1:7337`, with an inbox of all reviews at `/`), and `review.mjs` starts it when it is not running. It replaces the draft from step 3b in the open tab:
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" open --report <json file from build> --open
@@ -244,9 +244,9 @@ Tell the user, in a few lines:
 
 Do not paste the report into the chat. End your turn and do not poll: the waiter exits when the reviewer does something, and that wakes you. Its output says what happened and what to run next. After handling it, start the waiter again in the background, unless the review is done.
 
-**pr-report was updated:** the user can update pr-report from the page while you wait. The waiter then prints that pr-report was updated and exits with code 3. Tell the user that line, and do not start the waiter again from this session: they continue with `/pr-report resume`, which runs the new version.
+**reflektor was updated:** the user can update reflektor from the page while you wait. The waiter then prints that reflektor was updated and exits with code 3. Tell the user that line, and do not start the waiter again from this session: they continue with `/reflektor resume`, which runs the new version.
 
-**An update is out:** while a newer pr-report is out, `review.mjs` ends some answers with a line starting `note: pr-report`. Pass it on to the user once per session, in one sentence, and do not update on your own: the user updates from the report's menu, or asks you to run `review.mjs update`.
+**An update is out:** while a newer reflektor is out, `review.mjs` ends some answers with a line starting `note: reflektor`. Pass it on to the user once per session, in one sentence, and do not update on your own: the user updates from the report's menu, or asks you to run `review.mjs update`.
 
 **A live question:** read the code it points at and answer in 1 to 4 short sentences or a short list, following the style guide. Answer only: do not change code. If the answer shows something should change, say so and suggest a comment or "Fix this".
 
@@ -336,7 +336,7 @@ build.mjs also writes `pr-description.md` next to the report: the first line is 
 
 ## Pick up a review
 
-A review outlives the session that made it: when no session listens for it, the page tells the user how to pick it up: `/pr-report resume` in Claude Code, or asking the agent to resume the PR report review. In the repo of the review:
+A review outlives the session that made it: when no session listens for it, the page tells the user how to pick it up: `/reflektor resume` in Claude Code, or asking the agent to resume the PR report review. In the repo of the review:
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" resume --repo .
@@ -370,11 +370,11 @@ While the branch's pull request is open, the daemon publishes each new round by 
 
 - **Wording or grouping changes:** edit report.json and run build.mjs again. No need to collect again.
 - **After code changes:** run collect.mjs with `--update`, update the carried report.json for what changed, build, and publish again. Use `--since last` only when the user wants a report about just the new changes.
-- **"Viewer not found" from build.mjs:** tell the user to run `pnpm build`, then `pnpm run deploy`, in the pr-report repo.
+- **"Viewer not found" from build.mjs:** tell the user to run `pnpm build`, then `pnpm run deploy`, in the reflektor repo.
 
 ## Repo config (optional)
 
-`.pr-report.json` in the repo root, read by the scripts:
+`.reflektor.json` in the repo root, read by the scripts:
 
 ```json
 {
@@ -396,7 +396,7 @@ While the branch's pull request is open, the daemon publishes each new round by 
 }
 ```
 
-`checks` here come before the ones saved in `~/.pr-report/repos/`; `checks.mjs --share` writes the saved ones here. `when` limits a check to changes in those paths.
+`checks` here come before the ones saved in `~/.reflektor/repos/`; `checks.mjs --share` writes the saved ones here. `when` limits a check to changes in those paths.
 
 `screenshots` says where the app answers (`url`), how to start it when it does not (`start`, waited for `readySeconds`), and any hosts besides localhost the browser may open (`hosts`). `screenshots.mjs --share` writes the saved one here.
 

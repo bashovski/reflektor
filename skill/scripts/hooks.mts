@@ -1,4 +1,4 @@
-// Hooks: shell commands a project names in .pr-report.json, run at fixed points of a report. They come
+// Hooks: shell commands a project names in .reflektor.json, run at fixed points of a report. They come
 // with the repo, so everyone who clones it gets them, and the scripts run them, so every agent does.
 //
 //   preRun      collect.mjs, before it fetches and reads the changes. A failure stops the report.
@@ -16,19 +16,19 @@
 // project checks (repo.mjs runShell). A failing command ends its list, and so does the time limit below.
 // What a hook prints is shown to the agent. The daemon and the page never run a command.
 //
-// Every hook gets PR_REPORT_HOOK (its name), PR_REPORT_BRANCH and PR_REPORT_BASE. postRun and onApproved
-// also get PR_REPORT_ROUND, PR_REPORT_DIFF (diff.json: the git facts, with full file contents),
-// PR_REPORT_REPORT (report.json: what the agent wrote), PR_REPORT_URL (the review page) and, when the
-// build wrote one, PR_REPORT_PR_TEXT (pr-description.md: the title line, then the body). The two files'
+// Every hook gets REFLEKTOR_HOOK (its name), REFLEKTOR_BRANCH and REFLEKTOR_BASE. postRun and onApproved
+// also get REFLEKTOR_ROUND, REFLEKTOR_DIFF (diff.json: the git facts, with full file contents),
+// REFLEKTOR_REPORT (report.json: what the agent wrote), REFLEKTOR_URL (the review page) and, when the
+// build wrote one, REFLEKTOR_PR_TEXT (pr-description.md: the title line, then the body). The two files'
 // types are DiffData and Report in schema/types.ts.
 //
-// The screenshot hooks also get PR_REPORT_APP_URL (the app's address) and PR_REPORT_SCREENSHOTS_DIR (where the shots
-// go). preScreenshots gets two paths it may write: PR_REPORT_AUTH_STATE, for a Playwright storage state of a signed-in
-// test user, or PR_REPORT_AUTH_CREDENTIALS, for {"username", "password"} of one, which the run then signs in with
-// through the app's own login page. The three after the run get PR_REPORT_SCREENSHOTS (screenshots.json) and
-// PR_REPORT_SCREENSHOTS_RESULT (passed or failed).
+// The screenshot hooks also get REFLEKTOR_SCREENSHOTS_URL (the app's address) and REFLEKTOR_SCREENSHOTS_DIR (where the shots
+// go). preScreenshots gets two paths it may write: REFLEKTOR_AUTH_STATE, for a Playwright storage state of a signed-in
+// test user, or REFLEKTOR_AUTH_CREDENTIALS, for {"username", "password"} of one, which the run then signs in with
+// through the app's own login page. The three after the run get REFLEKTOR_SCREENSHOTS (screenshots.json) and
+// REFLEKTOR_SCREENSHOTS_RESULT (passed or failed).
 //
-// Hooks run code from the branch (.pr-report.json and the scripts it names), so they follow the checks'
+// Hooks run code from the branch (.reflektor.json and the scripts it names), so they follow the checks'
 // trust rule: when the branch has commits by someone the user has not trusted for this repo
 // (checks.mjs --trust), they do not run. Nor do they when the base cannot be found, since then nobody
 // can tell whose commits are on the branch.
@@ -38,7 +38,7 @@ import { join } from "node:path";
 import type { DiffData, HookName, RepoConfig } from "../schema/types.js";
 import { remoteOf, runShell, untrustedAuthors } from "./repo.mjs";
 
-// Code generation in preRun can be slow; the others should be quick. PR_REPORT_HOOK_SECONDS overrides
+// Code generation in preRun can be slow; the others should be quick. REFLEKTOR_HOOK_SECONDS overrides
 // all three, for tests.
 const LIMIT_SECONDS: Record<HookName, number> = {
   preRun: 300,
@@ -58,7 +58,7 @@ const readJson = (file: string): unknown => {
   }
 };
 
-// The commands for one hook: a string or a list of strings in "hooks" of .pr-report.json.
+// The commands for one hook: a string or a list of strings in "hooks" of .reflektor.json.
 export function hookCommands(config: RepoConfig | null | undefined, name: HookName): string[] {
   const value = config?.hooks?.[name];
   return (Array.isArray(value) ? value : [value]).filter((c): c is string => typeof c === "string" && Boolean(c.trim()));
@@ -72,7 +72,7 @@ export async function runHooks(
     root,
     branch,
     base,
-    config = readJson(join(root, ".pr-report.json")) as RepoConfig | null,
+    config = readJson(join(root, ".reflektor.json")) as RepoConfig | null,
     env = {},
     log = console.log,
   }: { root: string; branch: string | null; base: string | null | undefined; config?: RepoConfig | null; env?: Record<string, string>; log?: (text: string) => void },
@@ -94,8 +94,8 @@ export async function runHooks(
     return { ran: 0, failed: false };
   }
 
-  const seconds = Number(process.env.PR_REPORT_HOOK_SECONDS) || LIMIT_SECONDS[name];
-  const hookEnv = { ...process.env, PR_REPORT_HOOK: name, PR_REPORT_BRANCH: branch ?? "", PR_REPORT_BASE: base!, ...env };
+  const seconds = Number(process.env.REFLEKTOR_HOOK_SECONDS) || LIMIT_SECONDS[name];
+  const hookEnv = { ...process.env, REFLEKTOR_HOOK: name, REFLEKTOR_BRANCH: branch ?? "", REFLEKTOR_BASE: base!, ...env };
   let ran = 0;
   for (const command of commands) {
     const r = await runShell(command, { cwd: root, env: hookEnv, timeoutMs: seconds * 1000 });
@@ -125,11 +125,11 @@ export async function runReportHooks(
     base: diff.branch.base,
     log,
     env: {
-      PR_REPORT_ROUND: String(round),
-      PR_REPORT_DIFF: diffFile,
-      PR_REPORT_REPORT: join(dir, "report.json"),
-      PR_REPORT_URL: url,
-      ...(existsSync(prText) ? { PR_REPORT_PR_TEXT: prText } : {}),
+      REFLEKTOR_ROUND: String(round),
+      REFLEKTOR_DIFF: diffFile,
+      REFLEKTOR_REPORT: join(dir, "report.json"),
+      REFLEKTOR_URL: url,
+      ...(existsSync(prText) ? { REFLEKTOR_PR_TEXT: prText } : {}),
     },
   });
 }

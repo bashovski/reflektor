@@ -67,7 +67,7 @@ const BACKDROP = {
 // Its shades, from the one that fills most of the page to the crest of a wave. The palette replaces the component's
 // wave and background colors, so those two are not set.
 //
-// The first three are the page's own greys, so most of the page stays as quiet as the rest of pr-report, and the
+// The first three are the page's own greys, so most of the page stays as quiet as the rest of reflektor, and the
 // four colors (indigo, purple, periwinkle, a pale mint) only show on the waves. The component splits its range evenly
 // over the shades, so three greys out of seven is what keeps the greys in the majority: with fewer, the page turns
 // purple. There is one palette per theme because the wizard itself asks "Light or dark?" and the page must follow

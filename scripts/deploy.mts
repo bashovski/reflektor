@@ -2,9 +2,9 @@
 // Installs the package `pnpm build` made (dist/skill/) for a coding agent. Runs the same on macOS, Linux and Windows
 // (PowerShell, cmd or Git Bash). It is `pnpm run deploy`: plain `pnpm deploy` is a pnpm command of its own.
 //
-//   pnpm run deploy                       Claude Code: link ~/.claude/skills/pr-report to dist/skill/ (each new build applies right away)
+//   pnpm run deploy                       Claude Code: link ~/.claude/skills/reflektor to dist/skill/ (each new build applies right away)
 //   pnpm run deploy --copy                Claude Code: copy dist/skill/ instead; use this if a Claude Code update removed the link
-//   pnpm run deploy --target agents       other agents: a copy in ~/.agents/skills/pr-report, the folder Codex and other agents
+//   pnpm run deploy --target agents       other agents: a copy in ~/.agents/skills/reflektor, the folder Codex and other agents
 //                                         that follow the Agent Skills format read
 //   pnpm run deploy --target <folder>     a copy in any other skills folder
 //   pnpm run deploy --no-open             do not open the setup page in the browser after a first install
@@ -26,7 +26,7 @@ const fail = (message: string): never => {
   console.error(`error: ${message}`);
   process.exit(1);
 };
-// Every report starts with git. Finding out here beats a failed first /pr-report.
+// Every report starts with git. Finding out here beats a failed first /reflektor.
 if (spawnSync("git", ["--version"], { stdio: "ignore" }).status !== 0) fail("git is required. Install it from https://git-scm.com, then run this again.");
 
 // The package must exist and hold the source as it is now: a file changed after the build means it is not in there.
@@ -54,7 +54,7 @@ if (!targets.length) targets.push("claude");
 function install(name: string) {
   try {
     const t = installTarget(pkg, name, { copy: mode === "copy" });
-    console.log(`Installed pr-report for ${targetLabel(t)} (${t.how}): ${t.target}`);
+    console.log(`Installed reflektor for ${targetLabel(t)} (${t.how}): ${t.target}`);
     return t;
   } catch (e) {
     return fail((e as Error).message);
@@ -78,11 +78,11 @@ if (installed.some((t) => t.first) && !process.argv.includes("--no-open")) {
 
 console.log("");
 if (installed.some((t) => t.claude)) {
-  console.log("Next, in Claude Code: open it in a repo, on a branch with changes, and type /pr-report.");
-  console.log("If Claude Code does not know /pr-report, start a new session. If the skill goes missing after a Claude Code update, run pnpm run deploy again, or with --copy.");
+  console.log("Next, in Claude Code: open it in a repo, on a branch with changes, and type /reflektor.");
+  console.log("If Claude Code does not know /reflektor, start a new session. If the skill goes missing after a Claude Code update, run pnpm run deploy again, or with --copy.");
 }
 if (installed.some((t) => !t.claude)) {
-  console.log("Next, in another agent: open it in a repo, on a branch with changes, and ask for a PR report. In Codex, type $pr-report.");
+  console.log("Next, in another agent: open it in a repo, on a branch with changes, and ask for a PR report. In Codex, type $reflektor.");
   console.log("That install is a copy: run pnpm run deploy with the same --target after each pnpm build.");
 } else {
   console.log("For Codex and other agents that read ~/.agents/skills: pnpm run deploy --target agents");

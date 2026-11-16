@@ -64,7 +64,7 @@ const fnv1a = (text: string) => {
 const contentHash = (file: DiffFile) => fnv1a(`${file.oldContent ?? ""}\u0000${file.newContent ?? ""}\u0000${file.status}`);
 
 export const ReportProvider = ({ bundle, children }: { bundle: Bundle; children: ReactNode }) => {
-  const repoKey = `pr-report:${bundle.diff.repo.owner ?? ""}/${bundle.diff.repo.name}`;
+  const repoKey = `reflektor:${bundle.diff.repo.owner ?? ""}/${bundle.diff.repo.name}`;
   const prefs = usePrefs();
 
   const branchFiles = useMemo(() => new Map(bundle.diff.files.map((f) => [f.path, f])), [bundle]);

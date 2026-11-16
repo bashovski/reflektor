@@ -1,6 +1,6 @@
 # Screenshots (spec)
 
-Status: built in pr-report (skill/scripts/screenshots.mts, skill/screenshots.md, the Screenshots section of the review page). The Reflektor upload and the platform's section wait for object storage.
+Status: built in reflektor (skill/scripts/screenshots.mts, skill/screenshots.md, the Screenshots section of the review page). The Reflektor upload and the platform's section wait for object storage.
 
 ## Why
 
@@ -30,7 +30,7 @@ Limits: at most 12 shots per report, one desktop viewport (1280 by 800). Nothing
 
 ### The setting
 
-`screenshots: false` joins the settings in `~/.pr-report/settings.json` (`skill/scripts/settings.mts`). collect.mjs prints it, like `subagents`, so the agent knows whether to start the subagent.
+`screenshots: false` joins the settings in `~/.reflektor/settings.json` (`skill/scripts/settings.mts`). collect.mjs prints it, like `subagents`, so the agent knows whether to start the subagent.
 
 ### Finding Playwright
 
@@ -59,7 +59,7 @@ When the setting is on but Playwright disappears, the next report skips screensh
 
 ## Reaching the app
 
-The app's address and how to start it come from `.pr-report.json`:
+The app's address and how to start it come from `.reflektor.json`:
 
 ```json
 {
@@ -76,7 +76,7 @@ The app's address and how to start it come from `.pr-report.json`:
 - If something answers at `url`, it is used as it is.
 - If not, and `start` is set, screenshots.mjs starts it in the repo root, waits up to `readySeconds` for `url` to answer, and stops it when done.
 - If neither works, the run is skipped and the reason shows in the report.
-- Without the `screenshots` block, the agent works the values out once from the repo (package.json scripts, the dev server's config) and saves them in `~/.pr-report/repos/`, the same way it saves checks. `screenshots.mjs --share` copies them into `.pr-report.json`.
+- Without the `screenshots` block, the agent works the values out once from the repo (package.json scripts, the dev server's config) and saves them in `~/.reflektor/repos/`, the same way it saves checks. `screenshots.mjs --share` copies them into `.reflektor.json`.
 - `hosts` limits where the browser may go. The default is localhost addresses and names ending in `.localhost` or `.test`, plus the app's own host. Pages may still load fonts and scripts from anywhere, but a navigation or any request other than GET to another host is blocked, and the shot that needed it fails.
 
 ## Signed in or signed out
@@ -86,15 +86,15 @@ Every set says `auth: "signed-in"` or `auth: "signed-out"`.
 - **Signed out:** a fresh browser context with no cookies.
 - **Signed in:** a context loaded from a Playwright storage state file that the `preScreenshots` hook writes.
 
-The hook is where the project sets up a safe test login. It runs once per screenshot run, before any shot. Typical uses: seed the database, create a test user, sign in with a script, and save the session with Playwright's `storageState({ path })` to `$PR_REPORT_AUTH_STATE`.
+The hook is where the project sets up a safe test login. It runs once per screenshot run, before any shot. Typical uses: seed the database, create a test user, sign in with a script, and save the session with Playwright's `storageState({ path })` to `$REFLEKTOR_AUTH_STATE`.
 
-When the hook can't sign in itself, it may instead write `{ "username": "...", "password": "..." }` to `$PR_REPORT_AUTH_CREDENTIALS`. The subagent then signs in through the app's own login page, saves the session, and uses it for every signed-in set. These are test credentials for the local app only. They never go into the report, a caption, the page or Reflektor.
+When the hook can't sign in itself, it may instead write `{ "username": "...", "password": "..." }` to `$REFLEKTOR_AUTH_CREDENTIALS`. The subagent then signs in through the app's own login page, saves the session, and uses it for every signed-in set. These are test credentials for the local app only. They never go into the report, a caption, the page or Reflektor.
 
 With no hook, signed-in sets are skipped, and the report says that a `preScreenshots` hook would enable them.
 
 ## Hooks
 
-Four new hooks in `.pr-report.json`, run by screenshots.mjs through `runHooks` in `skill/scripts/hooks.mts`. Like the others, they don't run while the branch has commits by untrusted authors.
+Four new hooks in `.reflektor.json`, run by screenshots.mjs through `runHooks` in `skill/scripts/hooks.mts`. Like the others, they don't run while the branch has commits by untrusted authors.
 
 | Hook | When | On failure | Time limit |
 | --- | --- | --- | --- |
@@ -103,12 +103,12 @@ Four new hooks in `.pr-report.json`, run by screenshots.mjs through `runHooks` i
 | `onScreenshotsFailed` | At least one shot failed, or the run could not start | Warning | 120s |
 | `postScreenshots` | Always, after the two above | Warning | 120s |
 
-Every screenshot hook gets the usual `PR_REPORT_HOOK`, `PR_REPORT_BRANCH` and `PR_REPORT_BASE`, plus:
+Every screenshot hook gets the usual `REFLEKTOR_HOOK`, `REFLEKTOR_BRANCH` and `REFLEKTOR_BASE`, plus:
 
-- `PR_REPORT_APP_URL`: the app's address
-- `PR_REPORT_SCREENSHOTS_DIR`: the folder the shots go in
-- `preScreenshots` only: `PR_REPORT_AUTH_STATE` and `PR_REPORT_AUTH_CREDENTIALS`, the two paths it may write
-- the three after the run: `PR_REPORT_SCREENSHOTS` (the path of screenshots.json) and `PR_REPORT_SCREENSHOTS_RESULT` (`passed` or `failed`)
+- `REFLEKTOR_SCREENSHOTS_URL`: the app's address
+- `REFLEKTOR_SCREENSHOTS_DIR`: the folder the shots go in
+- `preScreenshots` only: `REFLEKTOR_AUTH_STATE` and `REFLEKTOR_AUTH_CREDENTIALS`, the two paths it may write
+- the three after the run: `REFLEKTOR_SCREENSHOTS` (the path of screenshots.json) and `REFLEKTOR_SCREENSHOTS_RESULT` (`passed` or `failed`)
 
 Example:
 
@@ -230,7 +230,7 @@ A **Screenshots** section, shown when screenshots.json exists, placed after Flow
 
 ## Reflektor
 
-On publish, the shots upload with the round. Uploading is on unless the repo turns it off with `screenshots.upload: false` in `.pr-report.json`. The page's publish confirmation says how many screenshots will be uploaded.
+On publish, the shots upload with the round. Uploading is on unless the repo turns it off with `screenshots.upload: false` in `.reflektor.json`. The page's publish confirmation says how many screenshots will be uploaded.
 
 - **Platform API:** an upload endpoint per round that takes PNGs and stores them in object storage. The bundle's screenshots point at the stored URLs. This needs object storage from the hosting work in TASKS.md.
 - **Platform UI:** the same section and viewer, ported to `apps/ui/src/report` through the renderer sync.

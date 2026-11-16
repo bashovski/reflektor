@@ -15,7 +15,7 @@ export const isSetupPage = () => Boolean(window.__PR_SETUP__) || window.location
 
 // Written when setup finishes or is skipped, so this browser is never asked again. Per browser,
 // like the preferences setup writes.
-export const SETUP_KEY = "pr-report:setup";
+export const SETUP_KEY = "reflektor:setup";
 export const setupDone = () => storage.get<{ at: string } | null>(SETUP_KEY, null) !== null;
 export const markSetupDone = () => storage.set(SETUP_KEY, { at: new Date().toISOString() });
 

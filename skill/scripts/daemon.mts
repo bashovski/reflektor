@@ -4,8 +4,8 @@
 // review.mjs to answer, post plans, report progress and publish new rounds. It streams each
 // review's live state to open pages with Server-Sent Events.
 //
-// Each repo's review folder (<git folder>/pr-report) stays the source of truth: the daemon only keeps
-// a list of those folders in ~/.pr-report/reviews.json, so a restart loses nothing.
+// Each repo's review folder (<git folder>/reflektor) stays the source of truth: the daemon only keeps
+// a list of those folders in ~/.reflektor/reviews.json, so a restart loses nothing.
 //
 // Once the reader is signed in to Reflektor, it also publishes each branch's report there while its pull request is
 // open (see "Reflektor" below).
@@ -37,11 +37,11 @@ import type { AgentInfo, Bundle, ChecksRun, ScreenshotsRun, CommentKind, Comment
 // ------------------------------------------------------------------ types
 // The daemon's own records. Report data and review files follow skill/schema/types.ts.
 
-// ~/.pr-report/secrets.json: the page token and the admin token, kept across restarts.
+// ~/.reflektor/secrets.json: the page token and the admin token, kept across restarts.
 type Secrets = { pageToken: string; adminToken: string };
-// ~/.pr-report/daemon.json: where review.mjs finds this daemon, and the admin token it calls with.
+// ~/.reflektor/daemon.json: where review.mjs finds this daemon, and the admin token it calls with.
 type DaemonFile = { port: number; pid: number; version: string; adminToken: string; startedAt: string };
-// One entry of ~/.pr-report/reviews.json. Entries from older daemons may lack the avatar, checks file and archive date.
+// One entry of ~/.reflektor/reviews.json. Entries from older daemons may lack the avatar, checks file and archive date.
 type RegistryEntry = { id: string; dir: string; title: string; tag: Tag; repo: string; branch: string; avatar?: RepoAvatar | null; checksFile?: string; archived?: string | null };
 // Where a review's current round stands. The inbox adds "merged" on top (statusOf).
 type Phase = "reviewing" | "sent" | "planning" | "working" | "done";
@@ -150,9 +150,9 @@ type GitHubError = Error & { status?: number; retryAfterMs?: number };
 // The name of a Lucide icon in ICONS.
 type IconName = keyof typeof ICONS;
 
-const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
-const FIRST_PORT = Number(process.env.PR_REPORT_PORT ?? 7337);
-const IDLE_MS = Number(process.env.PR_REPORT_IDLE_MINUTES ?? 240) * 60_000;
+const HOME = process.env.REFLEKTOR_HOME ?? join(homedir(), ".reflektor");
+const FIRST_PORT = Number(process.env.REFLEKTOR_PORT ?? 7337);
+const IDLE_MS = Number(process.env.REFLEKTOR_IDLE_MINUTES ?? 240) * 60_000;
 const LONG_POLL_MS = 25_000;
 const REDELIVER_MS = 120_000;
 const MAX_BODY = 5 * 1024 * 1024;
@@ -217,14 +217,14 @@ function takeLock() {
 }
 // After an update the new daemon is started by the old one, which is still answering: it waits for the old one to exit
 // and free the lock and the port.
-const takeover = Number(process.env.PR_REPORT_TAKEOVER ?? 0);
-delete process.env.PR_REPORT_TAKEOVER;
+const takeover = Number(process.env.REFLEKTOR_TAKEOVER ?? 0);
+delete process.env.REFLEKTOR_TAKEOVER;
 if (takeover) {
   const until = Date.now() + 15_000;
   while (pidAlive(takeover) && Date.now() < until) await new Promise((wake) => setTimeout(wake, 100));
 }
 if (!takeLock()) {
-  console.log("Another pr-report daemon is already running.");
+  console.log("Another reflektor daemon is already running.");
   process.exit(0);
 }
 
@@ -313,7 +313,7 @@ function roundText(file: string) {
   if (!file || !existsSync(file)) return null;
   const text = readFileSync(file, "utf8");
   if (extname(file) !== ".html") return text;
-  return text.match(/<script id="pr-report-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1] ?? null;
+  return text.match(/<script id="reflektor-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1] ?? null;
 }
 
 const submittedComments = (r: ReviewRecord) => (r.phase === "reviewing" ? [] : ((readJson(reviewFile(r, r.round), {}) as Partial<Review>).comments ?? []));
@@ -645,7 +645,7 @@ function platformLinks() {
   const pages = [["/docs", "Docs"], ["/examples", "Examples"], ["/pricing", "Pricing"]];
   return (
     pages.map(([path, label]) => `<a href="${escapeHtml(app + path)}" target="_blank" rel="noreferrer">${label}</a>`).join("") +
-    `<a href="https://github.com/bashovski/pr-report" target="_blank" rel="noreferrer">${GITHUB_MARK}GitHub</a>`
+    `<a href="https://github.com/bashovski/reflektor" target="_blank" rel="noreferrer">${GITHUB_MARK}GitHub</a>`
   );
 }
 
@@ -694,15 +694,15 @@ const STAR_SVG = (() => {
 
 function starSection() {
   return `<section class="star" aria-labelledby="star-title"><div class="star-box"><div class="star-copy"><h2 id="star-title">Star us on GitHub</h2>
-<p class="star-text">Reflektor runs as the pr-report skill, and its code lives on GitHub. Read it, open an issue or suggest a change. Every star helps other developers find it.</p>
-<a class="star-button" data-star href="https://github.com/bashovski/pr-report" target="_blank" rel="noreferrer">${GITHUB_MARK}Star on GitHub</a></div>
+<p class="star-text">Reflektor is open source on GitHub. Read the code, open an issue or suggest a change. Every star helps other developers find it.</p>
+<a class="star-button" data-star href="https://github.com/bashovski/reflektor" target="_blank" rel="noreferrer">${GITHUB_MARK}Star on GitHub</a></div>
 <div class="star-display" data-star aria-hidden="true">${STAR_SVG}</div></div></section>`;
 }
 
 // The platform's site footer (SiteFooter.vue in reflektor-platform), with its links on the platform's address.
 function siteFooter() {
   const app = (reflektorStatus().appUrl ?? "https://reflektor.dev").replace(/\/+$/, "");
-  const repo = "https://github.com/bashovski/pr-report";
+  const repo = "https://github.com/bashovski/reflektor";
   const groups: [string, [string, string][]][] = [
     ["Product", [["Install", `${app}/install`], ["Examples", `${app}/examples`], ["Pricing", `${app}/pricing`]]],
     ["Developers", [["Docs", `${app}/docs`], ["GitHub", repo]]],
@@ -854,7 +854,7 @@ code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospa
 <a class="mi" id="me-profile" target="_blank" rel="noreferrer" hidden>${icon("user")}<span>Open profile</span>${external}</a>
 <button type="button" class="mi" data-settings>${icon("settings")}<span>Settings</span><kbd>?</kbd></button>
 <button type="button" class="mi" data-panel="help">${icon("help")}<span>Help</span></button>
-<a class="mi" id="me-bug" target="_blank" rel="noreferrer" href="https://github.com/bashovski/pr-report/issues/new">${icon("bug")}<span>Report a bug</span>${external}</a><hr>
+<a class="mi" id="me-bug" target="_blank" rel="noreferrer" href="https://github.com/bashovski/reflektor/issues/new">${icon("bug")}<span>Report a bug</span>${external}</a><hr>
 <button type="button" class="mi" data-panel="purge">${icon("trash")}<span>Purge daemon cache</span></button><hr>
 <div class="status" id="me-status" role="status"><i aria-hidden="true"></i><span></span></div>
 </div></div></div></header>
@@ -877,7 +877,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const LOGO_FILE = join(here, "../brand/reflektor-logo.svg");
 const LOGO = existsSync(LOGO_FILE) ? readFileSync(LOGO_FILE, "utf8").trim() : "";
 const APP_DIR = [join(here, "../assets/app")].find((d) => existsSync(join(d, "index.html")));
-// Fuse.js for the inbox search, copied into assets/ by the build (scripts/build-skill.mts in the pr-report repo).
+// Fuse.js for the inbox search, copied into assets/ by the build (scripts/build-skill.mts in the reflektor repo).
 // Without it the inbox falls back to a plain substring match.
 const FUSE_FILE = [join(here, "../assets/fuse.mjs")].find((f) => existsSync(f));
 // A plain script the viewer build compiles into the app folder (viewer/vite.config.ts), read each time a page needs it,
@@ -915,8 +915,8 @@ const ASSET_TYPES: Record<string, string> = {
 function emptyState(welcome: boolean, archivedCount: number) {
   if (archivedCount) return '<div class="empty">Nothing open. The archived reviews are below.</div>';
   return `<div class="empty intro"><h2>${welcome ? "You're all set" : "No reviews yet"}</h2>
-<p>Open your coding agent in a repo, on a branch with changes, and ask it for a PR report. In Claude Code, type <code>/pr-report</code>. The report opens in a new tab, and every review on this machine shows up here.</p>
-<ul class="cmds"><li><code>/pr-report</code><span>compare with the PR base or the default branch</span></li><li><code>/pr-report develop</code><span>compare with another branch</span></li><li><code>/pr-report resume</code><span>pick a review up in a new Claude Code session</span></li></ul></div>`;
+<p>Open your coding agent in a repo, on a branch with changes, and ask it for a PR report. In Claude Code, type <code>/reflektor</code>. The report opens in a new tab, and every review on this machine shows up here.</p>
+<ul class="cmds"><li><code>/reflektor</code><span>compare with the PR base or the default branch</span></li><li><code>/reflektor develop</code><span>compare with another branch</span></li><li><code>/reflektor resume</code><span>pick a review up in a new Claude Code session</span></li></ul></div>`;
 }
 
 // First-run setup: the viewer at /setup, with the page token so it can ask the daemon about the
@@ -970,7 +970,7 @@ function sendAsset(res: ServerResponse, parts: string[]) {
 // new commits, edits, new files. The page then says the report may be out of date. Not while the agent
 // works on the round, since then the code is meant to change.
 
-const DRIFT_MS = Number(process.env.PR_REPORT_DRIFT_SECONDS ?? 15) * 1000;
+const DRIFT_MS = Number(process.env.REFLEKTOR_DRIFT_SECONDS ?? 15) * 1000;
 const run = promisify(execFile);
 const gitIn = (cwd: string, args: string[], env?: NodeJS.ProcessEnv) =>
   // windowsHide: the daemon has no console on Windows, so each git call would flash a window.
@@ -1056,7 +1056,7 @@ function roundFacts(r: ReviewRecord) {
 
 // The working tree as a git tree, untracked files included, without touching the real index.
 async function workingTree(f: RoundFacts) {
-  const index = join(f.gitDir, "pr-report", "drift.index");
+  const index = join(f.gitDir, "reflektor", "drift.index");
   try {
     if (existsSync(join(f.gitDir, "index"))) copyFileSync(join(f.gitDir, "index"), index);
     const env = { ...process.env, GIT_INDEX_FILE: index };
@@ -1104,17 +1104,17 @@ setInterval(() => {
 // Not Modified answer to a request with If-None-Match does not count, so following an idle pull
 // request costs nothing: one request per review when something changed, headers only otherwise.
 
-const PR_POLL_MS = Number(process.env.PR_REPORT_PR_POLL_SECONDS ?? 60) * 1000;
+const PR_POLL_MS = Number(process.env.REFLEKTOR_PR_POLL_SECONDS ?? 60) * 1000;
 // Overridden by the check suites, which point the daemon at a local stand-in for GitHub.
-const GITHUB_API = (process.env.PR_REPORT_GITHUB_API ?? "https://api.github.com").replace(/\/+$/, "");
+const GITHUB_API = (process.env.REFLEKTOR_GITHUB_API ?? "https://api.github.com").replace(/\/+$/, "");
 const PR_QUIET_MS = 30 * 60_000;
 
 // The token comes from gh once per daemon start and stays in memory: never on disk or in the log.
 // Without one (logged out) the daemon asks gh itself for the pull request; without gh it does not poll.
 let githubAuth: Promise<{ token: string | null; gh: boolean }> | null = null;
 const githubToken = () =>
-  (githubAuth ??= process.env.PR_REPORT_GITHUB_TOKEN
-    ? Promise.resolve({ token: process.env.PR_REPORT_GITHUB_TOKEN, gh: true })
+  (githubAuth ??= process.env.REFLEKTOR_GITHUB_TOKEN
+    ? Promise.resolve({ token: process.env.REFLEKTOR_GITHUB_TOKEN, gh: true })
     : run("gh", ["auth", "token"], { windowsHide: true, timeout: 10_000 }).then(
         (x) => ({ token: x.stdout.trim() || null, gh: true }),
         (e) => ({ token: null, gh: e.code !== "ENOENT" }),
@@ -1149,7 +1149,7 @@ const githubGet = (path: string, token: string, etag?: string | null) =>
       authorization: `Bearer ${token}`,
       accept: "application/vnd.github+json",
       "x-github-api-version": "2022-11-28",
-      "user-agent": "pr-report",
+      "user-agent": "reflektor",
       ...(etag ? { "if-none-match": etag } : {}),
     },
     signal: AbortSignal.timeout(10_000),
@@ -1354,7 +1354,7 @@ async function publishNow(r: ReviewRecord, { organization = null, auto = false }
   r.publishError = { reason: outcome.reason, message: outcome.message, round: entry.round, at: now() };
   if (auto) r.publishRetryAt = Date.now() + (outcome.retryAfterMs ?? (TRANSIENT.has(outcome.reason) ? PUBLISH_RETRY_MS : PUBLISH_QUIET_MS));
   console.log(`Reflektor: publishing ${r.id} round ${entry.round}${auto ? "" : " by hand"} did not work (${outcome.reason}): ${outcome.message}`);
-  // Reflektor only takes reports from pr-report as new as its minimum: the pages ask the reader to update.
+  // The platform only takes reports from a skill as new as its minimum: the pages ask the reader to update.
   if (outcome.reason === "update_required" && outcome.minimum) {
     noteMinimum(outcome.minimum);
     broadcastUpdate();
@@ -1464,7 +1464,7 @@ archiveIdle();
 setInterval(archiveIdle, 3_600_000).unref();
 
 // A branch's own folder goes whole. A folder shared by older reviews keeps what may belong to others.
-const ownFolder = (r: ReviewRecord) => basename(r.dir) !== "pr-report";
+const ownFolder = (r: ReviewRecord) => basename(r.dir) !== "reflektor";
 function reviewFiles(r: ReviewRecord) {
   if (ownFolder(r)) return existsSync(r.dir) ? readdirSync(r.dir).map((f) => join(r.dir, f)) : [];
   const rounds = r.rounds.map((x) => x.round);
@@ -1480,7 +1480,7 @@ const sizeOf = (r: ReviewRecord) => reviewFiles(r).reduce((n, f) => n + statSync
 async function deleteReview(r: ReviewRecord) {
   const f = roundFacts(r);
   if (f?.root && existsSync(f.root)) {
-    const prefix = `refs/pr-report/rounds/${r.branch.replace(/[^\w.-]+/g, "-")}/`;
+    const prefix = `refs/reflektor/rounds/${r.branch.replace(/[^\w.-]+/g, "-")}/`;
     const refs = ((await gitIn(f.root, ["for-each-ref", "--format=%(refname)", prefix])) ?? "").split("\n").filter(Boolean);
     for (const ref of refs) await gitIn(f.root, ["update-ref", "-d", ref]);
   }
@@ -1491,10 +1491,10 @@ async function deleteReview(r: ReviewRecord) {
 }
 
 // ------------------------------------------------------------------ updates
-// The daemon looks for a new pr-report once an hour (updates.mjs) and tells open pages over their event stream. The
+// The daemon looks for a new reflektor once an hour (updates.mjs) and tells open pages over their event stream. The
 // reader updates from a page or with review.mjs update: the daemon downloads and checks the release, installs it next
 // to this one (install.mjs), and hands over to a daemon started from the new version, on the same port. What was
-// waiting stops: agents' waiters are answered "pr-report-updated" and say so, and pages reload into the new version.
+// waiting stops: agents' waiters are answered "reflektor-updated" and say so, and pages reload into the new version.
 // Reviews, comments and drafts are on disk and carry over.
 
 type UpdateState = "idle" | "checking" | "downloading" | "installing" | "restarting" | "failed";
@@ -1542,7 +1542,7 @@ async function runUpdate() {
     setUpdate("checking");
     const base = releasesUrl();
     const manifest = await fetchManifest(base);
-    if (compareVersions(manifest.version, VERSION) <= 0) return setUpdate("failed", `pr-report ${VERSION} is already the newest release.`);
+    if (compareVersions(manifest.version, VERSION) <= 0) return setUpdate("failed", `reflektor ${VERSION} is already the newest release.`);
     update.target = manifest.version;
     setUpdate("downloading");
     const dir = await downloadRelease(manifest, base);
@@ -1561,7 +1561,7 @@ function handOver(dir: string, version: string) {
   for (const list of waiters.values()) {
     for (const w of list.splice(0)) {
       clearTimeout(w.timer);
-      send(w.res, 409, { error: "pr-report-updated", version });
+      send(w.res, 409, { error: "reflektor-updated", version });
     }
   }
   for (const stream of streams) sse(stream, "shutdown", { version: VERSION, next: version, reason: "update" });
@@ -1569,10 +1569,10 @@ function handOver(dir: string, version: string) {
   spawn(process.execPath, [join(dir, "scripts", "daemon.mjs")], {
     detached: true,
     stdio: ["ignore", log, log],
-    env: { ...process.env, PR_REPORT_TAKEOVER: String(process.pid), PR_REPORT_PORT: String(servingPort) },
+    env: { ...process.env, REFLEKTOR_TAKEOVER: String(process.pid), REFLEKTOR_PORT: String(servingPort) },
     windowsHide: true,
   }).unref();
-  console.log(`Updating to pr-report ${version}: the new daemon takes over.`);
+  console.log(`Updating to reflektor ${version}: the new daemon takes over.`);
   setTimeout(() => process.exit(0), 300);
 }
 
@@ -1596,7 +1596,7 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=3600", "x-content-type-options": "nosniff" });
     return res.end(readFileSync(FUSE_FILE));
   }
-  if (["r", "app", "setup", "settings", "panel"].includes(parts[0]) && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the pr-report checkout.", "text/plain");
+  if (["r", "app", "setup", "settings", "panel"].includes(parts[0]) && !APP_DIR) return send(res, 500, "The viewer is not built. Run pnpm build in the reflektor checkout.", "text/plain");
   if (req.method === "GET" && parts[0] === "app" && parts[1] === "assets") return sendAsset(res, parts.slice(1));
   if (req.method === "GET" && url.pathname === "/setup") return send(res, 200, setupPage(), "text/html; charset=utf-8");
   if (req.method === "GET" && url.pathname === "/settings") return send(res, 200, settingsPage(), "text/html; charset=utf-8");
@@ -2050,7 +2050,7 @@ async function listen(port: number, attempt = 0) {
   server.listen(port, "127.0.0.1", () => {
     servingPort = port;
     writeJson(daemonFile, { port, pid: process.pid, version: VERSION, adminToken, startedAt: now() }, 0o600);
-    console.log(`pr-report daemon ${VERSION} on http://127.0.0.1:${port}/ (pid ${process.pid})`);
+    console.log(`reflektor daemon ${VERSION} on http://127.0.0.1:${port}/ (pid ${process.pid})`);
   });
 }
 

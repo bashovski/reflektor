@@ -22,7 +22,7 @@ export type DiffFile = {
   generated: boolean;
   uncommitted: boolean;
   untracked: boolean;
-  // From .pr-report.json "targets" globs; null when no glob matches or there is no config.
+  // From .reflektor.json "targets" globs; null when no glob matches or there is no config.
   target: Target | null;
   oldContent: string | null;
   newContent: string | null;
@@ -147,7 +147,7 @@ export type DiffData = {
   warnings: string[];
 };
 
-// Optional .pr-report.json in the repo root. Globs follow .gitignore style: a pattern without "/" matches at any depth.
+// Optional .reflektor.json in the repo root. Globs follow .gitignore style: a pattern without "/" matches at any depth.
 export type RepoConfig = {
   base?: string;
   targets?: Partial<Record<Target, string[]>>;

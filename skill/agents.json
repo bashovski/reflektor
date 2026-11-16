@@ -2,7 +2,7 @@
   "claude-code": {
     "name": "Claude",
     "product": "Claude Code",
-    "resume": "/pr-report resume",
+    "resume": "/reflektor resume",
     "env": ["CLAUDECODE"],
     "paths": ["/.claude/skills/"],
     "aliases": ["claude"]

@@ -6,7 +6,7 @@
 // changed code, signing in to Reflektor and publishing from the menu, and the offer of the setup to a browser that
 // skipped it.
 //
-// Uses the installed Google Chrome (or PR_REPORT_CHROME=<path>), so no browser is downloaded.
+// Uses the installed Google Chrome (or REFLEKTOR_CHROME=<path>), so no browser is downloaded.
 // Usage: pnpm check:browser [--headed], after pnpm build
 
 import { execFileSync } from "node:child_process";
@@ -34,9 +34,9 @@ if (!existsSync(join(root, "dist/skill/build.json"))) {
 const fromPackage = (name: string) => import(pathToFileURL(join(root, "dist/skill/scripts", name)).href);
 const { gitBash } = (await fromPackage("repo.mjs")) as typeof import("../skill/scripts/repo.mjs");
 const { chromium } = createRequire(join(root, "viewer/package.json"))("playwright-core") as { chromium: BrowserType };
-const tmp = mkdtempSync(join(tmpdir(), "pr-report-browser-"));
+const tmp = mkdtempSync(join(tmpdir(), "reflektor-browser-"));
 const repo = join(tmp, "books");
-const data = join(repo, ".git/pr-report/feat-books");
+const data = join(repo, ".git/reflektor/feat-books");
 // GitHub is a local stub: the fake repo's remote is on github.com, so the daemon would otherwise ask the real API.
 // GH_CONFIG_DIR points at nothing, so gh has no login and the user menu shows the repo's git identity. Reflektor is a
 // local stub too: signing in from the menu goes to REFLEKTOR_API_URL.
@@ -44,17 +44,17 @@ const github = await startGithubStub();
 const reflektor = await startReflektorStub();
 const env = {
   ...process.env,
-  PR_REPORT_HOME: join(tmp, "home"),
-  PR_REPORT_PORT: String(4900 + Math.floor(Math.random() * 400)),
-  PR_REPORT_DRIFT_SECONDS: "1",
-  PR_REPORT_GITHUB_API: github.url,
-  PR_REPORT_GITHUB_TOKEN: "stub-token",
-  PR_REPORT_PR_POLL_SECONDS: "1",
+  REFLEKTOR_HOME: join(tmp, "home"),
+  REFLEKTOR_PORT: String(4900 + Math.floor(Math.random() * 400)),
+  REFLEKTOR_DRIFT_SECONDS: "1",
+  REFLEKTOR_GITHUB_API: github.url,
+  REFLEKTOR_GITHUB_TOKEN: "stub-token",
+  REFLEKTOR_PR_POLL_SECONDS: "1",
   GH_CONFIG_DIR: join(tmp, "gh-config"),
   REFLEKTOR_API_URL: reflektor.url,
   REFLEKTOR_APP_URL: reflektor.url,
   // The suite's calls say which agent they are, so the page words are the same wherever the suite runs.
-  PR_REPORT_AGENT: "claude-code",
+  REFLEKTOR_AGENT: "claude-code",
 };
 
 const run = (cmd: string, args: string[]) => execFileSync(cmd, args, { cwd: root, encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] });
@@ -80,7 +80,7 @@ const expectVisible = async (locator: Locator, what: string, timeout = 10_000) =
 
 const browser = await chromium.launch({
   headless: !process.argv.includes("--headed"),
-  ...(process.env.PR_REPORT_CHROME ? { executablePath: process.env.PR_REPORT_CHROME } : { channel: "chrome" }),
+  ...(process.env.REFLEKTOR_CHROME ? { executablePath: process.env.REFLEKTOR_CHROME } : { channel: "chrome" }),
 });
 const errors: string[] = [];
 
@@ -93,7 +93,7 @@ try {
   // the picks are saved for this browser, and the inbox greets the reader when setup ends. The rest
   // of the check then runs in dark mode with GitHub Dark, a theme the renderer has to load first.
   review("setup", "--no-open");
-  const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")) as { port: number };
+  const { port } = JSON.parse(readFileSync(join(env.REFLEKTOR_HOME, "daemon.json"), "utf8")) as { port: number };
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -120,7 +120,7 @@ try {
   await expectVisible(page.getByRole("option", { name: "GitHub Dark", exact: true, selected: true }), "the picked code theme");
   await page.keyboard.press("Enter");
   await expectVisible(page.getByRole("heading", { name: "You're all set" }), "the inbox greeting after setup");
-  const saved = await page.evaluate(() => ["pr-report:setup", "pr-report:theme", "pr-report:code-theme-dark"].map((k) => localStorage.getItem(k)));
+  const saved = await page.evaluate(() => ["reflektor:setup", "reflektor:theme", "reflektor:code-theme-dark"].map((k) => localStorage.getItem(k)));
   if (!saved[0] || saved[1] !== '"dark"' || saved[2] !== '"github-dark"') fail(`setup did not save its choices: ${saved.join(" ")}`);
 
   // 1. The draft opens first: the facts, with sending held back.
@@ -188,7 +188,7 @@ try {
 
   // Settings, signed out of Reflektor: the API URL can change for a self-hosted one, a plain http address off this
   // machine is refused with a reason, and Reset to default goes back to Reflektor's own.
-  const savedApiUrl = () => (JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "settings.json"), "utf8")) as { reflektorApiUrl?: string }).reflektorApiUrl;
+  const savedApiUrl = () => (JSON.parse(readFileSync(join(env.REFLEKTOR_HOME, "settings.json"), "utf8")) as { reflektorApiUrl?: string }).reflektorApiUrl;
   await page.keyboard.press("?");
   const apiUrl = page.getByRole("textbox", { name: "API URL" });
   await expectVisible(apiUrl, "the Reflektor API URL in Settings while signed out");
@@ -242,7 +242,7 @@ try {
   // The inbox row names the review's own agent; its groups and filters keep the neutral words, since they span agents.
   const sentInbox = await (await fetch(`http://127.0.0.1:${port}/`)).text();
   if (!sentInbox.includes(">Sent to Claude</span>") || !sentInbox.includes('"Sent to the agent"')) fail("the inbox does not name the agent a review was sent to");
-  await expectVisible(page.getByRole("button", { name: "/pr-report resume" }), "the resume command");
+  await expectVisible(page.getByRole("button", { name: "/reflektor resume" }), "the resume command");
 
   // 5. The agent picks it up, posts a plan, the reviewer approves it in the page, progress shows.
   if (!review("resume", "--id", id).includes("was sent with 2 comments")) fail("resume did not hand over the sent review");
@@ -322,7 +322,7 @@ try {
   await expectVisible(page.getByRole("heading", { name: /^Merged/ }), "a fuzzy search match");
 
   // 9. A browser that skipped the setup is offered it once, above a report and on the inbox.
-  await page.evaluate(() => localStorage.removeItem("pr-report:setup"));
+  await page.evaluate(() => localStorage.removeItem("reflektor:setup"));
   await page.goto(`http://127.0.0.1:${port}/r/${id}`);
   await expectVisible(page.getByRole("link", { name: "Set up Reflektor" }), "the setup offer above a report");
   // The top of the page must not jump between a report and the inbox: the mark, the reader's avatar and the setup

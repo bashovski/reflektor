@@ -6,7 +6,7 @@
 //   whoami    the account the token belongs to
 //   publish   preflight (does one of my organizations approve this repository?), then the bundle, gzipped
 //
-// The token is kept in ~/.pr-report/reflektor.json, readable by the user only, with the API it was issued by. Every
+// The token is kept in ~/.reflektor/reflektor.json, readable by the user only, with the API it was issued by. Every
 // later call goes to that API, whatever the settings say by then, so a token is never sent anywhere else. A call that
 // fails throws a ReflektorError with a sentence the reader can act on; publishBundle() never throws at all and answers
 // with an outcome, because the daemon runs it in the background.
@@ -23,7 +23,7 @@ import { skillVersion } from "./version.mjs";
 
 // The account a token belongs to, as POST /auth/device/token and GET /auth/me name it.
 export type ReflektorUser = { id: string; email: string; name: string | null };
-// ~/.pr-report/reflektor.json. `organizations` keeps, per repository ("github.com/acme/payments"), the organization
+// ~/.reflektor/reflektor.json. `organizations` keeps, per repository ("github.com/acme/payments"), the organization
 // the user picked when several of theirs approve it, so the next publish does not ask again.
 export type ReflektorLogin = { apiUrl: string; appUrl: string; token: string; user: ReflektorUser; savedAt: string; organizations?: Record<string, string> };
 // Where to sign in: the API, and the app whose pages the reader opens.
@@ -43,7 +43,7 @@ export type ScreenshotsUploaded = { sent: number; failed: number; error: string 
 // A call that did not work. `code` is the API's own error ("repository_not_approved", "slow_down") or one of these:
 // "network" (no answer), "unauthorized" (401: the token was revoked), "bad_url" (a setting that is not a usable URL),
 // "bad_answer" (an answer without what the contract promises), "http" (any other status).
-// "update_required" (426) comes with the oldest pr-report Reflektor takes, in `minimum`.
+// "update_required" (426) comes with the oldest skill version the platform takes, in `minimum`.
 export type ReflektorError = Error & { code: string; status: number | null; organizations?: Organization[]; retryAfterMs?: number; minimum?: string };
 // How a publish ended. `reason` is a ReflektorError code, or "draft", "no_remote", "not_approved",
 // "unknown_organization", which are found out here before anything is uploaded.
@@ -51,7 +51,7 @@ export type PublishOutcome =
   | ({ ok: true; organization: string } & Uploaded)
   | { ok: false; reason: string; message: string; organizations?: Organization[]; retryAfterMs?: number; minimum?: string };
 
-const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
+const HOME = process.env.REFLEKTOR_HOME ?? join(homedir(), ".reflektor");
 export const LOGIN_FILE = join(HOME, "reflektor.json");
 const DEFAULT_API = "https://api.reflektor.dev";
 const DEFAULT_APP = "https://reflektor.dev";
@@ -210,10 +210,10 @@ function refusal(res: Response, data: unknown): ReflektorError {
       return failure(code, status, `Several of your organizations approve this repository. Choose one: ${organizations.map((o) => o.slug).join(", ")}.`, { organizations });
     }
     case "invalid_bundle":
-      return failure(code, status, `Reflektor refused the report as not valid${issuesText(body.issues)}. Updating pr-report may help.`);
+      return failure(code, status, `The report was refused as not valid${issuesText(body.issues)}. Updating reflektor may help.`);
     case "update_required": {
       const minimum = typeof body.minimum === "string" ? body.minimum : undefined;
-      return failure(code, status, `Reflektor takes reports from pr-report ${minimum ?? "a newer version"} or newer, and this is ${skillVersion()}. Update pr-report from the report's menu, then publish again.`, { minimum });
+      return failure(code, status, `Publishing needs reflektor ${minimum ?? "a newer version"} or newer, and this is ${skillVersion()}. Update reflektor from the report's menu, then publish again.`, { minimum });
     }
     case "too_large":
       return failure(code, status, "The report is too large for Reflektor (25 MB at most, gzipped).");
@@ -239,9 +239,9 @@ async function call<T>(apiUrl: string, path: string, { method = "GET", token, js
       method,
       headers: {
         accept: "application/json",
-        "user-agent": "pr-report",
-        // Reflektor refuses a publish from a pr-report older than its minimum (426 update_required).
-        "x-pr-report-version": skillVersion(),
+        "user-agent": "reflektor",
+        // The platform refuses a publish from a skill older than its minimum (426 update_required).
+        "x-reflektor-version": skillVersion(),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(body !== undefined ? { "content-type": "application/json" } : {}),
         ...(zip ? { "content-encoding": "gzip" } : {}),
@@ -261,8 +261,8 @@ async function call<T>(apiUrl: string, path: string, { method = "GET", token, js
 // ------------------------------------------------------------------ login
 
 // Step 1 of the device flow: a code for the user to approve in the browser. `clientName` is what the approval page
-// shows: "pr-report on ada-mbp".
-export async function startDeviceLogin(config: ReflektorConfig, clientName = `pr-report on ${hostname().split(".")[0]}`): Promise<DeviceStart> {
+// shows: "reflektor on ada-mbp".
+export async function startDeviceLogin(config: ReflektorConfig, clientName = `reflektor on ${hostname().split(".")[0]}`): Promise<DeviceStart> {
   const start = await call<DeviceStart>(config.apiUrl, "/auth/device", { method: "POST", json: { clientName } });
   if (!start || typeof start.deviceCode !== "string" || typeof start.userCode !== "string" || typeof start.verificationUriComplete !== "string")
     throw failure("bad_answer", null, "Reflektor did not answer with a sign-in code.");
@@ -321,7 +321,7 @@ export async function preflight(login: ReflektorLogin, repository: Repository): 
 
 // Paths on this machine (the repo's folder, its git dir, the checks file) mean nothing to Reflektor and say where the
 // user keeps their code, so they are blanked before the bundle leaves.
-// Screenshots go with the report unless the repo's .pr-report.json says "screenshots": { "upload": false }: then the
+// Screenshots go with the report unless the repo's .reflektor.json says "screenshots": { "upload": false }: then the
 // report goes without them, so nothing on the page points at pictures Reflektor does not have.
 const sendsScreenshots = (bundle: Bundle) => Boolean(bundle.screenshots) && bundle.diff.config?.screenshots?.upload !== false;
 
@@ -361,7 +361,7 @@ async function uploadScreenshots(login: ReflektorLogin, bundle: Bundle, reportId
         if (!existsSync(file)) throw new Error(`${name} is not on this machine any more`);
         const res = await fetch(`${login.apiUrl}${base}/${encodeURIComponent(name)}`, {
           method: "PUT",
-          headers: { authorization: `Bearer ${login.token}`, "content-type": "image/png", "user-agent": "pr-report", "x-pr-report-version": skillVersion() },
+          headers: { authorization: `Bearer ${login.token}`, "content-type": "image/png", "user-agent": "reflektor", "x-reflektor-version": skillVersion() },
           body: readFileSync(file),
           signal: AbortSignal.timeout(UPLOAD_MS),
         });
