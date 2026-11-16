@@ -52,6 +52,16 @@ curl -fsSL https://reflektor.dev/install.sh | sh
 
 When completed, simply run the Reflector skill in your agent:
 
+## Docs
+
+The full documentation is at [reflektor.dev/docs](https://reflektor.dev/docs):
+
+- [Install](https://reflektor.dev/docs#install)
+- [Your first report](https://reflektor.dev/docs#first-report)
+- [Review rounds](https://reflektor.dev/docs#review-rounds)
+- [pr-report flags](https://reflektor.dev/docs#cli-flags)
+- [Publishing a report to your team](https://reflektor.dev/docs#publish-report)
+
 ## Examples
 We've built a large library of examples for you to explore. You can find them in the [Examples](https://reflektor.dev/examples).
 
