@@ -14,7 +14,7 @@ const TIMEOUT_MS = 3000;
 // White initials read well on each of these, on light and dark pages.
 const COLORS = ["#2563eb", "#7c3aed", "#db2777", "#dc2626", "#c2410c", "#b45309", "#15803d", "#0f766e", "#0e7490", "#4f46e5", "#a21caf", "#475569"];
 
-// "RnD-Labz" -> "RL", "monorepo" -> "M". A GitLab subgroup path uses its top group.
+// "Some-Entity" -> "SE", "monorepo" -> "M". A GitLab subgroup path uses its top group.
 const initialsOf = (owner: string): string =>
   owner
     .split("/")[0]
