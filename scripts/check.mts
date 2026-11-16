@@ -569,6 +569,8 @@ async function daemonFlow() {
     if (!/<span class="av" style="background:#[0-9a-f]{6}">AL<\/span>/.test(inbox)) fail("the inbox does not show the owner's initials");
     if (!inbox.includes("<title>(1) All reviews · Reflektor</title>")) fail("the inbox title does not count the review waiting on you");
     if (!inbox.includes('data-owner="acme-labs"')) fail("the inbox rows do not carry the owner they are grouped by");
+    if (!inbox.includes('<nav class="groups" aria-label="Footer">') || !inbox.includes('/signup"') || !inbox.includes("data-theme-toggle")) fail("the inbox has no site footer with its links and theme switch");
+    if (!inbox.includes('<h2 id="star-title">Star us on GitHub</h2>') || !inbox.includes('class="outline"')) fail("the inbox has no Star us on GitHub box with its star");
     if (!/<span class="tag" style="background:#[0-9a-f]{6}"><svg /.test(inbox)) fail("the inbox tag has no color or icon");
     if (!inbox.includes('name="q"') || !(await (await fetch(`${base}/fuse.mjs`)).text()).includes("Fuse.js")) fail("the inbox search or its Fuse.js file is missing");
 

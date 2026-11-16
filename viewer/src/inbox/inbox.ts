@@ -436,4 +436,38 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
     showStatus();
   });
   document.querySelector(".who")!.addEventListener("click", showStatus);
+  // The star box lights its star while the button or the picture is hovered, or the button has focus.
+  const starBox = document.querySelector(".star-display");
+  if (starBox) {
+    let hovered = false,
+      focused = false;
+    const light = () => starBox.classList.toggle("lit", hovered || focused);
+    for (const el of document.querySelectorAll("[data-star]")) {
+      el.addEventListener("mouseenter", () => ((hovered = true), light()));
+      el.addEventListener("mouseleave", () => ((hovered = false), light()));
+    }
+    const button = document.querySelector(".star-button");
+    button?.addEventListener("focus", () => ((focused = true), light()));
+    button?.addEventListener("blur", () => ((focused = false), light()));
+  }
+  // The footer's light and dark switch saves the choice where the review page keeps it (pr-report:theme), so every
+  // page follows it. theme.ts in the head keeps the page's theme in step with the system and other tabs.
+  const themeSwitch = document.querySelector<HTMLButtonElement>("[data-theme-toggle]");
+  if (themeSwitch) {
+    const root = document.documentElement;
+    const sync = () => {
+      const dark = root.dataset.theme === "dark";
+      themeSwitch.setAttribute("aria-checked", String(dark));
+      themeSwitch.title = dark ? "Switch to light mode" : "Switch to dark mode";
+    };
+    sync();
+    new MutationObserver(sync).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    themeSwitch.addEventListener("click", () => {
+      const next = root.dataset.theme === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem("pr-report:theme", JSON.stringify(next));
+      } catch {}
+      root.dataset.theme = next;
+    });
+  }
 })();
