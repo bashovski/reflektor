@@ -436,6 +436,29 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
     showStatus();
   });
   document.querySelector(".who")!.addEventListener("click", showStatus);
+  // After an update the stream comes back from the new version's daemon: reload, so the page is the new one.
+  es.addEventListener("daemon", (e) => {
+    if ((JSON.parse(e.data) as { version: string }).version !== DAEMON.version) location.reload();
+  });
+  // A new pr-report (skill/scripts/updates.mts): a dot on the avatar, an item at the top of the menu, and the update
+  // modal, which opens by itself once per version when the daemon says to ask. It is the report's own dialog, in the panel.
+  let promptedFor: string | null = null;
+  es.addEventListener("update", (e) => {
+    const u = JSON.parse(e.data) as { status: "none" | "available" | "required"; latest: string | null; minimum: string | null; prompt: boolean };
+    const on = u.status !== "none";
+    const dot = document.getElementById("me-dot")!;
+    dot.hidden = !on;
+    dot.classList.toggle("req", u.status === "required");
+    document.getElementById("me-update")!.hidden = !on;
+    document.getElementById("me-update-hr")!.hidden = !on;
+    document.getElementById("me-update-title")!.textContent = u.status === "required" ? "Update needed" : "Update available";
+    document.getElementById("me-update-sub")!.textContent = "pr-report " + (u.status === "required" ? u.minimum + " or newer" : u.latest);
+    const version = u.latest ?? u.minimum;
+    if (u.prompt && version !== promptedFor) {
+      promptedFor = version;
+      openPanel("update");
+    }
+  });
   // The star box lights its star while the button or the picture is hovered, or the button has focus.
   const starBox = document.querySelector(".star-display");
   if (starBox) {

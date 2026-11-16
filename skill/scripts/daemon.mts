@@ -12,9 +12,9 @@
 //
 // Started by review.mjs when needed. Stops itself after 4 hours without activity.
 
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { connect } from "node:net";
 import { homedir } from "node:os";
@@ -27,6 +27,10 @@ import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mjs";
 import { purgeCache, whoAmI } from "./identity.mjs";
 import { DEFAULT_REFLEKTOR_API, finishDeviceLogin, forgetLogin, type Organization, publishBundle, readLogin, reflektorConfig, rememberOrganization, repositoryOf, saveLogin, settingApiUrl, startDeviceLogin } from "./reflektor.mjs";
 import { readSettings, writeSettings } from "./settings.mjs";
+import { activate, prune } from "./install.mjs";
+import { downloadRelease, fetchManifest, releasesUrl } from "./release.mjs";
+import { CHECK_EVERY_MS, checkForUpdate, checksEnabled, managedInstall, noteMinimum, readUpdateFile, snooze, updateInfo } from "./updates.mjs";
+import { compareVersions, skillVersion } from "./version.mjs";
 import { replaceFile } from "./repo.mjs";
 import type { AgentInfo, Bundle, ChecksRun, ScreenshotsRun, CommentKind, CommentTarget, InboxData, LiveQuestion, PrState, Ref, RepoAvatar, Review, ReviewComment, Tag } from "../schema/types.js";
 
@@ -152,7 +156,8 @@ const IDLE_MS = Number(process.env.PR_REPORT_IDLE_MINUTES ?? 240) * 60_000;
 const LONG_POLL_MS = 25_000;
 const REDELIVER_MS = 120_000;
 const MAX_BODY = 5 * 1024 * 1024;
-export const VERSION = createHash("sha1").update(readFileSync(fileURLToPath(import.meta.url))).digest("hex").slice(0, 12);
+// "1.4.0" for a release, "1.4.0-dev+<hash of this file>" for a build from a checkout (version.mjs).
+export const VERSION = skillVersion();
 
 mkdirSync(HOME, { recursive: true });
 const daemonFile = join(HOME, "daemon.json");
@@ -209,6 +214,14 @@ function takeLock() {
     }
   }
   return false;
+}
+// After an update the new daemon is started by the old one, which is still answering: it waits for the old one to exit
+// and free the lock and the port.
+const takeover = Number(process.env.PR_REPORT_TAKEOVER ?? 0);
+delete process.env.PR_REPORT_TAKEOVER;
+if (takeover) {
+  const until = Date.now() + 15_000;
+  while (pidAlive(takeover) && Date.now() < until) await new Promise((wake) => setTimeout(wake, 100));
 }
 if (!takeLock()) {
   console.log("Another pr-report daemon is already running.");
@@ -545,6 +558,7 @@ const ICONS = {
   trash: '<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   star: '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
   filter: '<path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/>',
+  update: '<circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4"/><path d="M12 16V8"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
   moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
@@ -761,11 +775,12 @@ main{padding-top:32px;padding-bottom:48px}h1{margin:0 0 8px;font-size:26px;font-
 .brand{display:inline-flex;flex:none;padding:4px;border-radius:2px}.brand:hover{background:var(--hover-2)}.logo{display:inline-flex;height:24px;color:var(--accent)}.logo svg{display:block;height:100%;width:auto}
 .grow{flex:1}
 .sep{flex:none;width:1px;height:20px;background:var(--border)}.links{display:flex;align-items:center;gap:2px;min-width:0}.links a{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:2px;color:var(--muted);font-size:14px;font-weight:500;text-decoration:none}.links a:hover{color:var(--text);background:var(--hover-2)}.links svg{width:15px;height:15px;fill:currentColor}@media (max-width:559px){.sep,.links{display:none}}
-.me{margin-left:4px}.who{display:flex;align-items:center;padding:0;border:0;border-radius:50%;background:none;cursor:pointer}.who[aria-expanded=true]{box-shadow:0 0 0 2px color-mix(in oklab,oklch(70.5% .015 286.067) 40%,transparent)}
+.me{margin-left:4px}.who{position:relative;display:flex;align-items:center;padding:0;border:0;border-radius:50%;background:none;cursor:pointer}.who[aria-expanded=true]{box-shadow:0 0 0 2px color-mix(in oklab,oklch(70.5% .015 286.067) 40%,transparent)}
 .face{display:inline-grid;place-items:center;flex:none;width:28px;height:28px;border-radius:50%;object-fit:cover;background:color-mix(in oklab,oklch(55.2% .016 285.938) 20%,transparent);color:#fff;font:600 11px/1 "Geist Variable",ui-sans-serif,system-ui,sans-serif}.face.big{width:36px;height:36px;font-size:14px}
 .me .menu{box-sizing:border-box;width:288px;font-size:14px}.id{display:flex;align-items:center;gap:12px;padding:8px 10px}.id div{min-width:0}.id b,.id span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.id b{font-weight:500}.id span{color:var(--muted);font-size:12px}
 .me hr{height:1px;margin:4px 0;border:0;background:var(--border)}
 .mi{display:flex;align-items:center;gap:12px;box-sizing:border-box;width:100%;padding:8px 10px;border:0;border-radius:2px;background:none;color:inherit;font:inherit;text-align:left;text-decoration:none;cursor:pointer}.mi[hidden]{display:none}.mi:hover,.mi:focus-visible{background:var(--hover-2)}.mi>svg{width:16px;height:16px;color:var(--muted)}.mi>span:not(.ext){flex:1}.ext{display:inline-flex;color:var(--faint);opacity:0}.mi:hover .ext,.mi:focus-visible .ext{opacity:1}
+.upd-dot{position:absolute;top:-1px;right:-1px;width:9px;height:9px;border-radius:50%;background:oklch(62.3% .214 259.815);box-shadow:0 0 0 2px var(--bg)}.upd-dot.req{background:oklch(76.9% .188 70.08)}.upd-dot[hidden]{display:none}.mi small{display:block;color:var(--muted);font-size:12px}
 .mi kbd{padding:0 6px;border:1px solid var(--border);border-radius:2px;background:var(--hover-2);color:var(--muted);font:12px/1.5 "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace}
 iframe.panel{position:fixed;inset:0;z-index:100;width:100%;height:100%;border:0;background:transparent}iframe.panel[hidden]{display:none}
 .status{display:flex;align-items:center;gap:8px;padding:8px 10px;color:var(--muted);font-size:12px}.status i{flex:none;width:8px;height:8px;border-radius:50%;background:oklch(69.6% .17 162.48)}.status.down i{background:oklch(63.7% .237 25.331)}
@@ -833,8 +848,9 @@ code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospa
 @media (max-width:760px){.star-box{grid-template-columns:1fr}.star-copy{padding:28px 24px 0}}
 @media (prefers-reduced-motion:reduce){.knob{transition:none}.matrix .outline{animation:none}.matrix .fill,.lit .matrix .fill{transition:none}}</style></head><body>
 <header class="nav"><div class="wrap">${LOGO && `<a class="brand" href="/" title="All reviews" aria-label="All reviews"><span class="logo" aria-hidden="true">${LOGO}</span></a>`}<span class="sep" aria-hidden="true"></span><nav class="links" aria-label="Reflektor">${platformLinks()}</nav><span class="grow"></span>
-<div class="dd me"><button type="button" class="who" aria-haspopup="true" aria-expanded="false" title="Your account and the daemon" aria-label="Your account and the daemon"><span class="face" id="me-face"></span></button><div class="menu" hidden>
+<div class="dd me"><button type="button" class="who" aria-haspopup="true" aria-expanded="false" title="Your account and the daemon" aria-label="Your account and the daemon"><span class="face" id="me-face"></span><i class="upd-dot" id="me-dot" aria-hidden="true" hidden></i></button><div class="menu" hidden>
 <div class="id"><span class="face big" id="me-face-big"></span><div><b id="me-name">Looking you up…</b><span id="me-sub"></span></div></div><hr>
+<button type="button" class="mi" data-panel="update" id="me-update" hidden>${icon("update")}<span><span id="me-update-title">Update available</span><small id="me-update-sub"></small></span></button><hr id="me-update-hr" hidden>
 <a class="mi" id="me-profile" target="_blank" rel="noreferrer" hidden>${icon("user")}<span>Open profile</span>${external}</a>
 <button type="button" class="mi" data-settings>${icon("settings")}<span>Settings</span><kbd>?</kbd></button>
 <button type="button" class="mi" data-panel="help">${icon("help")}<span>Help</span></button>
@@ -1338,6 +1354,11 @@ async function publishNow(r: ReviewRecord, { organization = null, auto = false }
   r.publishError = { reason: outcome.reason, message: outcome.message, round: entry.round, at: now() };
   if (auto) r.publishRetryAt = Date.now() + (outcome.retryAfterMs ?? (TRANSIENT.has(outcome.reason) ? PUBLISH_RETRY_MS : PUBLISH_QUIET_MS));
   console.log(`Reflektor: publishing ${r.id} round ${entry.round}${auto ? "" : " by hand"} did not work (${outcome.reason}): ${outcome.message}`);
+  // Reflektor only takes reports from pr-report as new as its minimum: the pages ask the reader to update.
+  if (outcome.reason === "update_required" && outcome.minimum) {
+    noteMinimum(outcome.minimum);
+    broadcastUpdate();
+  }
   // Not saved: a failure is not activity, and must not keep the review out of the archive.
   broadcast(r);
   return answer(false, outcome.reason, outcome.message, { round: entry.round, organizations: outcome.organizations });
@@ -1469,6 +1490,92 @@ async function deleteReview(r: ReviewRecord) {
   saveRegistry();
 }
 
+// ------------------------------------------------------------------ updates
+// The daemon looks for a new pr-report once an hour (updates.mjs) and tells open pages over their event stream. The
+// reader updates from a page or with review.mjs update: the daemon downloads and checks the release, installs it next
+// to this one (install.mjs), and hands over to a daemon started from the new version, on the same port. What was
+// waiting stops: agents' waiters are answered "pr-report-updated" and say so, and pages reload into the new version.
+// Reviews, comments and drafts are on disk and carry over.
+
+type UpdateState = "idle" | "checking" | "downloading" | "installing" | "restarting" | "failed";
+let update: { state: UpdateState; error: string | null; target: string | null } = { state: "idle", error: null, target: null };
+let servingPort = FIRST_PORT;
+
+// How many reviews have an agent waiting on them now: those waits stop when the daemon is replaced.
+const waitingAgents = () => [...reviews.values()].filter((r) => (waiters.get(r.id)?.length ?? 0) > 0).length;
+const updateAnswer = () => ({ ...updateInfo(), state: update.state, error: update.error, target: update.target, waiting: waitingAgents() });
+function broadcastUpdate() {
+  const payload = updateAnswer();
+  for (const res of streams) sse(res, "update", payload);
+}
+function setUpdate(state: UpdateState, error: string | null = null) {
+  update = { ...update, state, error };
+  broadcastUpdate();
+}
+
+async function runCheck() {
+  if (!checksEnabled()) return;
+  let apiUrl: string;
+  try {
+    apiUrl = reflektorConfig().apiUrl;
+  } catch {
+    return;
+  }
+  if (await checkForUpdate(apiUrl)) broadcastUpdate();
+}
+
+// The first check soon after start when the last one is over an hour old, then one an hour, each a few random minutes
+// late so machines do not all ask at the same moment.
+function scheduleChecks() {
+  const last = Date.parse(readUpdateFile().checkedAt ?? "") || 0;
+  const firstIn = Math.max(5_000 + Math.random() * 25_000, last + CHECK_EVERY_MS - Date.now());
+  setTimeout(() => {
+    void runCheck();
+    setInterval(() => setTimeout(() => void runCheck(), Math.random() * 5 * 60_000).unref(), CHECK_EVERY_MS).unref();
+  }, firstIn).unref();
+}
+
+async function runUpdate() {
+  if (update.state !== "idle" && update.state !== "failed") return;
+  try {
+    update.target = null;
+    setUpdate("checking");
+    const base = releasesUrl();
+    const manifest = await fetchManifest(base);
+    if (compareVersions(manifest.version, VERSION) <= 0) return setUpdate("failed", `pr-report ${VERSION} is already the newest release.`);
+    update.target = manifest.version;
+    setUpdate("downloading");
+    const dir = await downloadRelease(manifest, base);
+    setUpdate("installing");
+    activate(manifest.version);
+    setUpdate("restarting");
+    handOver(dir, manifest.version);
+  } catch (e) {
+    setUpdate("failed", (e as Error).message);
+  }
+}
+
+// Answers every waiting agent, tells the pages, and starts the new version's daemon, which takes over once this one
+// has exited.
+function handOver(dir: string, version: string) {
+  for (const list of waiters.values()) {
+    for (const w of list.splice(0)) {
+      clearTimeout(w.timer);
+      send(w.res, 409, { error: "pr-report-updated", version });
+    }
+  }
+  for (const stream of streams) sse(stream, "shutdown", { version: VERSION, next: version, reason: "update" });
+  const log = openSync(join(HOME, "daemon.log"), "a");
+  spawn(process.execPath, [join(dir, "scripts", "daemon.mjs")], {
+    detached: true,
+    stdio: ["ignore", log, log],
+    env: { ...process.env, PR_REPORT_TAKEOVER: String(process.pid), PR_REPORT_PORT: String(servingPort) },
+    windowsHide: true,
+  }).unref();
+  console.log(`Updating to pr-report ${version}: the new daemon takes over.`);
+  setTimeout(() => process.exit(0), 300);
+}
+
 // ------------------------------------------------------------------ routes
 
 let lastActivity = Date.now();
@@ -1523,6 +1630,27 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     return;
   }
 
+  // ---------- updates: what is known, update now, later. Pages use the page token, review.mjs the admin token.
+  if (parts[1] === "update") {
+    if (!admin && !same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
+    if (req.method === "GET" && !parts[2]) return send(res, 200, updateAnswer());
+    if (req.method === "POST" && !parts[2]) {
+      void runUpdate();
+      return send(res, 202, updateAnswer());
+    }
+    if (req.method === "POST" && parts[2] === "snooze") {
+      const { latest } = updateInfo();
+      if (latest) snooze(latest);
+      broadcastUpdate();
+      return send(res, 200, updateAnswer());
+    }
+    if (req.method === "POST" && parts[2] === "check") {
+      await runCheck();
+      return send(res, 200, updateAnswer());
+    }
+    return send(res, 404, { error: "not found" });
+  }
+
   // ---------- page stream: one connection can watch many reviews
   if (req.method === "GET" && parts[1] === "events") {
     if (!same(url.searchParams.get("token"), pageToken)) return send(res, 401, { error: "bad token" });
@@ -1534,6 +1662,7 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     for (const r of reviews.values()) if (watches(res, r.id)) sse(res, "state", liveState(r));
     // After the states: a reader of the first chunk still finds a review's state first.
     sse(res, "daemon", daemonInfo());
+    sse(res, "update", updateAnswer());
     req.on("close", () => streams.delete(res));
     return;
   }
@@ -1919,6 +2048,7 @@ async function listen(port: number, attempt = 0) {
     }
   });
   server.listen(port, "127.0.0.1", () => {
+    servingPort = port;
     writeJson(daemonFile, { port, pid: process.pid, version: VERSION, adminToken, startedAt: now() }, 0o600);
     console.log(`pr-report daemon ${VERSION} on http://127.0.0.1:${port}/ (pid ${process.pid})`);
   });
@@ -1987,4 +2117,7 @@ setInterval(() => {
 for (const r of reviews.values()) if (finishIfSettled(r)) save(r);
 
 void listen(FIRST_PORT);
+// An installed release keeps the version in use and the one before it; older ones go.
+if (managedInstall()) prune();
+scheduleChecks();
 console.log(`Reviews known: ${reviews.size}. Home: ${HOME}`);

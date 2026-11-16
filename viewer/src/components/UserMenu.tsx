@@ -1,5 +1,5 @@
 import { Menu, MenuButton, MenuItem, MenuItems, MenuSeparator } from "@headlessui/react";
-import { Bug, CircleHelp, CloudUpload, ExternalLink, LogIn, Settings, Trash2, UserRound } from "lucide-react";
+import { Bug, CircleArrowUp, CircleHelp, CloudUpload, ExternalLink, LogIn, Settings, Trash2, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Bundle, Identity, RepoAvatar } from "../../../skill/schema/types";
 import { useIdentity } from "../lib/identity";
@@ -8,8 +8,10 @@ import { PROJECT } from "../lib/meta";
 import { pageToken } from "../lib/panel";
 import { type ReflektorStatus, useReflektor } from "../lib/reflektor";
 import { useReport } from "../lib/state";
+import { useUpdate } from "../lib/update";
 import { type ReflektorAction, ReflektorDialog } from "./Reflektor";
 import { cx } from "./ui";
+import { UpdateDialog } from "./UpdateDialog";
 
 const SOURCES: Record<Identity["source"], string> = {
   gh: "via the GitHub CLI",
@@ -140,6 +142,22 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
   const forge = repo.web?.forge ? FORGE_NAMES[repo.web.forge] : null;
   const linkStatus = LINKS[link];
 
+  // A new pr-report: a dot on the avatar and an item at the top of the menu until it is installed, and the modal by
+  // itself once per version when the daemon says to ask. An auto-opened modal closes again when another tab answered it.
+  const update = useUpdate();
+  const [updating, setUpdating] = useState<"auto" | "menu" | null>(null);
+  const promptedFor = useRef<string | null>(null);
+  const pending = update && update.status !== "none" ? update : null;
+  useEffect(() => {
+    if (!update) return;
+    const version = update.latest ?? update.minimum;
+    if (update.prompt && version !== promptedFor.current) {
+      promptedFor.current = version;
+      setUpdating((u) => u ?? "auto");
+    }
+    if (!update.prompt && update.state === "idle") setUpdating((u) => (u === "auto" ? null : u));
+  }, [update]);
+
   return (
     <>
       <Menu>
@@ -148,7 +166,12 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
           aria-label="Your account and the daemon"
           className="ml-1 flex items-center rounded-full focus:outline-none data-[focus]:ring-2 data-[focus]:ring-zinc-400/60 data-[open]:ring-2 data-[open]:ring-zinc-400/40"
         >
-          <Avatar avatar={who?.avatar ?? null} className="size-7 text-[11px]" />
+          <span className="relative">
+            <Avatar avatar={who?.avatar ?? null} className="size-7 text-[11px]" />
+            {pending && (
+              <span aria-hidden className={cx("absolute -top-px -right-px size-2.5 rounded-full ring-2 ring-[var(--bg)]", pending.status === "required" ? "bg-warn-500" : "bg-blue-500")} />
+            )}
+          </span>
         </MenuButton>
         <MenuItems
           anchor="bottom end"
@@ -169,6 +192,21 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
             </div>
           </div>
           <MenuSeparator className="my-1 h-px bg-[var(--border)]" />
+
+          {pending && (
+            <>
+              <MenuItem>
+                <button type="button" onClick={() => setUpdating("menu")} className={item}>
+                  <CircleArrowUp />
+                  <span className="min-w-0 flex-1">
+                    <span className="block">{pending.status === "required" ? "Update needed" : "Update available"}</span>
+                    <span className="block truncate text-xs text-muted">pr-report {pending.status === "required" ? `${pending.minimum} or newer` : pending.latest}</span>
+                  </span>
+                </button>
+              </MenuItem>
+              <MenuSeparator className="my-1 h-px bg-[var(--border)]" />
+            </>
+          )}
 
           {who?.url && (
             <MenuItem>
@@ -254,6 +292,7 @@ export const UserMenu = ({ onSettings, onHelp }: { onSettings: () => void; onHel
         </MenuItems>
       </Menu>
       <PurgeDialog open={purging} onClose={() => setPurging(false)} />
+      <UpdateDialog open={updating !== null} info={update} onClose={() => setUpdating(null)} />
       {config && (
         <ReflektorDialog
           action={reflektorAction}

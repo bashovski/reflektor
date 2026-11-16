@@ -5,12 +5,13 @@
 //   dist/skill/SKILL.md and the rest    copied from skill/ as they are, the schema included (build.mjs reads it)
 //   dist/skill/scripts/*.mjs            skill/scripts/*.mts compiled by tsc (tsconfig.skill.json), for Node 18
 //   dist/skill/assets/                  the viewer (app/ for the daemon, viewer.html for --html), Fuse.js, file icons
-//   dist/skill/build.json               when it was built and from which commit, for deploy's freshness check
+//   dist/skill/build.json               the version (package.json), when it was built and from which commit, for
+//                                       deploy's freshness check and version.mjs. pack-release.mts marks a release
 //
 // Usage: pnpm build, which compiles this file into dist/tools/ first. Runs the same on macOS, Linux and Windows.
 
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, sep } from "node:path";
 import { root } from "./paths.mjs";
 
@@ -67,7 +68,8 @@ cpSync(join(viewer, "node_modules", "fuse.js", "dist", "fuse.basic.min.mjs"), jo
 
 // 4. When and from what it was built. deploy refuses a package older than the source.
 const commit = spawnSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root, encoding: "utf8" }).stdout?.trim() || null;
-writeFileSync(join(out, "build.json"), `${JSON.stringify({ builtAt: new Date().toISOString(), commit }, null, 2)}\n`);
+const { version } = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string };
+writeFileSync(join(out, "build.json"), `${JSON.stringify({ version, channel: "dev", builtAt: new Date().toISOString(), commit }, null, 2)}\n`);
 
 console.log(`Built ${out}`);
 console.log("Install it with: pnpm run deploy");

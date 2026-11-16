@@ -19,6 +19,7 @@ import { gzip } from "node:zlib";
 import type { Bundle, Review } from "../schema/types.js";
 import { replaceFile } from "./repo.mjs";
 import { readSettings, type Settings } from "./settings.mjs";
+import { skillVersion } from "./version.mjs";
 
 // The account a token belongs to, as POST /auth/device/token and GET /auth/me name it.
 export type ReflektorUser = { id: string; email: string; name: string | null };
@@ -42,12 +43,13 @@ export type ScreenshotsUploaded = { sent: number; failed: number; error: string 
 // A call that did not work. `code` is the API's own error ("repository_not_approved", "slow_down") or one of these:
 // "network" (no answer), "unauthorized" (401: the token was revoked), "bad_url" (a setting that is not a usable URL),
 // "bad_answer" (an answer without what the contract promises), "http" (any other status).
-export type ReflektorError = Error & { code: string; status: number | null; organizations?: Organization[]; retryAfterMs?: number };
+// "update_required" (426) comes with the oldest pr-report Reflektor takes, in `minimum`.
+export type ReflektorError = Error & { code: string; status: number | null; organizations?: Organization[]; retryAfterMs?: number; minimum?: string };
 // How a publish ended. `reason` is a ReflektorError code, or "draft", "no_remote", "not_approved",
 // "unknown_organization", which are found out here before anything is uploaded.
 export type PublishOutcome =
   | ({ ok: true; organization: string } & Uploaded)
-  | { ok: false; reason: string; message: string; organizations?: Organization[]; retryAfterMs?: number };
+  | { ok: false; reason: string; message: string; organizations?: Organization[]; retryAfterMs?: number; minimum?: string };
 
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 export const LOGIN_FILE = join(HOME, "reflektor.json");
@@ -194,7 +196,7 @@ const issuesText = (issues: unknown): string => {
 
 // The error for an answer that is not 2xx, in the reader's words.
 function refusal(res: Response, data: unknown): ReflektorError {
-  const body = (data ?? {}) as { error?: unknown; organizations?: unknown; issues?: unknown; message?: unknown };
+  const body = (data ?? {}) as { error?: unknown; organizations?: unknown; issues?: unknown; message?: unknown; minimum?: unknown };
   const code = typeof body.error === "string" ? body.error : res.status === 401 ? "unauthorized" : "http";
   const status = res.status;
   if (res.status === 401) return failure("unauthorized", status, "Reflektor no longer accepts this machine's login: it was revoked or has expired. Sign in again.");
@@ -209,6 +211,10 @@ function refusal(res: Response, data: unknown): ReflektorError {
     }
     case "invalid_bundle":
       return failure(code, status, `Reflektor refused the report as not valid${issuesText(body.issues)}. Updating pr-report may help.`);
+    case "update_required": {
+      const minimum = typeof body.minimum === "string" ? body.minimum : undefined;
+      return failure(code, status, `Reflektor takes reports from pr-report ${minimum ?? "a newer version"} or newer, and this is ${skillVersion()}. Update pr-report from the report's menu, then publish again.`, { minimum });
+    }
     case "too_large":
       return failure(code, status, "The report is too large for Reflektor (25 MB at most, gzipped).");
     case "rate_limited": {
@@ -234,6 +240,8 @@ async function call<T>(apiUrl: string, path: string, { method = "GET", token, js
       headers: {
         accept: "application/json",
         "user-agent": "pr-report",
+        // Reflektor refuses a publish from a pr-report older than its minimum (426 update_required).
+        "x-pr-report-version": skillVersion(),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(body !== undefined ? { "content-type": "application/json" } : {}),
         ...(zip ? { "content-encoding": "gzip" } : {}),
@@ -353,7 +361,7 @@ async function uploadScreenshots(login: ReflektorLogin, bundle: Bundle, reportId
         if (!existsSync(file)) throw new Error(`${name} is not on this machine any more`);
         const res = await fetch(`${login.apiUrl}${base}/${encodeURIComponent(name)}`, {
           method: "PUT",
-          headers: { authorization: `Bearer ${login.token}`, "content-type": "image/png", "user-agent": "pr-report" },
+          headers: { authorization: `Bearer ${login.token}`, "content-type": "image/png", "user-agent": "pr-report", "x-pr-report-version": skillVersion() },
           body: readFileSync(file),
           signal: AbortSignal.timeout(UPLOAD_MS),
         });
@@ -409,6 +417,6 @@ export async function publishBundle(login: ReflektorLogin, bundle: Bundle, { org
     return { ok: true, organization: chosen.slug, ...uploaded, ...(screenshots ? { screenshots } : {}) };
   } catch (e) {
     const error = e as ReflektorError;
-    return { ok: false, reason: error.code ?? "http", message: error.message, organizations: error.organizations, retryAfterMs: error.retryAfterMs };
+    return { ok: false, reason: error.code ?? "http", message: error.message, organizations: error.organizations, retryAfterMs: error.retryAfterMs, minimum: error.minimum };
   }
 }

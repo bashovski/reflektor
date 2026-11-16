@@ -4,7 +4,7 @@
 // second copy written by hand would drift from this one. Instead the inbox loads this app at /panel, in a frame that
 // covers the window and is see-through, and tells it which dialog to open (see components/Panel.tsx). So each dialog
 // exists once and is the same from every page.
-export type PanelName = "help" | "purge";
+export type PanelName = "help" | "purge" | "update";
 export type PanelConfig = { token: string };
 
 declare global {

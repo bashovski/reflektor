@@ -243,6 +243,10 @@ Tell the user, in a few lines:
 
 Do not paste the report into the chat. End your turn and do not poll: the waiter exits when the reviewer does something, and that wakes you. Its output says what happened and what to run next. After handling it, start the waiter again in the background, unless the review is done.
 
+**pr-report was updated:** the user can update pr-report from the page while you wait. The waiter then prints that pr-report was updated and exits with code 3. Tell the user that line, and do not start the waiter again from this session: they continue with `/pr-report resume`, which runs the new version.
+
+**An update is out:** while a newer pr-report is out, `review.mjs` ends some answers with a line starting `note: pr-report`. Pass it on to the user once per session, in one sentence, and do not update on your own: the user updates from the report's menu, or asks you to run `review.mjs update`.
+
 **A live question:** read the code it points at and answer in 1 to 4 short sentences or a short list, following the style guide. Answer only: do not change code. If the answer shows something should change, say so and suggest a comment or "Fix this".
 
 ```bash
