@@ -66,6 +66,9 @@ cpSync(join(viewer, "dist", "app"), join(assets, "app"), { recursive: true });
 cpSync(join(viewer, "dist", "standalone", "index.html"), join(assets, "viewer.html"));
 cpSync(join(viewer, "node_modules", "fuse.js", "dist", "fuse.basic.min.mjs"), join(assets, "fuse.mjs"));
 
+// The license travels with every copy of the package, as the MIT license asks.
+cpSync(join(root, "LICENSE"), join(out, "LICENSE"));
+
 // 4. When and from what it was built. deploy refuses a package older than the source.
 const commit = spawnSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root, encoding: "utf8" }).stdout?.trim() || null;
 const { version } = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string };
