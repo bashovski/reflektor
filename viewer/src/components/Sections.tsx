@@ -9,6 +9,7 @@ import { FileCard } from "./FileCard";
 import { RichText } from "./RichText";
 import { SchemaDiagram } from "./SchemaDiagram";
 import { cx, LocCount, Pill, RefLink, SectionTitle } from "./ui";
+import { useChangeWords } from "../lib/pr";
 
 const QuestionItem = ({ target, id }: { target: Extract<CommentTarget, { type: "question" }>; id: string }) => {
   const { editable, commentsFor, openComposer, composer } = useReview();
@@ -29,6 +30,7 @@ const QuestionItem = ({ target, id }: { target: Extract<CommentTarget, { type: "
 
 const SectionCard = ({ section, index, paths }: { section: Section; index: number; paths: string[] }) => {
   const { filesByPath, isSectionOpen, setSectionOpen, isViewed } = useReport();
+  const words = useChangeWords();
   const open = isSectionOpen(index);
   const meta = SECTIONS[section.kind];
   const review = REVIEW[section.review];
@@ -108,7 +110,7 @@ const SectionCard = ({ section, index, paths }: { section: Section; index: numbe
             <div className="rounded-control border border-agent-500/25 bg-agent-500/[0.05] px-3 py-2.5">
               <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-agent-700 dark:text-agent-300">
                 <CircleHelp className="size-3.5" />
-                Answer before you open the PR
+                Answer before you open the {words.short}
               </p>
               <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed marker:text-agent-400">
                 {section.questions.map((q, i) => (

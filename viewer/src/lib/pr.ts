@@ -1,5 +1,6 @@
 import type { PrState } from "../../../skill/schema/types";
 import { useLive } from "./live";
+import { type ChangeWords, changeWords } from "./meta";
 import { useReport } from "./state";
 
 export type PullRequest = { number: number; url: string; title: string | null; state: PrState; base: string | null; mergedAt: string | null };
@@ -16,3 +17,6 @@ export function usePr(): PullRequest | null {
 }
 
 export const useMerged = () => usePr()?.state === "MERGED";
+
+// "PR #12" or "MR !12", by where the repo lives.
+export const useChangeWords = (): ChangeWords => changeWords(useReport().bundle.diff.repo.web?.forge);

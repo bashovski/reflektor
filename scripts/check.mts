@@ -9,7 +9,7 @@
 import { type ChildProcessByStdio, execFile, execFileSync, spawn } from "node:child_process";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import type { Readable } from "node:stream";
 import { pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
@@ -334,6 +334,7 @@ try {
   if (!waited.includes("Project checks: 1 passed")) fail(`checks.mts --wait did not print the finished results:\n${waited}`);
 
   await daemonFlow();
+  await gitlabFlow();
   updateFlow();
   await concurrentStart();
   await hooksFlow();
@@ -344,6 +345,70 @@ try {
   fail(e.stderr?.toString() || e.message);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
+}
+
+// ------------------------------------------------------------------ GitLab merge requests
+// A branch on GitLab: the daemon asks glab about its merge request, as it asks GitHub about pull requests. glab is a
+// stand-in on PATH that answers from a file and logs how it was called.
+
+async function gitlabFlow() {
+  const bin = join(tmp, "glab-bin");
+  const answer = join(tmp, "glab-answer.json");
+  const calls = join(tmp, "glab-calls.log");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, "glab"), `#!/bin/sh\necho "$@" >> "${calls}"\ncat "${answer}"\n`);
+  chmodSync(join(bin, "glab"), 0o755);
+  const mr = (state: string) => [{ iid: 5, web_url: "https://gitlab.example.com/acme/sub/library/-/merge_requests/5", title: "Books", state, target_branch: "main", merged_at: state === "merged" ? "2026-11-16T00:00:00Z" : null }];
+  writeFileSync(answer, JSON.stringify(mr("opened")));
+  const env = {
+    PR_REPORT_HOME: join(tmp, "gitlab-home"),
+    PR_REPORT_PORT: String(5400 + Math.floor(Math.random() * 300)),
+    PR_REPORT_DRIFT_SECONDS: "1",
+    PR_REPORT_PR_POLL_SECONDS: "1",
+    PATH: `${bin}${delimiter}${process.env.PATH}`,
+  };
+  const out = join(tmp, "gitlab-review", "round1.json");
+  run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
+  const bundle = JSON.parse(readFileSync(out, "utf8")) as Bundle;
+  bundle.diff.repo = { ...bundle.diff.repo, host: "gitlab.example.com", owner: "acme/sub", name: "library", web: { url: "https://gitlab.example.com/acme/sub/library", ownerUrl: "https://gitlab.example.com/acme/sub", forge: "gitlab" } };
+  bundle.diff.branch.pr = null;
+  writeFileSync(out, JSON.stringify(bundle));
+  const review = (...args: string[]) => run("node", [join(root, "dist/skill/scripts/review.mjs"), ...args], env);
+  try {
+    const id = review("open", "--report", out).match(/Review id: (\S+)/)?.[1];
+    if (!id) return fail("review.mts open printed no id for the GitLab review");
+    const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")) as DaemonFile;
+    const base = `http://127.0.0.1:${port}`;
+    const page = await (await fetch(`${base}/r/${id}`)).text();
+    const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)![1]) as ReviewConfig;
+    const state = async (): Promise<LiveState> => {
+      const res = await fetch(`${base}/api/events?token=${config.token}&watch=${id}`, { signal: AbortSignal.timeout(2000) });
+      const reader = res.body!.getReader();
+      const { value } = await reader.read();
+      reader.cancel();
+      return JSON.parse(new TextDecoder().decode(value).match(/data: (.*)/)![1]);
+    };
+    const until = async (test: (pr: LiveState["pr"]) => boolean) => {
+      for (let i = 0; i < 40; i++) {
+        await fetch(`${base}${config.api}/presence`, { method: "POST", headers: { "x-review-token": config.token, "content-type": "application/json" }, body: JSON.stringify({ tab: "gitlab-tab" }) });
+        if (test((await state()).pr)) return true;
+        await sleep(250);
+      }
+      return false;
+    };
+    if (!(await until((pr) => pr?.state === "OPEN" && pr.number === 5 && pr.base === "main"))) fail(`the daemon did not see the merge request open: ${JSON.stringify((await state()).pr)}`);
+    const logged = readFileSync(calls, "utf8");
+    if (!logged.includes("api --hostname gitlab.example.com projects/acme%2Fsub%2Flibrary/merge_requests?source_branch=feat%2Fbooks")) fail(`glab was not asked about the branch's merge request:\n${logged}`);
+    writeFileSync(answer, JSON.stringify(mr("merged")));
+    if (!(await until((pr) => pr?.state === "MERGED"))) fail("the daemon did not see the merge request merged");
+    console.log("gitlab: merge request found through glab, open then merged");
+  } finally {
+    try {
+      review("stop");
+    } catch {
+      // Already stopped.
+    }
+  }
 }
 
 // ------------------------------------------------------------------ app size

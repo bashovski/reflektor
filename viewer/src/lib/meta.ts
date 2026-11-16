@@ -45,6 +45,7 @@ import type {
   FindingKind,
   FlowDetailKind,
   FlowStep,
+  Forge,
   HighlightKind,
   PrState,
   ReplyStatus,
@@ -207,6 +208,15 @@ export const PR_STATES: Record<PrState, { label: string; icon: LucideIcon; class
   MERGED: { label: "Merged", icon: GitMerge, className: "text-violet-600 dark:text-violet-400", pill: "bg-violet-500/10 text-violet-700 ring-violet-500/30 dark:text-violet-300" },
   CLOSED: { label: "Closed", icon: GitPullRequestClosed, className: "text-red-600 dark:text-red-400", pill: "bg-red-500/10 text-red-700 ring-red-500/30 dark:text-red-300" },
 };
+
+// What the code host calls a branch's change request. GitLab has merge requests numbered !12; the others have pull
+// requests numbered #12.
+export type ChangeWords = { short: string; name: string; Name: string; Title: string; ref: (number: number) => string };
+
+const PULL_REQUEST: ChangeWords = { short: "PR", name: "pull request", Name: "Pull request", Title: "Pull Request", ref: (n) => `#${n}` };
+const MERGE_REQUEST: ChangeWords = { short: "MR", name: "merge request", Name: "Merge request", Title: "Merge Request", ref: (n) => `!${n}` };
+
+export const changeWords = (forge: Forge | null | undefined): ChangeWords => (forge === "gitlab" ? MERGE_REQUEST : PULL_REQUEST);
 
 export const BASE_SOURCE: Record<BaseSource, string> = {
   argument: "you picked it",

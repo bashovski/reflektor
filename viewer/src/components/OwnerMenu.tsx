@@ -3,7 +3,7 @@ import { ChevronDown, ExternalLink, GitPullRequestCreateArrow, Inbox } from "luc
 import type { ReactNode } from "react";
 import type { DiffData, Forge } from "../../../skill/schema/types";
 import { PR_STATES } from "../lib/meta";
-import { usePr } from "../lib/pr";
+import { useChangeWords, usePr } from "../lib/pr";
 import { useReport } from "../lib/state";
 import { cx, OwnerAvatar } from "./ui";
 
@@ -42,6 +42,7 @@ export const OwnerMenu = () => {
   const web = repo.web ?? null;
   // Live: a pull request opened or merged after the report was built counts.
   const pr = usePr();
+  const words = useChangeWords();
   const items: Item[] = [];
 
   if (web)
@@ -80,7 +81,7 @@ export const OwnerMenu = () => {
       href: newPr,
       external: true,
       icon: <GitPullRequestCreateArrow />,
-      label: "Open Pull Request",
+      label: `Open ${words.Title}`,
       detail: `${branch.head} into ${branch.base}${bundle.prDescription ? ", filled in from this report" : ""}`,
       warning: unpushed,
     });
@@ -93,8 +94,8 @@ export const OwnerMenu = () => {
       href: pr.url,
       external: true,
       icon: <Icon className={state.className} />,
-      label: "View Pull Request",
-      detail: `#${pr.number}, ${state.label.toLowerCase()}${pr.title ? `: ${pr.title}` : ""}`,
+      label: `View ${words.Title}`,
+      detail: `${words.ref(pr.number)}, ${state.label.toLowerCase()}${pr.title ? `: ${pr.title}` : ""}`,
     });
   }
 
@@ -109,7 +110,7 @@ export const OwnerMenu = () => {
   return (
     <Menu>
       <MenuButton
-        title="Owner, all reports and pull request"
+        title={`Owner, all reports and ${words.name}`}
         className="-ml-1 flex min-w-0 items-center gap-2 rounded-control py-1 pr-1 pl-1 hover:bg-zinc-500/10 focus:outline-none data-[focus]:ring-2 data-[focus]:ring-zinc-400/60 data-[open]:bg-zinc-500/10"
       >
         {owner}
