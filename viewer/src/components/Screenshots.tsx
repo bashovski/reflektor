@@ -27,7 +27,7 @@ type Pin = { x: number; y: number };
 type ShotTarget = Extract<CommentTarget, { type: "screenshot" }>;
 
 // The review bar's comment list asks for a screenshot comment's picture with this event; the section opens it.
-export const SHOW_SHOT_EVENT = "pr-report:show-shot";
+export const SHOW_SHOT_EVENT = "reflektor:show-shot";
 
 const shotTarget = (set: ShotSet, shot: Shot, pin?: Pin): ShotTarget => ({
   type: "screenshot",

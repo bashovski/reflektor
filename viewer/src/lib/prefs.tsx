@@ -5,17 +5,17 @@ import { codeThemeFor, DEFAULT_CODE_THEME, HIGHLIGHTER, type ThemeMode } from ".
 
 // What the reviewer set for themselves. It lives in this browser's localStorage, so every report
 // page, the setup page and the inbox agree. src/boot/theme.ts and src/inbox/theme.ts read
-// pr-report:theme before the first paint, so that key keeps its name.
+// reflektor:theme before the first paint, so that key keeps its name.
 
 export type ThemeChoice = "system" | "light" | "dark";
 export type DiffStyle = "unified" | "split";
 
 export const PREF_KEYS = {
-  theme: "pr-report:theme",
-  diffStyle: "pr-report:diff-style",
-  codeThemeDark: "pr-report:code-theme-dark",
-  codeThemeLight: "pr-report:code-theme-light",
-  screenshotsOpen: "pr-report:screenshots-open",
+  theme: "reflektor:theme",
+  diffStyle: "reflektor:diff-style",
+  codeThemeDark: "reflektor:code-theme-dark",
+  codeThemeLight: "reflektor:code-theme-light",
+  screenshotsOpen: "reflektor:screenshots-open",
 } as const;
 
 export const storage = {

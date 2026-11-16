@@ -2,7 +2,7 @@ import { createContext, type ReactNode, useContext, useEffect, useState } from "
 import type { UpdateInfo } from "./update";
 import type { AgentInfo, Bundle, ChecksRun, CommentKind, ScreenshotsRun, LiveQuestion, PrState, Ref, ReviewComment } from "../../../skill/schema/types";
 
-// Live state of a review, streamed from the pr-report daemon.
+// Live state of a review, streamed from the reflektor daemon.
 //
 // Browsers allow only 6 open connections per address, and every review tab talks to the same daemon.
 // So one tab (the holder of a Web Lock) keeps the single event stream and relays it to the other tabs
@@ -101,7 +101,7 @@ const emit = (m: Message) => {
 
 function startStream() {
   if (!config) return;
-  const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("pr-report-live");
+  const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("reflektor-live");
   const lead = () =>
     new Promise<void>(() => {
       const connect = () => {
@@ -149,7 +149,7 @@ function startStream() {
 
   if (channel && navigator.locks) {
     channel.addEventListener("message", (e) => emit(e.data as Message));
-    void navigator.locks.request("pr-report-live-stream", lead);
+    void navigator.locks.request("reflektor-live-stream", lead);
     channel.postMessage({ type: "hello" });
   } else {
     void lead();

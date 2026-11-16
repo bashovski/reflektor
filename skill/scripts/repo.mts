@@ -42,12 +42,12 @@ export function replaceFile(from: string, to: string): void {
 // A branch name as one file name: "feat/books" -> "feat-books".
 export const branchSlug = (branch: string): string => branch.replace(/[^\w.-]+/g, "-");
 
-// Where a branch's report files go: <git folder>/pr-report/<branch>/, so two branches reviewed in
+// Where a branch's report files go: <git folder>/reflektor/<branch>/, so two branches reviewed in
 // one checkout keep their rounds apart. A branch whose last report was written to
-// <git folder>/pr-report/ itself, before that layout, keeps using it.
+// <git folder>/reflektor/ itself, before that layout, keeps using it.
 export function reportDir(gitDir: string, branch: string): string {
   const slug = branchSlug(branch);
-  const shared = join(gitDir, "pr-report");
+  const shared = join(gitDir, "reflektor");
   try {
     const last = JSON.parse(readFileSync(join(shared, "last.json"), "utf8")) as { report?: string };
     const escaped = slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -91,7 +91,7 @@ export function parseRemote(url: string | null | undefined): RemoteIdentity | nu
   return { host: m[1], owner: parts.slice(0, -1).join("/"), name: parts.at(-1)! };
 }
 
-// Folder segments that name a repo under ~/.pr-report/repos/: host/owner/name from the remote, so
+// Folder segments that name a repo under ~/.reflektor/repos/: host/owner/name from the remote, so
 // clones and worktrees share them, or local/<folder>-<hash> for a repo without a remote.
 export function repoKey(identity: { host: string | null; owner: string | null; name: string } | null, root: string): string[] {
   const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^\.+$/, "_");
@@ -113,11 +113,11 @@ export function remoteOf(root: string): string | undefined {
   return remotes.includes("origin") ? "origin" : remotes[0];
 }
 
-// What pr-report keeps for one repo on this machine: ~/.pr-report/repos/<host>/<owner>/<repo>/, with the
+// What reflektor keeps for one repo on this machine: ~/.reflektor/repos/<host>/<owner>/<repo>/, with the
 // saved checks and the trusted authors.
 export function repoHome(root: string): string {
   const remote = remoteOf(root);
-  const home = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
+  const home = process.env.REFLEKTOR_HOME ?? join(homedir(), ".reflektor");
   return join(home, "repos", ...repoKey(parseRemote(remote ? quietGit(root, "remote", "get-url", remote) : null), root));
 }
 

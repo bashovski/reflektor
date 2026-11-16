@@ -3,8 +3,8 @@
 // A failing check is a fact for the report, not an error, so this script exits 0 unless it cannot
 // run at all.
 //
-// The commands come from, in order: --run; "checks" in .pr-report.json (shared with the team); the
-// checks saved for this repo in ~/.pr-report/repos/ (yours only). With none, the agent works them out
+// The commands come from, in order: --run; "checks" in .reflektor.json (shared with the team); the
+// checks saved for this repo in ~/.reflektor/repos/ (yours only). With none, the agent works them out
 // once from the repo and saves them with --save, so later reports skip that step.
 //
 // The skill starts a run in the background and reads the diff meanwhile. checks.json says "running"
@@ -13,7 +13,7 @@
 // Usage: node checks.mjs --repo . [--run "name=command"]... [--base <ref>] [--timeout <seconds>] [--out checks.json]
 //        node checks.mjs --repo . --plan          which checks would run, and from where
 //        node checks.mjs --repo . --save --run "name=command"... [--when "name=glob,glob"]... --source "<where from>" --from <file>...
-//        node checks.mjs --repo . --share         copy the saved checks into .pr-report.json
+//        node checks.mjs --repo . --share         copy the saved checks into .reflektor.json
 //        node checks.mjs --repo . --forget        delete the saved checks and trusted authors
 //        node checks.mjs --repo . --wait [--out checks.json]
 //
@@ -29,7 +29,7 @@ import { globToRegExp, replaceFile, repoHome, reportDir, runShell, shellPath, un
 
 const TAIL_LINES = 80;
 
-// One project check, as --run, .pr-report.json and the saved checks give it.
+// One project check, as --run, .reflektor.json and the saved checks give it.
 type Check = NonNullable<RepoConfig["checks"]>[number];
 // The command-line options. `mode` is "run" or the flag that picked another one ("wait", "plan", ...).
 type Args = { repo: string; runs: Check[]; when: Record<string, string[]>; from: string[]; source: string | null; base: string | null; timeout: number; out: string | null; mode: string; trust: boolean };
@@ -137,7 +137,7 @@ const quietGit = (...argv: string[]): string | null => {
 };
 const savedFile = join(repoHome(root), "checks.json");
 const trustFile = join(repoHome(root), "trust.json");
-const configFile = join(root, ".pr-report.json");
+const configFile = join(root, ".reflektor.json");
 const readJson = <T,>(file: string): T | null => {
   try {
     return JSON.parse(readFileSync(file, "utf8")) as T;
@@ -162,7 +162,7 @@ const withWhen = (c: Check): Check => (args.when[c.name] ? { ...c, when: args.wh
 function pickChecks() {
   if (args.runs.length) return { source: "--run", checks: args.runs.map(withWhen) };
   const config = readJson<RepoConfig>(configFile);
-  if (config?.checks?.length) return { source: ".pr-report.json", checks: config.checks };
+  if (config?.checks?.length) return { source: ".reflektor.json", checks: config.checks };
   const saved = readJson<SavedChecks>(savedFile);
   if (saved?.checks?.length) {
     const changed = Object.entries(saved.from ?? {}).filter(([file, hash]) => hashOf(file) !== hash).map(([file]) => file);
@@ -206,7 +206,7 @@ if (args.mode === "save") {
   writeJson(savedFile, { version: 1, savedAt: new Date().toISOString(), source: args.source, from, checks });
   console.log(`Saved ${plural(checks.length)} for this repo in ${savedFile}:`);
   for (const c of checks) console.log(`  ${describe(c)}`);
-  console.log("They run for every report of this repo from now on. --forget deletes them; --share copies them into .pr-report.json for the team.");
+  console.log("They run for every report of this repo from now on. --forget deletes them; --share copies them into .reflektor.json for the team.");
   process.exit(0);
 }
 

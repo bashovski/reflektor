@@ -31,7 +31,7 @@ w package.json <<'EOF'
 }
 EOF
 
-w .pr-report.json <<'EOF'
+w .reflektor.json <<'EOF'
 {
   "base": "main",
   "targets": {

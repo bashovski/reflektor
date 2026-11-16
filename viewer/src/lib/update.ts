@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useLive } from "./live";
 import { pageToken } from "./panel";
 
-// New versions of pr-report (skill/scripts/updates.mts). The daemon looks once an hour and tells open pages on their
+// New versions of reflektor (skill/scripts/updates.mts). The daemon looks once an hour and tells open pages on their
 // event stream; a page without the stream (the inbox's panel) asks GET /api/update itself.
 
 // What GET /api/update answers, and what the "update" event carries.
@@ -22,7 +22,7 @@ export type UpdateInfo = {
   state: "idle" | "checking" | "downloading" | "installing" | "restarting" | "failed";
   error: string | null;
   target: string | null;
-  // How many reviews have an agent waiting on them: they stop when pr-report restarts.
+  // How many reviews have an agent waiting on them: they stop when reflektor restarts.
   waiting: number;
 };
 

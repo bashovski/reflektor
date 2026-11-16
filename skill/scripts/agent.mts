@@ -1,15 +1,15 @@
-// Which coding agent is running pr-report, so the page can say "Send to Codex" and not name one agent
+// Which coding agent is running reflektor, so the page can say "Send to Codex" and not name one agent
 // for everybody. review.mjs and build.mjs are started from the agent's own shell, so they can tell from
 // what that shell carries. The daemon never detects: it outlives the session that started it and serves
 // every agent on the machine, so each call tells it who is calling.
 //
 // The first source that answers wins:
-//   1. --agent <id>, or PR_REPORT_AGENT: said outright, for wrappers and tests.
+//   1. --agent <id>, or REFLEKTOR_AGENT: said outright, for wrappers and tests.
 //   2. AI_AGENT, a name several agents set, such as "claude-code_2-1-321_agent".
 //   3. A marker only one agent sets (the "env" list in agents.json).
 //   4. The skills folder the script was started from (the "paths" list). Node keeps the path as typed in
 //      process.argv[1], also when the folder is a link.
-//   5. --agent-name "<product>", or PR_REPORT_AGENT_NAME: the agent's own answer, asked for by SKILL.md
+//   5. --agent-name "<product>", or REFLEKTOR_AGENT_NAME: the agent's own answer, asked for by SKILL.md
 //      only when the sources above found nothing.
 //
 // ../agents.json turns an id into the words the page shows: `name` for the assistant ("Send to Claude")
@@ -82,7 +82,7 @@ function parseAiAgent(value: unknown): [string, string | null] {
 }
 
 export function detectAgent({ env = process.env, launchPath = process.argv[1], id, name }: { env?: NodeJS.ProcessEnv; launchPath?: string; id?: string; name?: string } = {}): DetectedAgent | null {
-  const said = clean(id) || clean(env.PR_REPORT_AGENT);
+  const said = clean(id) || clean(env.REFLEKTOR_AGENT);
   if (said) return describe(said, "flag");
 
   if (clean(env.AI_AGENT)) {
@@ -99,7 +99,7 @@ export function detectAgent({ env = process.env, launchPath = process.argv[1], i
     if ((entry.paths ?? []).some((part) => path.includes(part))) return describe(agent, "path");
   }
 
-  const own = clean(name) || clean(env.PR_REPORT_AGENT_NAME);
+  const own = clean(name) || clean(env.REFLEKTOR_AGENT_NAME);
   if (own) {
     const known = lookup(own);
     // A name the table knows gets the table's words; any other is shown as the agent gave it.
@@ -124,7 +124,7 @@ export function cleanAgent(value: unknown): AgentInfo | null {
 }
 
 // The agent travels with each call in a header, as JSON made safe for one.
-export const AGENT_HEADER = "x-pr-report-agent";
+export const AGENT_HEADER = "x-reflektor-agent";
 export const encodeAgent = (agent: Partial<AgentInfo>): string => encodeURIComponent(JSON.stringify(agent));
 export function decodeAgent(header: unknown): AgentInfo | null {
   try {

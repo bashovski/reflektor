@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Builds the pr-report skill from this checkout and installs it for a coding agent: pnpm build, then pnpm run deploy.
+# Builds the reflektor skill from this checkout and installs it for a coding agent: pnpm build, then pnpm run deploy.
 # For contributors. Everyone else installs a release with install.sh.
-#   ./install-from-source.sh                    Claude Code: link ~/.claude/skills/pr-report to the built package, dist/skill/
+#   ./install-from-source.sh                    Claude Code: link ~/.claude/skills/reflektor to the built package, dist/skill/
 #   ./install-from-source.sh --copy             Claude Code: copy dist/skill/ instead; use this if a Claude Code update removed the link
-#   ./install-from-source.sh --target agents    other agents: a copy in ~/.agents/skills/pr-report, which Codex and others read
+#   ./install-from-source.sh --target agents    other agents: a copy in ~/.agents/skills/reflektor, which Codex and others read
 #   ./install-from-source.sh --target <folder>  a copy in any other skills folder
 # The tools are TypeScript in scripts/, compiled into dist/tools/ first and run from there. On Windows without bash,
 # run pnpm build and pnpm run deploy instead.

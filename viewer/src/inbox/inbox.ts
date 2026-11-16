@@ -11,10 +11,10 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
   // A browser that never saw the setup page (see viewer/src/lib/setup.ts) is offered it once, here and above a report.
   try {
     const hint = document.getElementById("setup-hint")!;
-    if (!localStorage.getItem("pr-report:setup")) {
+    if (!localStorage.getItem("reflektor:setup")) {
       hint.hidden = false;
       document.getElementById("setup-dismiss")!.onclick = () => {
-        localStorage.setItem("pr-report:setup", JSON.stringify({ at: new Date().toISOString() }));
+        localStorage.setItem("reflektor:setup", JSON.stringify({ at: new Date().toISOString() }));
         hint.hidden = true;
       };
     }
@@ -32,7 +32,7 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
   // Group, sort and filter happen here, on the rows the server sent. The choice is remembered in this browser.
   const prefs: { group: string; sort: string; phase: string[]; tag: string[] } = { group: "owner", sort: "activity", phase: [], tag: [] };
   try {
-    const saved = JSON.parse(localStorage.getItem("pr-report-inbox") || "{}") as Record<string, unknown>;
+    const saved = JSON.parse(localStorage.getItem("reflektor-inbox") || "{}") as Record<string, unknown>;
     if (LABELS.group[saved.group as string]) prefs.group = saved.group as string;
     if (LABELS.sort[saved.sort as string]) prefs.sort = saved.sort as string;
     for (const k of ["phase", "tag"] as const) if (Array.isArray(saved[k])) prefs[k] = saved[k] as string[];
@@ -44,13 +44,13 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
   }
   const save = () => {
     try {
-      localStorage.setItem("pr-report-inbox", JSON.stringify(prefs));
+      localStorage.setItem("reflektor-inbox", JSON.stringify(prefs));
     } catch {}
   };
   // The search lasts for this tab, through the reloads that new events cause, but not into the next visit.
   let query = "";
   try {
-    query = sessionStorage.getItem("pr-report-inbox-q") || "";
+    query = sessionStorage.getItem("reflektor-inbox-q") || "";
   } catch {}
   const searchBox = document.querySelector<HTMLInputElement>("input[name=q]");
   if (searchBox) searchBox.value = query;
@@ -102,7 +102,7 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
   if (onlyOwner !== null) {
     query = "";
     try {
-      sessionStorage.removeItem("pr-report-inbox-q");
+      sessionStorage.removeItem("reflektor-inbox-q");
     } catch {}
     if (searchBox) searchBox.value = "";
   }
@@ -210,7 +210,7 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
   const setQuery = (q: string) => {
     query = q;
     try {
-      sessionStorage.setItem("pr-report-inbox-q", q);
+      sessionStorage.setItem("reflektor-inbox-q", q);
     } catch {}
     search();
     render();
@@ -330,7 +330,7 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
   // pop in a moment later on every page. A report keeps and reads the same entry (viewer/src/lib/identity.ts).
   const ME_KEY = ME.host + "|" + ME.forge + "|" + ME.root;
   try {
-    const kept = JSON.parse(localStorage.getItem("pr-report:me") || "null") as { key?: string; who?: Identity } | null;
+    const kept = JSON.parse(localStorage.getItem("reflektor:me") || "null") as { key?: string; who?: Identity } | null;
     if (kept && kept.key === ME_KEY && kept.who) showMe(kept.who);
   } catch {}
   fetch("/api/me?" + new URLSearchParams(ME), { headers: { "x-review-token": token } })
@@ -343,7 +343,7 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
       }
       showMe(who);
       try {
-        localStorage.setItem("pr-report:me", JSON.stringify({ key: ME_KEY, who }));
+        localStorage.setItem("reflektor:me", JSON.stringify({ key: ME_KEY, who }));
       } catch {}
     });
   // "<" and "!--" are kept apart: this script sits inside the page's HTML, where the two together start a comment.
@@ -440,7 +440,7 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
   es.addEventListener("daemon", (e) => {
     if ((JSON.parse(e.data) as { version: string }).version !== DAEMON.version) location.reload();
   });
-  // A new pr-report (skill/scripts/updates.mts): a dot on the avatar, an item at the top of the menu, and the update
+  // A new reflektor (skill/scripts/updates.mts): a dot on the avatar, an item at the top of the menu, and the update
   // modal, which opens by itself once per version when the daemon says to ask. It is the report's own dialog, in the panel.
   let promptedFor: string | null = null;
   es.addEventListener("update", (e) => {
@@ -452,7 +452,7 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
     document.getElementById("me-update")!.hidden = !on;
     document.getElementById("me-update-hr")!.hidden = !on;
     document.getElementById("me-update-title")!.textContent = u.status === "required" ? "Update needed" : "Update available";
-    document.getElementById("me-update-sub")!.textContent = "pr-report " + (u.status === "required" ? u.minimum + " or newer" : u.latest);
+    document.getElementById("me-update-sub")!.textContent = "reflektor " + (u.status === "required" ? u.minimum + " or newer" : u.latest);
     const version = u.latest ?? u.minimum;
     if (u.prompt && version !== promptedFor) {
       promptedFor = version;
@@ -473,7 +473,7 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
     button?.addEventListener("focus", () => ((focused = true), light()));
     button?.addEventListener("blur", () => ((focused = false), light()));
   }
-  // The footer's light and dark switch saves the choice where the review page keeps it (pr-report:theme), so every
+  // The footer's light and dark switch saves the choice where the review page keeps it (reflektor:theme), so every
   // page follows it. theme.ts in the head keeps the page's theme in step with the system and other tabs.
   const themeSwitch = document.querySelector<HTMLButtonElement>("[data-theme-toggle]");
   if (themeSwitch) {
@@ -488,7 +488,7 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
     themeSwitch.addEventListener("click", () => {
       const next = root.dataset.theme === "dark" ? "light" : "dark";
       try {
-        localStorage.setItem("pr-report:theme", JSON.stringify(next));
+        localStorage.setItem("reflektor:theme", JSON.stringify(next));
       } catch {}
       root.dataset.theme = next;
     });

@@ -16,8 +16,8 @@ const secondary = "rounded-control border border-[var(--border)] px-3 py-1.5 tex
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-// The update modal. "Update now" restarts pr-report on the new version straight away: agents waiting on a review stop
-// (they say so, and /pr-report resume carries on), and every open page reloads. The modal says that before the reader
+// The update modal. "Update now" restarts reflektor on the new version straight away: agents waiting on a review stop
+// (they say so, and /reflektor resume carries on), and every open page reloads. The modal says that before the reader
 // confirms. While it runs, the modal follows the daemon's steps; the page reloads by itself once the new daemon answers
 // (live.tsx), and this modal also reloads when it sees the new version, for pages without the event stream.
 // "Later" snoozes this version for a day. A required update has no Later: publishing waits for it.
@@ -82,10 +82,10 @@ export const UpdateDialog = ({ open, info, onClose }: { open: boolean; info: Upd
       <div className="space-y-4 px-5 py-4">
         <div className="space-y-1">
           <h2 id="update-title" className="font-semibold">
-            {required ? `Update pr-report to keep publishing` : `pr-report ${version} is available`}
+            {required ? `Update reflektor to keep publishing` : `reflektor ${version} is available`}
           </h2>
           <p className="text-sm text-muted">
-            {required ? `Reflektor takes reports from pr-report ${shown.minimum} or newer. ` : ""}You have {shown.current}.
+            {required ? `Publishing needs reflektor ${shown.minimum} or newer. ` : ""}You have {shown.current}.
           </p>
         </div>
 
@@ -109,11 +109,11 @@ export const UpdateDialog = ({ open, info, onClose }: { open: boolean; info: Upd
 
         {!started && (
           <p className="rounded-control border border-[var(--border)] bg-zinc-500/5 px-3 py-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Updating restarts pr-report now.{" "}
+            Updating restarts reflektor now.{" "}
             {shown.waiting > 0
-              ? `${plural(shown.waiting, "review has an agent", "reviews have agents")} waiting; ${shown.waiting === 1 ? "it stops" : "they stop"}, and comments and drafts are kept. Run /pr-report resume afterwards. `
+              ? `${plural(shown.waiting, "review has an agent", "reviews have agents")} waiting; ${shown.waiting === 1 ? "it stops" : "they stop"}, and comments and drafts are kept. Run /reflektor resume afterwards. `
               : ""}
-            Open pages reload. An agent session that already loaded pr-report keeps the old instructions until its next /pr-report.
+            Open pages reload. An agent session that already loaded reflektor keeps the old instructions until its next /reflektor.
           </p>
         )}
 
@@ -134,7 +134,7 @@ export const UpdateDialog = ({ open, info, onClose }: { open: boolean; info: Upd
 
         {failed && (
           <p role="alert" className="rounded-control border border-danger-500/40 bg-danger-500/5 px-3 py-2 text-sm">
-            The update did not happen, and pr-report {shown.current} is still installed. {shown.error}
+            The update did not happen, and reflektor {shown.current} is still installed. {shown.error}
           </p>
         )}
 
@@ -166,7 +166,7 @@ export const UpdateBanner = () => {
       <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2 text-sm sm:px-6">
         <CircleArrowUp className="size-4 shrink-0 text-warn-600 dark:text-warn-400" />
         <span>
-          Publishing to Reflektor needs pr-report {update.minimum} or newer. This is {update.current}.
+          Publishing needs reflektor {update.minimum} or newer. This is {update.current}.
         </span>
         <button type="button" onClick={() => setOpen(true)} className="ml-auto rounded-control border border-warn-500/40 px-2.5 py-1 text-xs font-medium hover:bg-warn-500/10">
           Update now

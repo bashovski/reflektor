@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Builds the pr-report skill into dist/skill/: the package an agent installs, which `pnpm run deploy` puts in place.
+// Builds the reflektor skill into dist/skill/: the package an agent installs, which `pnpm run deploy` puts in place.
 // skill/ holds the source and nothing is built into it. dist/ is never committed.
 //
 //   dist/skill/SKILL.md and the rest    copied from skill/ as they are, the schema included (build.mjs reads it)

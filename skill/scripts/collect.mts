@@ -96,15 +96,15 @@ function hasCommand(cmd: string) {
   }
 }
 
-// ------------------------------------------------------------------ repo config (.pr-report.json)
+// ------------------------------------------------------------------ repo config (.reflektor.json)
 
 function loadConfig(): RepoConfig | null {
-  const file = join(repoRoot, ".pr-report.json");
+  const file = join(repoRoot, ".reflektor.json");
   if (!existsSync(file)) return null;
   try {
     return JSON.parse(readFileSync(file, "utf8")) as RepoConfig;
   } catch (e) {
-    warnings.push(`.pr-report.json is not valid JSON, ignored: ${(e as Error).message}`);
+    warnings.push(`.reflektor.json is not valid JSON, ignored: ${(e as Error).message}`);
     return null;
   }
 }
@@ -230,7 +230,7 @@ if (!base) throw new Error("Could not find a base branch. Pass --base <branch>."
 // The project's preRun hook (hooks.mjs): it can regenerate code or print a ticket's text for the agent.
 // When it fails, nothing is collected.
 if ((await runHooks("preRun", { root: repoRoot, branch: head, base, config })).failed) {
-  console.error("error: the preRun hook in .pr-report.json failed, so nothing was collected. What the hook printed says why.");
+  console.error("error: the preRun hook in .reflektor.json failed, so nothing was collected. What the hook printed says why.");
   process.exit(1);
 }
 
@@ -276,28 +276,28 @@ if (args.files) mode = mode === "since" ? "since+files" : "files";
 
 // ------------------------------------------------------------------ snapshot
 // Records exactly what this report shows, uncommitted and untracked files included, as a commit
-// under refs/pr-report/last. `--since last` diffs against it, so changes that were uncommitted
+// under refs/reflektor/last. `--since last` diffs against it, so changes that were uncommitted
 // at the last report do not show up again once they are committed. Nothing in the working tree,
 // the real index or any branch changes.
 
 function snapshotWorkingTree() {
   if (!args.uncommitted) return headSha;
-  const tmpIndex = join(gitDir, "pr-report", "snapshot.index");
+  const tmpIndex = join(gitDir, "reflektor", "snapshot.index");
   mkdirSync(dirname(tmpIndex), { recursive: true });
   const realIndex = join(gitDir, "index");
   if (existsSync(realIndex)) copyFileSync(realIndex, tmpIndex);
   const env = {
     ...process.env,
     GIT_INDEX_FILE: tmpIndex,
-    GIT_AUTHOR_NAME: "pr-report",
-    GIT_AUTHOR_EMAIL: "pr-report@localhost",
-    GIT_COMMITTER_NAME: "pr-report",
-    GIT_COMMITTER_EMAIL: "pr-report@localhost",
+    GIT_AUTHOR_NAME: "reflektor",
+    GIT_AUTHOR_EMAIL: "reflektor@localhost",
+    GIT_COMMITTER_NAME: "reflektor",
+    GIT_COMMITTER_EMAIL: "reflektor@localhost",
   };
   try {
     run("git", ["add", "-A"], repoRoot, { env });
     const tree = run("git", ["write-tree"], repoRoot, { env }).trim();
-    return run("git", ["commit-tree", tree, "-p", headSha, "-m", "pr-report snapshot"], repoRoot, { env }).trim();
+    return run("git", ["commit-tree", tree, "-p", headSha, "-m", "reflektor snapshot"], repoRoot, { env }).trim();
   } catch {
     warnings.push("Could not snapshot uncommitted work, so this report covers committed changes only.");
     return headSha;
@@ -987,7 +987,7 @@ const ranges = (lines: number[]) => {
 if (coverage) {
   console.log(`Patch coverage: ${coverage.percent ?? "n/a"}% (${coverage.covered}/${coverage.covered + coverage.uncovered} new lines run by tests)`);
   for (const src of coverage.sources) {
-    const origin = args.coverage.length ? "" : ", listed in .pr-report.json";
+    const origin = args.coverage.length ? "" : ", listed in .reflektor.json";
     console.log(`  from ${src.format} file ${src.file}${origin}${src.stale ? "  STALE: older than the latest change" : ""}`);
   }
   for (const [path, f] of Object.entries(coverage.files)) {
@@ -995,9 +995,9 @@ if (coverage) {
     if (total) console.log(`  ${`${f.covered.length}/${total}`.padStart(7)} tested  ${path}${f.uncovered.length ? `  untested lines: ${ranges(f.uncovered)}` : ""}`);
   }
 } else {
-  console.log("Patch coverage: none (no coverage file given or listed in .pr-report.json)");
+  console.log("Patch coverage: none (no coverage file given or listed in .reflektor.json)");
 }
-console.log(config ? "Config: .pr-report.json found" : "Config: no .pr-report.json");
+console.log(config ? "Config: .reflektor.json found" : "Config: no .reflektor.json");
 // The reader can ask for speed over tokens in the page's Settings. It is said only when it is on, so the usual run
 // reads as before, and the steps for it are in a file of their own, which only such a run has to read.
 // Screenshots are said the same way: only when on, and only when the change touches files a page is drawn from.

@@ -51,7 +51,7 @@ if (!existsSync(join(root, "dist/skill/build.json"))) {
 // The skill as users get it, from its package; only the types come from its source.
 const fromPackage = (name: string) => import(pathToFileURL(join(root, "dist/skill/scripts", name)).href);
 const { gitBash } = (await fromPackage("repo.mjs")) as typeof import("../skill/scripts/repo.mjs");
-const tmp = mkdtempSync(join(tmpdir(), "pr-report-check-"));
+const tmp = mkdtempSync(join(tmpdir(), "reflektor-check-"));
 const repo = join(tmp, "books");
 const html = join(root, "samples", "books-report.html");
 
@@ -72,15 +72,15 @@ try {
   // The copy of the skill for an agent other than Claude Code: the folder written out in every command, Claude Code's
   // own front matter left out, and the two fields every agent needs kept.
   const { portableSkillText } = (await fromPackage("portable-skill.mjs")) as typeof import("../skill/scripts/portable-skill.mjs");
-  const portable = portableSkillText(readFileSync(join(root, "skill/SKILL.md"), "utf8"), "C:\\Users\\x\\.agents\\skills\\pr-report");
+  const portable = portableSkillText(readFileSync(join(root, "skill/SKILL.md"), "utf8"), "C:\\Users\\x\\.agents\\skills\\reflektor");
   const frontMatter = portable.slice(0, portable.indexOf("\n---", 4));
-  if (portable.includes("CLAUDE_SKILL_DIR") || /^(allowed-tools|argument-hint):/m.test(frontMatter) || !/^name: pr-report$/m.test(frontMatter) || !/^description: /m.test(frontMatter))
+  if (portable.includes("CLAUDE_SKILL_DIR") || /^(allowed-tools|argument-hint):/m.test(frontMatter) || !/^name: reflektor$/m.test(frontMatter) || !/^description: /m.test(frontMatter))
     fail("the skill text for other agents still has Claude Code's placeholder or front matter, or lost its name or description");
-  if (!portable.includes('node "C:/Users/x/.agents/skills/pr-report/scripts/collect.mjs" --repo .')) fail("the skill text for other agents does not spell out the skill's folder in its commands");
+  if (!portable.includes('node "C:/Users/x/.agents/skills/reflektor/scripts/collect.mjs" --repo .')) fail("the skill text for other agents does not spell out the skill's folder in its commands");
   // The steps for subagent mode are a file of their own. The placeholder is replaced in SKILL.md only, so it must not be in there.
   if (readFileSync(join(root, "skill/subagents.md"), "utf8").includes("CLAUDE_SKILL_DIR")) fail("skill/subagents.md has Claude Code's placeholder, which nothing replaces in that file");
 
-  // Which agent runs pr-report: said outright, read from the shell's variables, from the skills folder a script was
+  // Which agent runs reflektor: said outright, read from the shell's variables, from the skills folder a script was
   // started from, or from the agent's own answer, in that order. Every case names its own variables, so the result does
   // not depend on the shell this check runs in.
   const { detectAgent, decodeAgent, encodeAgent } = (await fromPackage("agent.mjs")) as typeof import("../skill/scripts/agent.mjs");
@@ -92,12 +92,12 @@ try {
   };
   const agentCases: [string, AgentOptions, string][] = [
     ["a flag wins over the shell", { id: "codex", env: { CLAUDECODE: "1" } }, "codex|Codex|Codex|null|null|flag"],
-    ["PR_REPORT_AGENT", { env: { PR_REPORT_AGENT: "claude-code", AI_AGENT: "codex" } }, "claude-code|Claude|Claude Code|/pr-report resume|null|flag"],
-    ["AI_AGENT with a version", { env: { AI_AGENT: "claude-code_2-1-321_agent" } }, "claude-code|Claude|Claude Code|/pr-report resume|2.1.321|env"],
+    ["REFLEKTOR_AGENT", { env: { REFLEKTOR_AGENT: "claude-code", AI_AGENT: "codex" } }, "claude-code|Claude|Claude Code|/reflektor resume|null|flag"],
+    ["AI_AGENT with a version", { env: { AI_AGENT: "claude-code_2-1-321_agent" } }, "claude-code|Claude|Claude Code|/reflektor resume|2.1.321|env"],
     ["AI_AGENT of an agent with no entry", { env: { AI_AGENT: "some-new-agent_0-9_agent" } }, "some-new-agent|Some New Agent|Some New Agent|null|0.9|env"],
-    ["a marker only one agent sets", { env: { CLAUDECODE: "1" } }, "claude-code|Claude|Claude Code|/pr-report resume|null|env"],
-    ["the skills folder, Windows", { launchPath: "C:\\Users\\k\\.claude\\skills\\pr-report\\scripts\\review.mjs" }, "claude-code|Claude|Claude Code|/pr-report resume|null|path"],
-    ["the skills folder, POSIX", { launchPath: "/home/k/.claude/skills/pr-report/scripts/review.mjs" }, "claude-code|Claude|Claude Code|/pr-report resume|null|path"],
+    ["a marker only one agent sets", { env: { CLAUDECODE: "1" } }, "claude-code|Claude|Claude Code|/reflektor resume|null|env"],
+    ["the skills folder, Windows", { launchPath: "C:\\Users\\k\\.claude\\skills\\reflektor\\scripts\\review.mjs" }, "claude-code|Claude|Claude Code|/reflektor resume|null|path"],
+    ["the skills folder, POSIX", { launchPath: "/home/k/.claude/skills/reflektor/scripts/review.mjs" }, "claude-code|Claude|Claude Code|/reflektor resume|null|path"],
     ["a worktree under .claude is not a skills folder", { launchPath: "/code/app/.claude/worktrees/x/skill/scripts/review.mjs" }, "nobody"],
     ["the agent's own answer, known", { name: "Gemini CLI" }, "gemini-cli|Gemini|Gemini CLI|null|null|self"],
     ["the agent's own answer, unknown and untidy", { name: "  Zed\n Agent " }, "zed-agent|Zed Agent|Zed Agent|null|null|self"],
@@ -130,15 +130,15 @@ try {
     if (viewerTags[tag] !== inboxTags[tag]) fail(`the tag lists differ for ${tag}: viewer has ${viewerTags[tag] ?? "nothing"}, the inbox has ${inboxTags[tag] ?? "nothing"}`);
 
   // A private home, so avatars come only from what this check puts in its cache.
-  const home = { PR_REPORT_HOME: join(tmp, "collect-home") };
+  const home = { REFLEKTOR_HOME: join(tmp, "collect-home") };
   const collected = run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"], home);
-  if (!collected.includes("Patch coverage: 51%")) fail("collect.mts did not read coverage from .pr-report.json");
-  if (!collected.includes("(config)")) fail("collect.mts did not take the base branch from .pr-report.json");
+  if (!collected.includes("Patch coverage: 51%")) fail("collect.mts did not read coverage from .reflektor.json");
+  if (!collected.includes("(config)")) fail("collect.mts did not take the base branch from .reflektor.json");
   if (!collected.includes("Safety checks: 1 high, 0 medium, 1 low")) fail("collect.mts safety checks did not find the slug migration problems");
   // The reader's settings: collect says nothing of subagent mode while it is off. The run on the second repo, below, has it on.
   if (collected.includes("Subagent mode")) fail("collect.mts speaks of subagent mode although the setting is off");
   if (/^Hooks? /m.test(collected)) fail("collect.mts printed a hook line for a repo without hooks");
-  const books = JSON.parse(readFileSync(join(repo, ".git/pr-report/feat-books/diff.json"), "utf8")) as DiffData;
+  const books = JSON.parse(readFileSync(join(repo, ".git/reflektor/feat-books/diff.json"), "utf8")) as DiffData;
   if (books.repo.avatar?.initials !== "AL" || books.repo.avatar.image !== null) fail(`acme-labs without a cached avatar should get initials AL: ${JSON.stringify(books.repo.avatar)}`);
   if (books.repo.web?.ownerUrl !== "https://github.com/acme-labs" || books.repo.web.forge !== "github") fail(`collect.mts did not find the repo's web links: ${JSON.stringify(books.repo.web)}`);
   if (books.branch.upstream !== null) fail("feat/books is not on the remote, but collect.mts says it is");
@@ -154,7 +154,7 @@ try {
   run(bash, ["-c", `cd "${edgeRepo}" && git init -q -b main && git add status.ts && git -c user.name=t -c user.email=t@t commit -q -m base && git checkout -qb feat && git remote add origin https://gitlab.com/edge-group/sub/edge.git`]);
   writeFileSync(join(edgeRepo, "status.ts"), "export enum Status { Draft, Published }\nexport const LIMIT = 10;\n");
   // An avatar downloaded earlier: --no-fetch must still use it. A GitLab subgroup is one cache file.
-  const cachedAvatar = join(home.PR_REPORT_HOME, "cache/avatars/gitlab.com/edge-group_sub");
+  const cachedAvatar = join(home.REFLEKTOR_HOME, "cache/avatars/gitlab.com/edge-group_sub");
   mkdirSync(dirname(cachedAvatar), { recursive: true });
   writeFileSync(cachedAvatar, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64"));
   writeFileSync(join(edgeRepo, "config.js"), `export const key = "${"AKIA" + "Q".repeat(16)}";\n`);
@@ -181,9 +181,9 @@ try {
   writeFileSync(join(edgeRepo, "goose.sql"), "-- +goose Up\nTRUNCATE logs;\n-- +goose Down\nTRUNCATE audit;\n");
   writeFileSync(join(edgeRepo, "0007_init.down.sql"), "DROP TABLE gizmos;\n");
   // Subagent mode turned on in Settings, for this one run: collect has to say so and name the file with the steps.
-  writeFileSync(join(home.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: true }));
+  writeFileSync(join(home.REFLEKTOR_HOME, "settings.json"), JSON.stringify({ subagents: true }));
   const edgeOut = run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", edgeRepo, "--no-fetch", "--base", "main", "--out", join(tmp, "edge.json")], home);
-  rmSync(join(home.PR_REPORT_HOME, "settings.json"));
+  rmSync(join(home.REFLEKTOR_HOME, "settings.json"));
   const told = edgeOut.match(/^Subagent mode: on .* Read (.+subagents\.md) before/m);
   if (!told || !existsSync(told[1])) fail("collect.mts does not tell the agent that subagent mode is on, or the file it names with the steps is not there");
   if (!edgeOut.includes("AWS access key [AKIA…(20 characters)]")) fail("collect.mts did not flag or mask a fake AWS key");
@@ -254,7 +254,7 @@ try {
   if (!checks("--plan").includes("No checks for this repo yet")) fail("checks.mts --plan did not ask for checks in a repo without any");
   writeFileSync(join(edgeRepo, "package.json"), '{"scripts":{"lint":"echo ok"}}\n');
   checks("--save", "--source", "from package.json", "--from", "package.json", "--run", "lint=echo lint ok", "--run", "api=echo api", "--when", "api=api/**");
-  if (!existsSync(join(home.PR_REPORT_HOME, "repos/gitlab.com/edge-group/sub/edge/checks.json"))) fail("saved checks are not stored under the repo's remote");
+  if (!existsSync(join(home.REFLEKTOR_HOME, "repos/gitlab.com/edge-group/sub/edge/checks.json"))) fail("saved checks are not stored under the repo's remote");
   const plan = checks("--plan");
   if (!plan.includes("saved for this repo") || !plan.includes("skipped, nothing it covers changed: api")) fail(`checks.mts --plan did not use the saved checks:\n${plan}`);
   const ranSaved = checks("--out", savedRun);
@@ -265,7 +265,7 @@ try {
   checks("--out", savedRun);
   if (!checks("--plan").includes("could not run")) fail("a missing command did not mark the saved checks out of date");
   checks("--share");
-  if (!checks("--plan").includes("Checks come from: .pr-report.json")) fail("--share did not make .pr-report.json the source");
+  if (!checks("--plan").includes("Checks come from: .reflektor.json")) fail("--share did not make .reflektor.json the source");
   checks("--forget");
 
   // A commit by someone else: the checks would run their code, so they wait for the user's yes.
@@ -294,7 +294,7 @@ try {
 
   const built = run("node", [
     join(root, "dist/skill/scripts/build.mjs"),
-    "--diff", join(repo, ".git/pr-report/feat-books/diff.json"),
+    "--diff", join(repo, ".git/reflektor/feat-books/diff.json"),
     "--report", join(root, "samples/report.json"),
     "--out", join(root, "samples/bundle.json"),
     "--html", html,
@@ -302,7 +302,7 @@ try {
   for (const line of built.split("\n").filter((l) => l.startsWith("warning:"))) fail(line);
 
   // A draft: the facts before the agent's report, every file listed, nothing that needs the report.
-  run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--draft", "--out", join(tmp, "draft.json")]);
+  run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(repo, ".git/reflektor/feat-books/diff.json"), "--draft", "--out", join(tmp, "draft.json")]);
   const draft = JSON.parse(readFileSync(join(tmp, "draft.json"), "utf8")) as Bundle;
   const listed = draft.report.sections.flatMap((s) => s.files).length;
   if (!draft.draft || draft.prDescription !== null || listed !== draft.diff.files.length) fail(`a draft build is not a draft of every file: ${JSON.stringify({ draft: draft.draft, listed })}`);
@@ -312,7 +312,7 @@ try {
   if (missingIcons.length) fail(`no file icon for ${missingIcons.length} files (run pnpm build)`);
 
   const page = readFileSync(html, "utf8");
-  if (page.includes("__PR_REPORT_DATA__")) fail("report data was not injected into the viewer");
+  if (page.includes("__REFLEKTOR_DATA__")) fail("report data was not injected into the viewer");
   // samples/ can hold review files from local runs, which makes this a later round.
   if (!/<title>Save and list books in the library \(new books table, POST and GET \/books\)( · Round \d+)? · Reflektor<\/title>/.test(page)) fail("the standalone page does not carry the report title");
   if (statSync(html).size < 1_000_000) fail("the standalone page is too small; build.mts probably used the unbuilt viewer");
@@ -328,7 +328,7 @@ try {
     }
   };
   for (let i = 0; i < 50 && !started(); i++) await sleep(50);
-  run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--checks", bgChecks, "--out", join(tmp, "bg.json")]);
+  run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(repo, ".git/reflektor/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--checks", bgChecks, "--out", join(tmp, "bg.json")]);
   const bgRun = (JSON.parse(readFileSync(join(tmp, "bg.json"), "utf8")) as Bundle).projectChecks;
   if (bgRun?.status !== "running" || bgRun.pending.join() !== "slow" || bgRun.file !== bgChecks) fail(`build.mts did not record the running checks: ${JSON.stringify(bgRun)}`);
   const waited = run("node", [join(root, "dist/skill/scripts/checks.mjs"), "--repo", repo, "--out", bgChecks, "--wait"]);
@@ -363,14 +363,14 @@ async function gitlabFlow() {
   const mr = (state: string) => [{ iid: 5, web_url: "https://gitlab.example.com/acme/sub/library/-/merge_requests/5", title: "Books", state, target_branch: "main", merged_at: state === "merged" ? "2026-11-16T00:00:00Z" : null }];
   writeFileSync(answer, JSON.stringify(mr("opened")));
   const env = {
-    PR_REPORT_HOME: join(tmp, "gitlab-home"),
-    PR_REPORT_PORT: String(5400 + Math.floor(Math.random() * 300)),
-    PR_REPORT_DRIFT_SECONDS: "1",
-    PR_REPORT_PR_POLL_SECONDS: "1",
+    REFLEKTOR_HOME: join(tmp, "gitlab-home"),
+    REFLEKTOR_PORT: String(5400 + Math.floor(Math.random() * 300)),
+    REFLEKTOR_DRIFT_SECONDS: "1",
+    REFLEKTOR_PR_POLL_SECONDS: "1",
     PATH: `${bin}${delimiter}${process.env.PATH}`,
   };
   const out = join(tmp, "gitlab-review", "round1.json");
-  run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
+  run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(repo, ".git/reflektor/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
   const bundle = JSON.parse(readFileSync(out, "utf8")) as Bundle;
   bundle.diff.repo = { ...bundle.diff.repo, host: "gitlab.example.com", owner: "acme/sub", name: "library", web: { url: "https://gitlab.example.com/acme/sub/library", ownerUrl: "https://gitlab.example.com/acme/sub", forge: "gitlab" } };
   bundle.diff.branch.pr = null;
@@ -379,7 +379,7 @@ async function gitlabFlow() {
   try {
     const id = review("open", "--report", out).match(/Review id: (\S+)/)?.[1];
     if (!id) return fail("review.mts open printed no id for the GitLab review");
-    const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")) as DaemonFile;
+    const { port } = JSON.parse(readFileSync(join(env.REFLEKTOR_HOME, "daemon.json"), "utf8")) as DaemonFile;
     const base = `http://127.0.0.1:${port}`;
     const page = await (await fetch(`${base}/r/${id}`)).text();
     const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)![1]) as ReviewConfig;
@@ -441,14 +441,14 @@ async function daemonFlow() {
   const github = await startGithubStub();
   // GH_CONFIG_DIR points at nothing, so gh has no login and the identity lookup falls back to the repo's git config.
   const env = {
-    PR_REPORT_HOME: join(tmp, "home"),
-    PR_REPORT_PORT: String(4400 + Math.floor(Math.random() * 500)),
-    PR_REPORT_DRIFT_SECONDS: "1",
-    PR_REPORT_GITHUB_API: github.url,
-    PR_REPORT_GITHUB_TOKEN: "stub-token",
-    PR_REPORT_PR_POLL_SECONDS: "1",
+    REFLEKTOR_HOME: join(tmp, "home"),
+    REFLEKTOR_PORT: String(4400 + Math.floor(Math.random() * 500)),
+    REFLEKTOR_DRIFT_SECONDS: "1",
+    REFLEKTOR_GITHUB_API: github.url,
+    REFLEKTOR_GITHUB_TOKEN: "stub-token",
+    REFLEKTOR_PR_POLL_SECONDS: "1",
     GH_CONFIG_DIR: join(tmp, "gh-config"),
-    PR_REPORT_AGENT: "claude-code",
+    REFLEKTOR_AGENT: "claude-code",
   };
   const reviewDir = join(tmp, "review");
   const review = (...args: string[]) => run("node", [join(root, "dist/skill/scripts/review.mjs"), ...args], env);
@@ -459,14 +459,14 @@ async function daemonFlow() {
       execFile("node", [join(root, "dist/skill/scripts/review.mjs"), ...args], { cwd: root, encoding: "utf8", env: { ...process.env, ...env } }, (e, stdout) => (e ? reject(e) : resolveOut(stdout))),
     );
   const build = (out: string) =>
-    run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(repo, ".git/pr-report/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
+    run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(repo, ".git/reflektor/feat-books/diff.json"), "--report", join(root, "samples/report.json"), "--out", out]);
   try {
     build(join(reviewDir, "round1.json"));
     const opened = review("open", "--report", join(reviewDir, "round1.json"));
     const id = opened.match(/Review id: (\S+)/)?.[1];
     if (!id) return fail(`review.mts open printed no id:\n${opened}`);
 
-    const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")) as DaemonFile;
+    const { port } = JSON.parse(readFileSync(join(env.REFLEKTOR_HOME, "daemon.json"), "utf8")) as DaemonFile;
     const base = `http://127.0.0.1:${port}`;
     const page = await (await fetch(`${base}/r/${id}`)).text();
     const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)![1]) as ReviewConfig;
@@ -523,17 +523,17 @@ async function daemonFlow() {
     const daemonAt = hello.indexOf("event: daemon");
     if (daemonAt < 0 || daemonAt < hello.indexOf("event: state") || !hello.includes('"startedAt"')) fail("the event stream does not introduce the daemon after the review states");
     // Purging the cache from the page removes what is under cache/ and nothing else.
-    mkdirSync(join(env.PR_REPORT_HOME, "cache", "avatars"), { recursive: true });
-    writeFileSync(join(env.PR_REPORT_HOME, "cache", "avatars", "stale"), "x");
+    mkdirSync(join(env.REFLEKTOR_HOME, "cache", "avatars"), { recursive: true });
+    writeFileSync(join(env.REFLEKTOR_HOME, "cache", "avatars", "stale"), "x");
     const purged = (await (await fetch(`${base}/api/cache/purge`, { method: "POST", headers: { "x-review-token": config.token } })).json()) as { removed: number };
-    if (!(purged.removed >= 1) || existsSync(join(env.PR_REPORT_HOME, "cache")) || !existsSync(join(env.PR_REPORT_HOME, "daemon.json"))) fail("purging the cache did not remove exactly the cache folder");
+    if (!(purged.removed >= 1) || existsSync(join(env.REFLEKTOR_HOME, "cache")) || !existsSync(join(env.REFLEKTOR_HOME, "daemon.json"))) fail("purging the cache did not remove exactly the cache folder");
     // The settings the agent reads: behind the page token, off until changed, and saved to the file the scripts read.
     const settingsUrl = `${base}/api/settings`;
     const asPage = { "x-review-token": config.token, "content-type": "application/json" };
     if ((await fetch(settingsUrl)).status !== 401) fail("the settings endpoint answers without the page token");
     const settingsBefore = (await (await fetch(settingsUrl, { headers: asPage })).json()) as Record<string, unknown>;
     const settingsAfter = (await (await fetch(settingsUrl, { method: "POST", headers: asPage, body: JSON.stringify({ subagents: true, other: "x" }) })).json()) as Record<string, unknown>;
-    const settingsOnDisk = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "settings.json"), "utf8")) as Record<string, unknown>;
+    const settingsOnDisk = JSON.parse(readFileSync(join(env.REFLEKTOR_HOME, "settings.json"), "utf8")) as Record<string, unknown>;
     if (settingsBefore.subagents !== false || settingsAfter.subagents !== true || settingsOnDisk.subagents !== true || "other" in settingsOnDisk)
       fail(`the settings were not saved as sent: ${JSON.stringify({ settingsBefore, settingsAfter, settingsOnDisk })}`);
     if ((await fetch(settingsUrl, { method: "POST", headers: asPage, body: "{" })).status !== 400) fail("the settings endpoint takes a body that is not JSON");
@@ -550,7 +550,7 @@ async function daemonFlow() {
     if (((await (await postSetting({ reflektorApiUrl: "" })).json()) as Record<string, unknown>).reflektorApiUrl !== "") fail("resetting the Reflektor API URL did not save it empty");
 
     // A value of the wrong type in the file counts as not set.
-    writeFileSync(join(env.PR_REPORT_HOME, "settings.json"), JSON.stringify({ subagents: "yes" }));
+    writeFileSync(join(env.REFLEKTOR_HOME, "settings.json"), JSON.stringify({ subagents: "yes" }));
     if (((await (await fetch(settingsUrl, { headers: asPage })).json()) as Record<string, unknown>).subagents !== false) fail("a setting of the wrong type in settings.json is taken for on");
 
     // The page is told which agent it talks to: in its config, and live from whoever called last.
@@ -558,7 +558,7 @@ async function daemonFlow() {
     review("resume", "--id", id, "--agent", "codex");
     if ((await state()).agent?.name !== "Codex") fail("a call from another agent did not change the agent the page shows");
     // A call that names nobody, such as one typed in a plain terminal, leaves the agent as it was.
-    run("node", [join(root, "dist/skill/scripts/review.mjs"), "resume", "--id", id], { ...env, PR_REPORT_AGENT: "", AI_AGENT: "", CLAUDECODE: "" });
+    run("node", [join(root, "dist/skill/scripts/review.mjs"), "resume", "--id", id], { ...env, REFLEKTOR_AGENT: "", AI_AGENT: "", CLAUDECODE: "" });
     if ((await state()).agent?.name !== "Codex") fail("a call that names no agent cleared the one the page shows");
     review("resume", "--id", id);
     if ((await state()).agent?.name !== "Claude") fail("the agent did not change back with the next call");
@@ -674,7 +674,7 @@ async function daemonFlow() {
     if (!(await until((c) => c?.status === "done" && c.results[0]?.status === "passed"))) fail("a finished check did not reach the page state");
     spawn("node", [checksScript, "--repo", repo, "--run", "hang=sleep 3"], { stdio: "ignore" });
     await until((c) => c?.status === "running");
-    process.kill((JSON.parse(readFileSync(join(repo, ".git/pr-report/feat-books/checks.json"), "utf8")) as { pid: number }).pid, "SIGKILL");
+    process.kill((JSON.parse(readFileSync(join(repo, ".git/reflektor/feat-books/checks.json"), "utf8")) as { pid: number }).pid, "SIGKILL");
     if (!(await until((c) => c?.status === "stopped" && c.pending.join() === "hang"))) fail("a crashed check run was not shown as stopped");
 
     await post("questions", { id: "q_1", target: { type: "report" }, text: "Why two migrations?" });
@@ -746,7 +746,7 @@ async function daemonFlow() {
     const waiterExit = new Promise((resolveExit) => waiter.on("exit", resolveExit));
     await sleep(500);
     if (!(await state()).listening) fail("a running waiter does not count as listening");
-    const daemonPid = () => (JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")) as DaemonFile).pid;
+    const daemonPid = () => (JSON.parse(readFileSync(join(env.REFLEKTOR_HOME, "daemon.json"), "utf8")) as DaemonFile).pid;
     const oldPid = daemonPid();
     const goodbye = await fetch(`${base}/api/events?token=${config.token}&watch=${id}`);
     const goodbyeReader = goodbye.body!.getReader();
@@ -787,10 +787,10 @@ async function daemonFlow() {
     await post("archive", {});
     const archivedInbox = await (await fetch(`${base}/`)).text();
     if (!archivedInbox.includes("Archived (1)") || !archivedInbox.includes("<title>All reviews · Reflektor</title>")) fail("an archived review did not move to the archived list");
-    if (!run("git", ["-C", repo, "for-each-ref", "refs/pr-report/rounds/feat-books/"]).trim()) fail("build did not keep a ref per round");
+    if (!run("git", ["-C", repo, "for-each-ref", "refs/reflektor/rounds/feat-books/"]).trim()) fail("build did not keep a ref per round");
     await post("delete", {});
     if (existsSync(reviewDir)) fail("deleting an archived review left its folder");
-    if (run("git", ["-C", repo, "for-each-ref", "refs/pr-report/rounds/feat-books/"]).trim()) fail("deleting a review left its round refs");
+    if (run("git", ["-C", repo, "for-each-ref", "refs/reflektor/rounds/feat-books/"]).trim()) fail("deleting a review left its round refs");
     if (review("list").includes(id)) fail("a deleted review is still listed");
     console.log(
       "daemon flow: question, drift, pull request polled with ETags, rate limit, told by the agent, merged, live checks, sent review, resume, plan, status, round 2 finished without code changes, publishing again, waiting through a restart, empty round 3, archive and delete all worked",
@@ -860,7 +860,7 @@ function updateFlow() {
   run("git", ["-C", repo, "checkout", "-q", "-b", "feat/other"]);
   const other = run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", repo, "--no-fetch"]);
   // collect prints the path with forward slashes on every OS (shellPath), so compare with those.
-  if (!other.includes(".git/pr-report/feat-other/diff.json")) fail(`a second branch in the same checkout did not get its own report folder:\n${other.split("\n")[0]}`);
+  if (!other.includes(".git/reflektor/feat-other/diff.json")) fail(`a second branch in the same checkout did not get its own report folder:\n${other.split("\n")[0]}`);
   console.log("next round: whole branch with the change since round 1, references moved once, PR description only from whole-branch builds");
 }
 
@@ -873,7 +873,7 @@ async function concurrentStart() {
   writeFileSync(join(home, "daemon.lock"), "");
   const old = new Date(Date.now() - 60_000);
   utimesSync(join(home, "daemon.lock"), old, old);
-  const env = { ...process.env, PR_REPORT_HOME: home, PR_REPORT_PORT: String(5000 + Math.floor(Math.random() * 300)) };
+  const env = { ...process.env, REFLEKTOR_HOME: home, REFLEKTOR_PORT: String(5000 + Math.floor(Math.random() * 300)) };
   const daemons = Array.from({ length: 6 }, () => {
     // `output` collects what the daemon prints, on the child itself.
     const child = spawn("node", [join(root, "dist/skill/scripts/daemon.mjs")], { env, stdio: ["ignore", "pipe", "pipe"] }) as ChildProcessByStdio<null, Readable, Readable> & { output: string };
@@ -903,7 +903,7 @@ async function hooksFlow() {
   const github = await startGithubStub();
   const hooksRepo = join(tmp, "hooks-books");
   run(bash, [join(root, "fixtures", "make-books-repo.sh"), hooksRepo]);
-  const data = join(hooksRepo, ".git/pr-report/feat-books");
+  const data = join(hooksRepo, ".git/reflektor/feat-books");
   const log = join(tmp, "hooks.log");
   const logger = join(tmp, "log-hook.mjs");
   writeFileSync(
@@ -911,24 +911,24 @@ async function hooksFlow() {
     [
       'import { appendFileSync } from "node:fs";',
       "const e = process.env;",
-      'appendFileSync(e.HOOK_LOG, `${[e.PR_REPORT_HOOK, e.PR_REPORT_BRANCH, e.PR_REPORT_BASE, e.PR_REPORT_ROUND ?? "-", e.PR_REPORT_REPORT?.endsWith("report.json") ? "report" : "-", e.PR_REPORT_URL ? "url" : "-"].join(" ")}\\n`);',
-      "console.log(`${e.PR_REPORT_HOOK} ran`);",
-      "if (e.HOOK_FAIL === e.PR_REPORT_HOOK) process.exit(1);",
+      'appendFileSync(e.HOOK_LOG, `${[e.REFLEKTOR_HOOK, e.REFLEKTOR_BRANCH, e.REFLEKTOR_BASE, e.REFLEKTOR_ROUND ?? "-", e.REFLEKTOR_REPORT?.endsWith("report.json") ? "report" : "-", e.REFLEKTOR_URL ? "url" : "-"].join(" ")}\\n`);',
+      "console.log(`${e.REFLEKTOR_HOOK} ran`);",
+      "if (e.HOOK_FAIL === e.REFLEKTOR_HOOK) process.exit(1);",
     ].join("\n"),
   );
   const logHook = `node "${logger.replaceAll("\\", "/")}"`;
   const setHooks = (hooks: RepoConfig["hooks"]) => {
-    const file = join(hooksRepo, ".pr-report.json");
+    const file = join(hooksRepo, ".reflektor.json");
     writeFileSync(file, JSON.stringify({ ...(JSON.parse(readFileSync(file, "utf8")) as RepoConfig), hooks }, null, 2));
   };
   const ran = (hook: HookName) => (existsSync(log) ? readFileSync(log, "utf8") : "").split("\n").filter((line) => line.startsWith(`${hook} `));
   const env = {
-    PR_REPORT_HOME: join(tmp, "hooks-home"),
-    PR_REPORT_PORT: String(5400 + Math.floor(Math.random() * 300)),
-    PR_REPORT_GITHUB_API: github.url,
-    PR_REPORT_GITHUB_TOKEN: "stub-token",
+    REFLEKTOR_HOME: join(tmp, "hooks-home"),
+    REFLEKTOR_PORT: String(5400 + Math.floor(Math.random() * 300)),
+    REFLEKTOR_GITHUB_API: github.url,
+    REFLEKTOR_GITHUB_TOKEN: "stub-token",
     GH_CONFIG_DIR: join(tmp, "gh-config"),
-    PR_REPORT_AGENT: "claude-code",
+    REFLEKTOR_AGENT: "claude-code",
     HOOK_LOG: log,
   };
   const collect = (extra: NodeJS.ProcessEnv, ...a: string[]) => run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", hooksRepo, "--no-fetch", ...a], { ...env, ...extra });
@@ -948,12 +948,12 @@ async function hooksFlow() {
       fail("a failing preRun hook did not stop collect.mjs");
     } catch (error) {
       const e = error as ExecError;
-      if (e.status !== 1 || !e.stdout.includes("preRun ran") || !e.stderr.includes("the preRun hook in .pr-report.json failed")) fail(`a failing preRun did not stop collect clearly:\n${e.stdout}${e.stderr}`);
+      if (e.status !== 1 || !e.stdout.includes("preRun ran") || !e.stderr.includes("the preRun hook in .reflektor.json failed")) fail(`a failing preRun did not stop collect clearly:\n${e.stdout}${e.stderr}`);
     }
     setHooks({ preRun: "sleep 20" });
     const started = Date.now();
     try {
-      collect({ PR_REPORT_HOOK_SECONDS: "1" });
+      collect({ REFLEKTOR_HOOK_SECONDS: "1" });
       fail("a preRun hook past its time limit did not stop collect.mjs");
     } catch (error) {
       const e = error as ExecError;
@@ -969,13 +969,13 @@ async function hooksFlow() {
     const id = opened.match(/Review id: (\S+)/)?.[1];
     // Without a review id the rest of the hooks check cannot run: stop here, as daemonFlow does.
     if (!id) return fail(`review.mjs open printed no review id, so a failing postRun stopped the publish:\n${opened}`);
-    if (!opened.includes("warning: the postRun hook in .pr-report.json failed")) fail(`a failing postRun gave no warning:\n${opened}`);
+    if (!opened.includes("warning: the postRun hook in .reflektor.json failed")) fail(`a failing postRun gave no warning:\n${opened}`);
     if (ran("postRun").join() !== "postRun feat/books main 1 report url") fail(`postRun was not handed the round's files: ${ran("postRun").join(" | ")}`);
     review({}, "open", "--report", build("--report", join(data, "report.json")));
     if (ran("postRun").length !== 1) fail("postRun ran again when the same round was published again");
 
     // onApproved: the reviewer sends the round with no comments. It runs once, in the waiter, and a later resume does not run it again.
-    const { port } = JSON.parse(readFileSync(join(env.PR_REPORT_HOME, "daemon.json"), "utf8")) as DaemonFile;
+    const { port } = JSON.parse(readFileSync(join(env.REFLEKTOR_HOME, "daemon.json"), "utf8")) as DaemonFile;
     const page = await (await fetch(`http://127.0.0.1:${port}/r/${id}`)).text();
     const config = JSON.parse(page.match(/window.__PR_REVIEW__=(\{.*?\})<\/script>/)![1]) as ReviewConfig;
     const approve = () =>
@@ -1035,21 +1035,21 @@ async function hooksFlow() {
 async function screenshotsFlow() {
   const shotsRepo = join(tmp, "shots-books");
   run(bash, [join(root, "fixtures", "make-shots-repo.sh"), shotsRepo]);
-  const data = join(shotsRepo, ".git/pr-report/feat-add-book");
+  const data = join(shotsRepo, ".git/reflektor/feat-add-book");
   const home = join(tmp, "shots-home");
   mkdirSync(home, { recursive: true });
   writeFileSync(join(home, "settings.json"), JSON.stringify({ screenshots: true }));
   const log = join(tmp, "shots-hooks.log");
   const logger = join(tmp, "log-shots-hook.mjs");
-  writeFileSync(logger, 'import { appendFileSync } from "node:fs";\nappendFileSync(process.env.HOOK_LOG, `${process.env.PR_REPORT_HOOK} ${process.env.PR_REPORT_SCREENSHOTS_RESULT}\\n`);\n');
+  writeFileSync(logger, 'import { appendFileSync } from "node:fs";\nappendFileSync(process.env.HOOK_LOG, `${process.env.REFLEKTOR_HOOK} ${process.env.REFLEKTOR_SCREENSHOTS_RESULT}\\n`);\n');
   const logHook = `node "${logger.replaceAll("\\", "/")}"`;
   writeFileSync(
-    join(shotsRepo, ".pr-report.json"),
+    join(shotsRepo, ".reflektor.json"),
     JSON.stringify({ hooks: { preScreenshots: "sh scripts/e2e-login.sh", onScreenshotsPassed: logHook, onScreenshotsFailed: logHook, postScreenshots: logHook } }),
   );
   const hooksRan = () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : []);
   const port = 5700 + Math.floor(Math.random() * 300);
-  const env = { PR_REPORT_HOME: home, PR_REPORT_PLAYWRIGHT: join(root, "viewer/node_modules/playwright-core"), HOOK_LOG: log };
+  const env = { REFLEKTOR_HOME: home, REFLEKTOR_PLAYWRIGHT: join(root, "viewer/node_modules/playwright-core"), HOOK_LOG: log };
   const script = join(root, "dist/skill/scripts/screenshots.mjs");
   const shots = (...a: string[]) => run("node", [script, "--repo", shotsRepo, ...a], env);
   const shotsExit = (...a: string[]) => {
@@ -1081,7 +1081,7 @@ async function screenshotsFlow() {
   rmSync(log, { force: true });
 
   const detected = JSON.parse(run("node", [script, "--detect"], env)) as { playwright: { found: boolean }; chromium: { found: boolean }; chrome: { found: boolean } };
-  if (!detected.playwright.found) fail(`screenshots --detect did not find the Playwright named by PR_REPORT_PLAYWRIGHT: ${JSON.stringify(detected)}`);
+  if (!detected.playwright.found) fail(`screenshots --detect did not find the Playwright named by REFLEKTOR_PLAYWRIGHT: ${JSON.stringify(detected)}`);
   if (!detected.chromium.found && !detected.chrome.found) {
     console.log("screenshots: plan checks, --status and --skip worked; the browser run was skipped (neither Playwright's Chromium nor Google Chrome is installed)");
     return;
@@ -1176,14 +1176,14 @@ async function reflektorFlow() {
     );
   const dhome = join(tmp, "reflektor-daemon-home");
   const env = {
-    PR_REPORT_HOME: dhome,
-    PR_REPORT_PORT: String(5800 + Math.floor(Math.random() * 300)),
-    PR_REPORT_DRIFT_SECONDS: "1",
-    PR_REPORT_GITHUB_API: github.url,
-    PR_REPORT_GITHUB_TOKEN: "stub-token",
-    PR_REPORT_PR_POLL_SECONDS: "1",
+    REFLEKTOR_HOME: dhome,
+    REFLEKTOR_PORT: String(5800 + Math.floor(Math.random() * 300)),
+    REFLEKTOR_DRIFT_SECONDS: "1",
+    REFLEKTOR_GITHUB_API: github.url,
+    REFLEKTOR_GITHUB_TOKEN: "stub-token",
+    REFLEKTOR_PR_POLL_SECONDS: "1",
     GH_CONFIG_DIR: join(tmp, "gh-config"),
-    PR_REPORT_AGENT: "claude-code",
+    REFLEKTOR_AGENT: "claude-code",
   };
   const review = (...a: string[]) => run("node", [join(root, "dist/skill/scripts/review.mjs"), ...a], env);
 
@@ -1221,8 +1221,8 @@ async function reflektorFlow() {
     const pending: StubAnswer = { status: 400, body: { error: "authorization_pending" } };
     const waits: number[] = [];
     stub.device([pending, { status: 400, body: { error: "slow_down" } }, pending], { interval: 1 });
-    const start = await client.startDeviceLogin(config, "pr-report on test-box");
-    if ((stub.requests.find((q) => q.path === "/auth/device")?.json as { clientName?: string } | null)?.clientName !== "pr-report on test-box" || start.userCode !== "ABCD-EFGH")
+    const start = await client.startDeviceLogin(config, "reflektor on test-box");
+    if ((stub.requests.find((q) => q.path === "/auth/device")?.json as { clientName?: string } | null)?.clientName !== "reflektor on test-box" || start.userCode !== "ABCD-EFGH")
       fail("the device login did not name this client, or did not hand back the code");
     const approved = await client.finishDeviceLogin(config, start, { sleep: async (ms) => void waits.push(ms) });
     if (approved.token !== STUB_TOKEN || approved.user.email !== STUB_USER.email || approved.apiUrl !== stub.url) fail(`the approved device login is not the stub's account: ${JSON.stringify(approved)}`);
@@ -1281,7 +1281,7 @@ async function reflektorFlow() {
     if (body.bundle?.diff.repo.root !== "" || body.bundle?.diff.repo.gitDir !== "" || (body.bundle?.projectChecks && body.bundle.projectChecks.file !== ""))
       fail("the upload sent paths on this machine");
     const reviewed = { round: 1, branch: "feat/books", headSha: "a".repeat(40), snapshot: "b".repeat(40), submittedAt: "2026-11-15T00:00:00Z", comments: [] };
-    const carried = client.withoutLocalPaths({ ...bundle, previousReview: { version: 1, ...reviewed, report: "/home/dev/books/.git/pr-report/r1.json" } as Bundle["previousReview"] });
+    const carried = client.withoutLocalPaths({ ...bundle, previousReview: { version: 1, ...reviewed, report: "/home/dev/books/.git/reflektor/r1.json" } as Bundle["previousReview"] });
     if (!carried.previousReview || "report" in carried.previousReview) fail("the upload sent the local path of the report a review was sent on");
     const twice = await publish(bundle);
     if (!twice.ok || twice.created) fail("an upload of a snapshot the platform had already did not say so");
@@ -1339,8 +1339,8 @@ async function reflektorFlow() {
     if (reasonOf(await publish(bundle, {}, { ...login, apiUrl: "http://127.0.0.1:9" })) !== "network") fail("a Reflektor that does not answer did not end as a network problem");
 
     // review.mjs login, whoami and logout, against the stand-in.
-    const cliHome = { PR_REPORT_HOME: join(tmp, "reflektor-cli-home"), REFLEKTOR_API_URL: stub.url, REFLEKTOR_APP_URL: stub.url };
-    const loginFile = join(cliHome.PR_REPORT_HOME, "reflektor.json");
+    const cliHome = { REFLEKTOR_HOME: join(tmp, "reflektor-cli-home"), REFLEKTOR_API_URL: stub.url, REFLEKTOR_APP_URL: stub.url };
+    const loginFile = join(cliHome.REFLEKTOR_HOME, "reflektor.json");
     stub.device([pending]);
     const signedIn = await cli(cliHome, "login", "--no-open");
     if (signedIn.code !== 0 || !signedIn.out.includes("ABCD-EFGH") || !signedIn.out.includes("Signed in to Reflektor as Ada Lovelace <ada@example.test>")) fail(`review.mjs login did not sign in:\n${signedIn.out}`);
@@ -1361,7 +1361,7 @@ async function reflektorFlow() {
     // The daemon publishes by itself: a fresh books repo, its review on screen, and its pull request on the GitHub stub.
     const repoDir = join(tmp, "reflektor-books");
     run(bash, [join(root, "fixtures", "make-books-repo.sh"), repoDir]);
-    const data = join(repoDir, ".git/pr-report/feat-books");
+    const data = join(repoDir, ".git/reflektor/feat-books");
     const collect = () => run("node", [join(root, "dist/skill/scripts/collect.mjs"), "--repo", repoDir, "--no-fetch"], env);
     const build = (...a: string[]) => run("node", [join(root, "dist/skill/scripts/build.mjs"), "--diff", join(data, "diff.json"), ...a]).match(/Wrote (\S+)/)![1];
     const finished = () => build("--report", join(root, "samples/report.json"));
@@ -1515,7 +1515,7 @@ async function reflektorFlow() {
 }
 
 // ------------------------------------------------------------------ releases and updates
-// How users get pr-report and new versions of it. pack-release.mts packs this build as 0.9.0 and as 0.9.1, signed with
+// How users get reflektor and new versions of it. pack-release.mts packs this build as 0.9.0 and as 0.9.1, signed with
 // the dev key, and local release servers hand them out. install.sh refuses the dev key unless asked and refuses a
 // tarball that does not match its manifest, then installs 0.9.0. A daemon on it learns of 0.9.1 from a stand-in for
 // Reflektor's version endpoint; review.mjs update replaces it with a daemon on 0.9.1, on the same port, while an agent
@@ -1530,19 +1530,19 @@ async function releaseFlow() {
   const out = join(tmp, "releases");
   const pack = (version: string, extra: string[] = []) => run(process.execPath, [join(root, "dist/tools/scripts/pack-release.mjs"), "--dev", "--version", version, "--out", join(out, version), ...extra]);
   pack("0.9.0");
-  writeFileSync(join(tmp, "notes.md"), "pr-report 0.9.1\n\n## Notes\n- One\n- Two\n- Three\n- Four\n");
+  writeFileSync(join(tmp, "notes.md"), "reflektor 0.9.1\n\n## Notes\n- One\n- Two\n- Three\n- Four\n");
   pack("0.9.1", ["--notes-file", join(tmp, "notes.md")]);
   const manifest = JSON.parse(readFileSync(join(out, "0.9.1", "manifest.json"), "utf8")) as { notes: string[]; file: string };
   if (manifest.notes.join("|") !== "One|Two|Three") fail(`the release notes are not the first three of the notes section: ${manifest.notes.join("|")}`);
   // A copy of 0.9.0 whose tarball no longer matches its manifest.
   cpSync(join(out, "0.9.0"), join(out, "bad"), { recursive: true });
-  appendFileSync(join(out, "bad", "pr-report-0.9.0.tar.gz"), "x");
+  appendFileSync(join(out, "bad", "reflektor-0.9.0.tar.gz"), "x");
 
   const r090 = await startReleaseStub(join(out, "0.9.0"));
   const r091 = await startReleaseStub(join(out, "0.9.1"));
   const rBad = await startReleaseStub(join(out, "bad"));
   const api = createServer((req, res) => {
-    if (!req.url?.startsWith("/pr-report/version")) return res.writeHead(404).end("{}");
+    if (!req.url?.startsWith("/skill/version")) return res.writeHead(404).end("{}");
     res.writeHead(200, { "content-type": "application/json", etag: '"0.9.1"' }).end(JSON.stringify({ latest: "0.9.1", minimum: null, notes: ["One"], notesUrl: null, publishedAt: new Date().toISOString() }));
   });
   await new Promise<void>((done) => api.listen(0, "127.0.0.1", () => done()));
@@ -1550,7 +1550,7 @@ async function releaseFlow() {
 
   const home = join(tmp, "release-home");
   const skills = join(tmp, "release-skills");
-  const env = { ...process.env, PR_REPORT_HOME: home, CLAUDE_SKILLS_DIR: skills, PR_REPORT_PORT: String(5600 + Math.floor(Math.random() * 300)), REFLEKTOR_API_URL: apiUrl };
+  const env = { ...process.env, REFLEKTOR_HOME: home, CLAUDE_SKILLS_DIR: skills, REFLEKTOR_PORT: String(5600 + Math.floor(Math.random() * 300)), REFLEKTOR_API_URL: apiUrl };
   // Asynchronous: the release servers and the stand-in for Reflektor answer from this process, which a synchronous
   // call would block.
   const exec = (cmd: string, args: string[], extra: NodeJS.ProcessEnv) =>
@@ -1559,11 +1559,11 @@ async function releaseFlow() {
         done({ status: error ? Number((error as { code?: unknown }).code) || 1 : 0, stdout, stderr }),
       ),
     );
-  const install = (url: string, extra: NodeJS.ProcessEnv = {}) => exec("sh", [join(root, "install.sh"), "--no-open"], { PR_REPORT_RELEASES_URL: url, ...extra });
+  const install = (url: string, extra: NodeJS.ProcessEnv = {}) => exec("sh", [join(root, "install.sh"), "--no-open"], { REFLEKTOR_RELEASES_URL: url, ...extra });
   const installed = () => JSON.parse(readFileSync(join(home, "install.json"), "utf8")) as { version: string; previous: string | null };
-  const linked = () => readlinkSync(join(skills, "pr-report")).split(/[\\/]/).at(-1);
+  const linked = () => readlinkSync(join(skills, "reflektor")).split(/[\\/]/).at(-1);
   const review = async (...args: string[]) => {
-    const r = await exec(process.execPath, [join(skills, "pr-report/scripts/review.mjs"), ...args], { PR_REPORT_RELEASES_URL: r091.url, PR_REPORT_ALLOW_DEV_KEY: "1" });
+    const r = await exec(process.execPath, [join(skills, "reflektor/scripts/review.mjs"), ...args], { REFLEKTOR_RELEASES_URL: r091.url, REFLEKTOR_ALLOW_DEV_KEY: "1" });
     return r.stdout + r.stderr;
   };
   // Missing for a moment while the new daemon takes over: the old one removes its daemon.json as it exits.
@@ -1576,11 +1576,11 @@ async function releaseFlow() {
   };
   try {
     if ((await install(r090.url)).status === 0 || existsSync(join(home, "versions", "0.9.0"))) fail("install.sh installed a release signed with the dev key without being asked to trust it");
-    if ((await install(rBad.url, { PR_REPORT_ALLOW_DEV_KEY: "1" })).status === 0 || existsSync(join(home, "versions", "0.9.0"))) fail("install.sh installed a tarball that does not match its manifest");
-    const first = await install(r090.url, { PR_REPORT_ALLOW_DEV_KEY: "1" });
+    if ((await install(rBad.url, { REFLEKTOR_ALLOW_DEV_KEY: "1" })).status === 0 || existsSync(join(home, "versions", "0.9.0"))) fail("install.sh installed a tarball that does not match its manifest");
+    const first = await install(r090.url, { REFLEKTOR_ALLOW_DEV_KEY: "1" });
     if (first.status !== 0 || linked() !== "0.9.0" || installed().version !== "0.9.0") fail(`install.sh did not install 0.9.0:\n${first.stdout}${first.stderr}`);
 
-    if (!(await review("version")).includes("pr-report 0.9.1 is available")) fail("review.mjs version did not learn of 0.9.1 from Reflektor");
+    if (!(await review("version")).includes("reflektor 0.9.1 is available")) fail("review.mjs version did not learn of 0.9.1 from Reflektor");
     const before = daemon()!;
 
     // An agent waiting on a review when the update comes.
@@ -1588,7 +1588,7 @@ async function releaseFlow() {
     mkdirSync(join(tmp, "release-review"), { recursive: true });
     writeFileSync(join(home, "reviews.json"), JSON.stringify([{ id: "rel-1", dir: join(tmp, "release-review"), title: "Release", tag: "feature", repo: tmp, branch: "feat" }]));
     let waited = "";
-    const waiter = spawn(process.execPath, [join(skills, "pr-report/scripts/review.mjs"), "wait", "--id", "rel-1"], { env: { ...env, PR_REPORT_RELEASES_URL: r091.url, PR_REPORT_ALLOW_DEV_KEY: "1" }, stdio: ["ignore", "pipe", "pipe"] });
+    const waiter = spawn(process.execPath, [join(skills, "reflektor/scripts/review.mjs"), "wait", "--id", "rel-1"], { env: { ...env, REFLEKTOR_RELEASES_URL: r091.url, REFLEKTOR_ALLOW_DEV_KEY: "1" }, stdio: ["ignore", "pipe", "pipe"] });
     waiter.stdout.on("data", (chunk: Buffer) => (waited += chunk.toString()));
     const waiterExit = new Promise<number | null>((done) => waiter.on("exit", done));
     const asAdmin = async () => {
@@ -1603,16 +1603,16 @@ async function releaseFlow() {
     if ((await asAdmin())?.waiting !== 1) fail("the daemon does not count the waiting agent");
 
     const updated = await review("update");
-    if (!updated.includes("Installed pr-report 0.9.1")) fail(`review.mjs update did not install 0.9.1:\n${updated}`);
+    if (!updated.includes("Installed reflektor 0.9.1")) fail(`review.mjs update did not install 0.9.1:\n${updated}`);
     const code = await Promise.race([waiterExit, sleep(10_000).then(() => "timeout" as const)]);
-    if (code !== 3 || !waited.includes("pr-report was updated to 0.9.1")) fail(`the waiting agent was not told about the update (exit ${code}):\n${waited}`);
+    if (code !== 3 || !waited.includes("reflektor was updated to 0.9.1")) fail(`the waiting agent was not told about the update (exit ${code}):\n${waited}`);
     for (let i = 0; i < 100 && daemon()?.version !== "0.9.1"; i++) await sleep(100);
     const after = daemon();
     if (after?.version !== "0.9.1" || after.port !== before.port) fail(`the new daemon is not 0.9.1 on the same port: ${after?.version} on ${after?.port}, before ${before.port}`);
     if (linked() !== "0.9.1" || installed().version !== "0.9.1" || installed().previous !== "0.9.0") fail("the update did not move the link and record the version before it");
-    if ((await asAdmin())?.status !== "none") fail("pr-report 0.9.1 still says an update is waiting");
+    if ((await asAdmin())?.status !== "none") fail("reflektor 0.9.1 still says an update is waiting");
 
-    if (!(await review("rollback")).includes("Back on pr-report 0.9.0") || linked() !== "0.9.0" || installed().previous !== "0.9.1") fail("rollback did not go back to 0.9.0");
+    if (!(await review("rollback")).includes("Back on reflektor 0.9.0") || linked() !== "0.9.0" || installed().previous !== "0.9.1") fail("rollback did not go back to 0.9.0");
 
     // A release build trusts only the release key, whatever signed the manifest it is handed.
     const released = (await import(pathToFileURL(join(home, "versions", "0.9.0", "scripts", "release.mjs")).href)) as typeof import("../skill/scripts/release.mjs");

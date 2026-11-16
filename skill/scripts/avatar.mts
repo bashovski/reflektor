@@ -1,5 +1,5 @@
 // The repo owner's picture for the report header and the inbox. Orgs and users on github.com and
-// gitlab.com get their avatar, downloaded once and kept in ~/.pr-report/cache/avatars/ for good
+// gitlab.com get their avatar, downloaded once and kept in ~/.reflektor/cache/avatars/ for good
 // (delete that folder to download again). Any other host, or no picture, gets initials on a color.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { RepoAvatar } from "../schema/types.js";
 
-const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
+const HOME = process.env.REFLEKTOR_HOME ?? join(homedir(), ".reflektor");
 const MAX_BYTES = 256 * 1024;
 const TIMEOUT_MS = 3000;
 

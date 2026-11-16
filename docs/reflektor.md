@@ -1,6 +1,6 @@
 # Publishing to Reflektor
 
-Reflektor is the platform where an organization reads its members' reports and comments on them. pr-report publishes
+Reflektor is the platform where an organization reads its members' reports and comments on them. The reflektor skill publishes
 a branch's report there: by itself while the branch's pull request is open, or by hand at any time. Nothing goes up
 until you sign in, and nothing from a repository leaves the machine until an admin of one of your organizations has
 approved that repository on Reflektor.
@@ -14,7 +14,7 @@ The API this follows is in the platform's `docs/reports-and-organizations.md` ("
 In a terminal:
 
 ```bash
-node ~/.claude/skills/pr-report/scripts/review.mjs login
+node ~/.claude/skills/reflektor/scripts/review.mjs login
 ```
 
 It asks Reflektor for a code, opens the approval page in your browser (`--no-open` only prints its address), and
@@ -25,11 +25,11 @@ On a report page, the reader's menu (your avatar, top right) has **Sign in to Re
 daemon asks for the code, the dialog shows it with a link to the approval page, and it says who you are once you
 approved.
 
-The approval page names the client as `pr-report on <this machine's name>`.
+The approval page names the client as `reflektor on <this machine's name>`.
 
 ### The token file
 
-The login is kept in `~/.pr-report/reflektor.json` (under `PR_REPORT_HOME` when that is set), readable by you only
+The login is kept in `~/.reflektor/reflektor.json` (under `REFLEKTOR_HOME` when that is set), readable by you only
 (mode 0600; Windows has no such modes):
 
 ```json
@@ -52,8 +52,8 @@ The login is kept in `~/.pr-report/reflektor.json` (under `PR_REPORT_HOME` when 
 ### Who am I, and signing out
 
 ```bash
-node ~/.claude/skills/pr-report/scripts/review.mjs whoami
-node ~/.claude/skills/pr-report/scripts/review.mjs logout
+node ~/.claude/skills/reflektor/scripts/review.mjs whoami
+node ~/.claude/skills/reflektor/scripts/review.mjs logout
 ```
 
 `whoami` asks Reflektor whose token this is. `logout` deletes `reflektor.json` and nothing else; Settings on a report
@@ -62,11 +62,11 @@ page has **Sign out** too. To end the token on Reflektor's side as well, revoke 
 ## Publish by hand
 
 ```bash
-node ~/.claude/skills/pr-report/scripts/review.mjs publish            # this branch's review, found from the folder
-node ~/.claude/skills/pr-report/scripts/review.mjs publish --id <review id> --org acme
+node ~/.claude/skills/reflektor/scripts/review.mjs publish            # this branch's review, found from the folder
+node ~/.claude/skills/reflektor/scripts/review.mjs publish --id <review id> --org acme
 ```
 
-In Claude Code, `/pr-report push` asks the agent to run the first one and explain the outcome, for example after the
+In Claude Code, `/reflektor push` asks the agent to run the first one and explain the outcome, for example after the
 daemon's own publish failed. Or **Publish to Reflektor** in the reader's menu on the report page. Both go through the daemon, which:
 
 1. Takes the review's newest round that is not a draft, as the report data file `build.mjs` wrote.
@@ -99,16 +99,16 @@ the agent (`review.mjs pr`), from the report when it was built after the pull re
 the review is open in a tab.
 
 Everything runs in the background and never holds up a page or an agent. A publish that did not work is written to
-`~/.pr-report/daemon.log`, shown under **Publish to Reflektor** in the menu, and tried again later: after 5 minutes
+`~/.reflektor/daemon.log`, shown under **Publish to Reflektor** in the menu, and tried again later: after 5 minutes
 for a network problem or a server error (or when Reflektor's `Retry-After` says), after an hour for a refusal only a
 person can fix (repository not approved, an organization to choose). Signing in again, or a new build, tries at once.
 
 Turn it off in Settings (**Publish while the pull request is open**, shown once you are signed in), or set
-`reflektorAutoPublish` to `false` in `~/.pr-report/settings.json`.
+`reflektorAutoPublish` to `false` in `~/.reflektor/settings.json`.
 
 ## Settings
 
-In `~/.pr-report/settings.json`, beside the other settings the scripts read (`skill/scripts/settings.mts`):
+In `~/.reflektor/settings.json`, beside the other settings the scripts read (`skill/scripts/settings.mts`):
 
 | Key | Default | Means |
 | --- | --- | --- |
@@ -158,5 +158,5 @@ Against a platform running on your machine (its API on port 3000, its app on 517
 
 ```bash
 export REFLEKTOR_API_URL=http://localhost:3000 REFLEKTOR_APP_URL=http://localhost:5173
-node ~/.claude/skills/pr-report/scripts/review.mjs login
+node ~/.claude/skills/reflektor/scripts/review.mjs login
 ```

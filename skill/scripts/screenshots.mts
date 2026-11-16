@@ -7,12 +7,12 @@
 // round can run the same plan again without working it out anew.
 //
 // Playwright is the project's own (playwright, @playwright/test or playwright-core in the repo), else a global install,
-// else PR_REPORT_PLAYWRIGHT (a package folder, for tests). Its Chromium must be installed.
+// else REFLEKTOR_PLAYWRIGHT (a package folder, for tests). Its Chromium must be installed.
 //
 // Usage: node screenshots.mjs --repo . --status              the setting, Playwright, the app and what to run next
 //        node screenshots.mjs --detect                       Playwright and Chromium on this machine, as JSON (the daemon)
 //        node screenshots.mjs --repo . --save --url <url> [--start "<command>"] [--ready <seconds>] [--host <name>]... --source "<where from>" --from <file>...
-//        node screenshots.mjs --repo . --share               copy the saved app settings into .pr-report.json
+//        node screenshots.mjs --repo . --share               copy the saved app settings into .reflektor.json
 //        node screenshots.mjs --repo . --forget              delete the saved app settings
 //        node screenshots.mjs --repo . --prepare [--trust]   reach or start the app, then run the preScreenshots hook
 //        node screenshots.mjs --repo . --inspect <path> [--auth signed-in]   print a page's accessibility tree, save a look at it
@@ -149,7 +149,7 @@ const globalCandidates = (): { name: string; dir: string }[] => {
 };
 
 function findPlaywright(root: string | null): Found | null {
-  const env = process.env.PR_REPORT_PLAYWRIGHT;
+  const env = process.env.REFLEKTOR_PLAYWRIGHT;
   const lists: [Found["from"], { name: string; dir: string }[]][] = [
     ["env", env ? [{ name: readJson<{ name?: string }>(join(env, "package.json"))?.name ?? "playwright-core", dir: env }] : []],
     ["repo", root ? repoCandidates(root) : []],
@@ -167,13 +167,13 @@ function findPlaywright(root: string | null): Found | null {
 const loadChromium = (found: Found): BrowserType => (createRequire(join(found.core!, "noop.js"))(found.core!) as { chromium: BrowserType }).chromium;
 
 // The browser to take the shots with: Playwright's own Chromium, else the Google Chrome installed on this machine,
-// which Playwright drives as the "chrome" channel. PR_REPORT_CHROME names another Chrome, for tests.
+// which Playwright drives as the "chrome" channel. REFLEKTOR_CHROME names another Chrome, for tests.
 const CHROME_PATHS: Record<string, string[]> = {
   darwin: ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"],
   linux: ["/opt/google/chrome/chrome", "/usr/bin/google-chrome"],
   win32: [process.env.PROGRAMFILES, process.env["PROGRAMFILES(X86)"], process.env.LOCALAPPDATA].filter(Boolean).map((d) => join(d!, "Google", "Chrome", "Application", "chrome.exe")),
 };
-const systemChrome = (): string | null => [process.env.PR_REPORT_CHROME, ...(CHROME_PATHS[process.platform] ?? [])].find((p): p is string => Boolean(p && existsSync(p))) ?? null;
+const systemChrome = (): string | null => [process.env.REFLEKTOR_CHROME, ...(CHROME_PATHS[process.platform] ?? [])].find((p): p is string => Boolean(p && existsSync(p))) ?? null;
 
 type BrowserChoice = { kind: "chromium" } | { kind: "chrome"; path: string };
 const browserFor = (found: Found): BrowserChoice | null => {
@@ -227,7 +227,7 @@ const files = {
   credentials: join(work, "auth-credentials.json"),
   inspect: join(work, "inspect"),
 };
-const configFile = join(root, ".pr-report.json");
+const configFile = join(root, ".reflektor.json");
 const savedFile = join(repoHome(root), "screenshots.json");
 const trustFile = join(repoHome(root), "trust.json");
 const diff = readJson<DiffData>(join(dir, "diff.json"));
@@ -247,7 +247,7 @@ const hashOf = (file: string): string | null => {
 
 function appConfig(): { config: ScreenshotsConfig; source: string; changed: string[] } | null {
   const shared = readJson<RepoConfig>(configFile)?.screenshots;
-  if (shared?.url) return { config: shared, source: ".pr-report.json", changed: [] };
+  if (shared?.url) return { config: shared, source: ".reflektor.json", changed: [] };
   const saved = readJson<SavedApp>(savedFile);
   if (!saved?.config?.url) return null;
   const changed = Object.entries(saved.from ?? {}).filter(([file, hash]) => hashOf(file) !== hash).map(([file]) => file);
@@ -262,7 +262,7 @@ if (args.mode === "save") {
   writeJson(savedFile, { version: 1, savedAt: new Date().toISOString(), source: args.source, from, config });
   console.log(`Saved the app for screenshots of this repo in ${shellPath(savedFile)}:`);
   console.log(`  address: ${url}${config.start ? `\n  start:   ${config.start}` : ""}`);
-  console.log("--forget deletes it; --share copies it into .pr-report.json for the team.");
+  console.log("--forget deletes it; --share copies it into .reflektor.json for the team.");
   process.exit(0);
 }
 if (args.mode === "forget") {
@@ -322,10 +322,10 @@ const writeRun = (run: Omit<ScreenshotsFile, "version" | "updatedAt">) => writeJ
 
 async function afterHooks(result: "passed" | "failed", appUrl: string | null) {
   const env: Record<string, string> = {
-    PR_REPORT_SCREENSHOTS: runFile,
-    PR_REPORT_SCREENSHOTS_RESULT: result,
-    PR_REPORT_SCREENSHOTS_DIR: shotsDir,
-    ...(appUrl ? { PR_REPORT_APP_URL: appUrl } : {}),
+    REFLEKTOR_SCREENSHOTS: runFile,
+    REFLEKTOR_SCREENSHOTS_RESULT: result,
+    REFLEKTOR_SCREENSHOTS_DIR: shotsDir,
+    ...(appUrl ? { REFLEKTOR_SCREENSHOTS_URL: appUrl } : {}),
   };
   const run = (name: HookName) => runHooks(name, { root, branch, base: diff?.branch.base ?? readJson<RepoConfig>(configFile)?.base ?? null, env });
   await run(result === "passed" ? "onScreenshotsPassed" : "onScreenshotsFailed");
@@ -356,7 +356,7 @@ if (args.mode === "status") {
   const app = appConfig();
   console.log(`Screenshots setting: ${settingOn ? "on" : "off (turned on in the page's Settings, under Screenshots)"}`);
   if (playwright) {
-    console.log(`Playwright: ${playwright.name} ${playwright.version ?? ""} (${playwright.from === "repo" ? "the project's own" : playwright.from === "global" ? "global install" : "PR_REPORT_PLAYWRIGHT"}) at ${shellPath(playwright.dir)}`);
+    console.log(`Playwright: ${playwright.name} ${playwright.version ?? ""} (${playwright.from === "repo" ? "the project's own" : playwright.from === "global" ? "global install" : "REFLEKTOR_PLAYWRIGHT"}) at ${shellPath(playwright.dir)}`);
     const choice = browserFor(playwright);
     console.log(
       choice?.kind === "chromium" ? "Browser: Playwright's Chromium" : choice ? "Browser: Google Chrome (Playwright's Chromium is not installed)" : `Browser: none. The user installs Playwright's Chromium with: ${INSTALL.chromium}`,
@@ -619,7 +619,7 @@ if (args.mode === "prepare") {
     root,
     branch,
     base: diff?.branch.base ?? null,
-    env: { PR_REPORT_APP_URL: url, PR_REPORT_SCREENSHOTS_DIR: shotsDir, PR_REPORT_AUTH_STATE: files.state, PR_REPORT_AUTH_CREDENTIALS: files.credentials },
+    env: { REFLEKTOR_SCREENSHOTS_URL: url, REFLEKTOR_SCREENSHOTS_DIR: shotsDir, REFLEKTOR_AUTH_STATE: files.state, REFLEKTOR_AUTH_CREDENTIALS: files.credentials },
   });
   const auth = existsSync(files.state) ? "state" : existsSync(files.credentials) ? "credentials" : null;
   writeJson(files.auth, { auth, hookFailed: hook.failed, hookRan: hook.ran > 0 });

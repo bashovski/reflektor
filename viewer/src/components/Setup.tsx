@@ -3,7 +3,7 @@ import { CodeThemeStep, finishSetup, IntroStep, type SetupStep, SetupFrame, Spee
 import { ScreenshotsStep } from "./SetupSteps";
 import { ToolsStep } from "./ToolsStep";
 
-// First-run setup: what pr-report is, the tools it can use, how reports get written, then how the page should look. The last
+// First-run setup: what reflektor is, the tools it can use, how reports get written, then how the page should look. The last
 // step hands over to the inbox, which greets a first-timer and says how to start a report.
 const STEPS: SetupStep[] = [
   { id: "intro", title: "Welcome to Reflektor", next: "Get started" },

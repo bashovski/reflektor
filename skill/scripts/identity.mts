@@ -1,7 +1,7 @@
-// Who is using pr-report, for the review page's top bar: the person's account on the repo's forge when
+// Who is using reflektor, for the review page's top bar: the person's account on the repo's forge when
 // its CLI is logged in (gh for GitHub, glab for GitLab), else the git identity set in the repo. The CLIs'
 // config files are read for the login only, never for a token, and what is kept on disk
-// (~/.pr-report/cache/identity/) is the public profile.
+// (~/.reflektor/cache/identity/) is the public profile.
 
 import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -14,7 +14,7 @@ import { ownerAvatar } from "./avatar.mjs";
 // The reader's account on the forge, as the CLI reports it and as it is cached.
 type Account = { source: "gh" | "glab"; login: string; name: string | null; url: string; checkedAt?: string };
 
-const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
+const HOME = process.env.REFLEKTOR_HOME ?? join(homedir(), ".reflektor");
 const CLI_TIMEOUT_MS = 10_000;
 // A profile from the CLI is reused for a day before asking again. After a failed call (offline, logged
 // out, no CLI) the git identity stands for five minutes, so a page does not start a CLI on every load.
@@ -128,7 +128,7 @@ export async function whoAmI({ host, forge, root }: { host: string | null; forge
   return { source, login: found?.login ?? null, name, email: git.email, url: found?.url ?? null, host: host ?? null, avatar };
 }
 
-// Deletes ~/.pr-report/cache: owner and user avatars and the identity profiles, all fetched again when
+// Deletes ~/.reflektor/cache: owner and user avatars and the identity profiles, all fetched again when
 // needed. Reviews and saved checks live elsewhere and are not touched. Returns how many files went.
 export function purgeCache(): number {
   const dir = join(HOME, "cache");

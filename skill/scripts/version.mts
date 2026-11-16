@@ -1,4 +1,4 @@
-// Which pr-report this is. build.json sits next to scripts/ in the package and names the version it was built as. A
+// Which reflektor this is. build.json sits next to scripts/ in the package and names the version it was built as. A
 // release (scripts/pack-release.mts marks it `channel: "release"`) is that version exactly. Anything else is a build
 // from a checkout and counts as a dev build: its version carries a hash of the daemon's code, so the daemon is still
 // replaced the moment a rebuild changes it, as before versions existed.

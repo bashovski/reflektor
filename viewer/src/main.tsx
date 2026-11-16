@@ -14,7 +14,7 @@ import { isSetupPage } from "./lib/setup";
 import "./index.css";
 
 const readBundle = (): Bundle | null => {
-  const text = document.getElementById("pr-report-data")?.textContent?.trim() ?? "";
+  const text = document.getElementById("reflektor-data")?.textContent?.trim() ?? "";
   return text.startsWith("{") ? (JSON.parse(text) as Bundle) : null;
 };
 

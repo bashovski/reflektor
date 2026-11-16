@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { pageToken } from "../lib/panel";
 import { cx } from "./ui";
 
-// The tools on this machine that pr-report can use: the GitHub and GitLab command lines. pr-report
+// The tools on this machine that reflektor can use: the GitHub and GitLab command lines. reflektor
 // has no accounts of its own; "connected" means the tool is installed and logged in. The daemon
 // checks both (GET /api/setup/tools) and this step asks it every few seconds while it is open, so
 // the tick appears as soon as the user has logged in from a terminal.

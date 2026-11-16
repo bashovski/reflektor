@@ -5,7 +5,7 @@
 //
 //   pnpm release:pack -- --dev      (or pack-release.mjs --dev --version 0.9.1 for a newer one)
 //   pnpm release:stub
-//   PR_REPORT_RELEASES_URL=http://127.0.0.1:<port> ./install.sh
+//   REFLEKTOR_RELEASES_URL=http://127.0.0.1:<port> ./install.sh
 //
 // DEV_PRIVATE_KEY signs those releases. It is public on purpose: only builds from a checkout trust its public half
 // (DEV_KEY in skill/scripts/release.mts), so nothing it signs can be installed over a real release.
@@ -49,5 +49,5 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   }
   const stub = await startReleaseStub(folder);
   console.log(`Serving the release in ${folder} at ${stub.url}`);
-  console.log(`Install it with: PR_REPORT_RELEASES_URL=${stub.url} ./install.sh`);
+  console.log(`Install it with: REFLEKTOR_RELEASES_URL=${stub.url} ./install.sh`);
 }
