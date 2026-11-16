@@ -1,0 +1,58 @@
+# Publishes a release when a version tag is pushed: git tag v0.9.0 && git push origin v0.9.0
+#
+# It runs the check suite, builds, packs dist/skill/ with scripts/pack-release.mts, signs the manifest with the
+# release key (the PR_REPORT_RELEASE_KEY secret), and attaches the tarball, manifest.json, its signature and the
+# installers to a GitHub Release. The tag must match package.json's version. The release text is the tag's message;
+# its "## Notes" section, up to three "- " lines, becomes the notes the update modal shows.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tag matches package.json
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "Tag $GITHUB_REF_NAME does not match package.json version $version"; exit 1; }
+
+      - name: Check
+        run: pnpm check
+
+      - name: Release notes
+        run: git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+
+      - name: Pack and sign
+        env:
+          PR_REPORT_RELEASE_KEY: ${{ secrets.PR_REPORT_RELEASE_KEY }}
+        run: >
+          node dist/tools/scripts/pack-release.mjs
+          --notes-file "$RUNNER_TEMP/notes.md"
+          --notes-url "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME"
+          --title "pr-report ${GITHUB_REF_NAME#v}"
+          --notes-file "$RUNNER_TEMP/notes.md"
+          dist/release/*

@@ -10,6 +10,7 @@ import { useTab } from "../lib/tab";
 import { BeforeMerge } from "./BeforeMerge";
 import { Contracts } from "./Contracts";
 import { DriftBanner } from "./DriftBanner";
+import { UpdateBanner } from "./UpdateDialog";
 import { Coverage } from "./Coverage";
 import { FileModal } from "./FileModal";
 import { Findings } from "./Findings";
@@ -169,6 +170,7 @@ const Layout = () => {
       {settings.open && <SettingsPage topBar={null} back={{ label: "Back to the review", onClick: settings.hide }} />}
       <div hidden={settings.open}>
         <SetupBanner />
+        <UpdateBanner />
         <RoundBanner />
         <MergedBanner />
         <DriftBanner />

@@ -12,9 +12,9 @@
 //
 // Started by review.mjs when needed. Stops itself after 4 hours without activity.
 
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { connect } from "node:net";
 import { homedir } from "node:os";
@@ -27,6 +27,10 @@ import { AGENT_HEADER, cleanAgent, decodeAgent } from "./agent.mjs";
 import { purgeCache, whoAmI } from "./identity.mjs";
 import { DEFAULT_REFLEKTOR_API, finishDeviceLogin, forgetLogin, type Organization, publishBundle, readLogin, reflektorConfig, rememberOrganization, repositoryOf, saveLogin, settingApiUrl, startDeviceLogin } from "./reflektor.mjs";
 import { readSettings, writeSettings } from "./settings.mjs";
+import { activate, prune } from "./install.mjs";
+import { downloadRelease, fetchManifest, releasesUrl } from "./release.mjs";
+import { CHECK_EVERY_MS, checkForUpdate, checksEnabled, managedInstall, noteMinimum, readUpdateFile, snooze, updateInfo } from "./updates.mjs";
+import { compareVersions, skillVersion } from "./version.mjs";
 import { replaceFile } from "./repo.mjs";
 import type { AgentInfo, Bundle, ChecksRun, ScreenshotsRun, CommentKind, CommentTarget, InboxData, LiveQuestion, PrState, Ref, RepoAvatar, Review, ReviewComment, Tag } from "../schema/types.js";
 
@@ -152,7 +156,8 @@ const IDLE_MS = Number(process.env.PR_REPORT_IDLE_MINUTES ?? 240) * 60_000;
 const LONG_POLL_MS = 25_000;
 const REDELIVER_MS = 120_000;
 const MAX_BODY = 5 * 1024 * 1024;
-export const VERSION = createHash("sha1").update(readFileSync(fileURLToPath(import.meta.url))).digest("hex").slice(0, 12);
+// "1.4.0" for a release, "1.4.0-dev+<hash of this file>" for a build from a checkout (version.mjs).
+export const VERSION = skillVersion();
 
 mkdirSync(HOME, { recursive: true });
 const daemonFile = join(HOME, "daemon.json");
@@ -209,6 +214,14 @@ function takeLock() {
     }
   }
   return false;
+}
+// After an update the new daemon is started by the old one, which is still answering: it waits for the old one to exit
+// and free the lock and the port.
+const takeover = Number(process.env.PR_REPORT_TAKEOVER ?? 0);
+delete process.env.PR_REPORT_TAKEOVER;
+if (takeover) {
+  const until = Date.now() + 15_000;
+  while (pidAlive(takeover) && Date.now() < until) await new Promise((wake) => setTimeout(wake, 100));
 }
 if (!takeLock()) {
   console.log("Another pr-report daemon is already running.");
@@ -545,7 +558,10 @@ const ICONS = {
   trash: '<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   star: '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
   filter: '<path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/>',
+  update: '<circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4"/><path d="M12 16V8"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
   search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
   gitPullRequest: '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/>',
   gitMerge: '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
@@ -633,6 +649,72 @@ function platformLinks() {
   );
 }
 
+// The platform's "Star us on GitHub" box (StarSection.vue in reflektor-platform): a star of dots on a dot grid that
+// fills in while the button or the picture is hovered. The dots are worked out once, when the daemon starts.
+const STAR_SVG = (() => {
+  const columns = 48,
+    rows = 30,
+    outer = 11,
+    inner = outer * 0.47,
+    cx = columns / 2,
+    cy = rows / 2 + outer * 0.095;
+  const corners = Array.from({ length: 10 }, (_, i) => {
+    const radius = i % 2 === 0 ? outer : inner;
+    const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+    return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
+  });
+  const inside = (x: number, y: number) =>
+    corners.reduce((hit, from, i) => {
+      const to = corners[(i + 1) % corners.length];
+      return from.y > y !== to.y > y && x < ((to.x - from.x) * (y - from.y)) / (to.y - from.y) + from.x ? !hit : hit;
+    }, false);
+  const noise = (x: number, y: number) => {
+    const v = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const dots: string[] = [];
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      const x = column + 0.5,
+        y = row + 0.5;
+      if (!inside(x, y)) {
+        if (noise(column, row) > 0.94) dots.push(`<circle class="sparkle" cx="${x}" cy="${y}" r="0.15"/>`);
+        continue;
+      }
+      const seed = noise(row, column);
+      if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !inside(x + dx, y + dy))) {
+        dots.push(`<circle class="outline" cx="${x}" cy="${y}" r="0.3" style="--twinkle-delay:${(-seed * 4).toFixed(2)}s;--twinkle-duration:${(2.4 + seed * 2.4).toFixed(2)}s"/>`);
+      } else {
+        dots.push(`<circle class="fill" cx="${x}" cy="${y}" r="0.3" style="--fill-delay:${Math.round(Math.hypot(x - cx, y - cy) * 24 + seed * 140)}ms"/>`);
+      }
+    }
+  }
+  return `<svg class="matrix" viewBox="0 0 ${columns} ${rows}"><defs><pattern id="star-grid" width="1" height="1" patternUnits="userSpaceOnUse"><circle class="grid-dot" cx="0.5" cy="0.5" r="0.15"/></pattern></defs><rect width="${columns}" height="${rows}" fill="url(#star-grid)"/>${dots.join("")}</svg>`;
+})();
+
+function starSection() {
+  return `<section class="star" aria-labelledby="star-title"><div class="star-box"><div class="star-copy"><h2 id="star-title">Star us on GitHub</h2>
+<p class="star-text">Reflektor runs as the pr-report skill, and its code lives on GitHub. Read it, open an issue or suggest a change. Every star helps other developers find it.</p>
+<a class="star-button" data-star href="https://github.com/bashovski/pr-report" target="_blank" rel="noreferrer">${GITHUB_MARK}Star on GitHub</a></div>
+<div class="star-display" data-star aria-hidden="true">${STAR_SVG}</div></div></section>`;
+}
+
+// The platform's site footer (SiteFooter.vue in reflektor-platform), with its links on the platform's address.
+function siteFooter() {
+  const app = (reflektorStatus().appUrl ?? "https://reflektor.dev").replace(/\/+$/, "");
+  const repo = "https://github.com/bashovski/pr-report";
+  const groups: [string, [string, string][]][] = [
+    ["Product", [["Install", `${app}/install`], ["Examples", `${app}/examples`], ["Pricing", `${app}/pricing`]]],
+    ["Developers", [["Docs", `${app}/docs`], ["GitHub", repo]]],
+    ["Account", [["Sign in", `${app}/login`], ["Sign up", `${app}/signup`]]],
+  ];
+  const link = (label: string, href: string) => `<li><a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${label}</a></li>`;
+  return `<footer class="site"><div class="inner top"><div class="brand-col">${LOGO ? `<a class="foot-brand" href="${escapeHtml(app)}" target="_blank" rel="noreferrer" aria-label="Reflektor home"><span class="logo" aria-hidden="true">${LOGO}</span></a>` : ""}<p class="tagline">Code reviews done right.</p>
+<button type="button" role="switch" class="toggle" data-theme-toggle aria-checked="false" aria-label="Dark mode" title="Switch to dark mode"><span class="knob">${icon("sun")}${icon("moon")}</span></button></div>
+<nav class="groups" aria-label="Footer">${groups.map(([title, links]) => `<div><p class="group-title">${title}</p><ul>${links.map(([label, href]) => link(label, href)).join("")}</ul></div>`).join("")}</nav></div>
+<div class="inner bottom"><span>© ${new Date().getFullYear()} Reflektor</span><a class="gh" href="${repo}" target="_blank" rel="noreferrer" aria-label="GitHub">${GITHUB_MARK}</a></div></footer>`;
+}
+
 function inboxPage(welcome = false) {
   const all = [...reviews.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const active = all.filter((r) => !r.archived);
@@ -684,8 +766,8 @@ function inboxPage(welcome = false) {
 ${inlineScript(appScript("inbox-theme.js"))}
 <title>${waitingOnYou ? `(${waitingOnYou}) ` : ""}All reviews · Reflektor</title><link rel="icon" href="${inboxIcon(waitingOnYou > 0)}">${FUSE_FILE ? '<link rel="modulepreload" href="/fuse.mjs">' : ""}<style>
 ${FONT_CSS}
-:root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--faint:#83838c;--lead:#52525b;--accent:#18181b;--hover:color-mix(in srgb,var(--text) 5%,transparent);--hover-2:color-mix(in oklab,oklch(55.2% .016 285.938) 10%,transparent);color-scheme:light}
-:root[data-theme=dark]{--bg:#09090b;--surface:#141417;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;--faint:#71717a;--lead:#a1a1aa;--accent:#fff;color-scheme:dark}
+:root{--bg:#fafafa;--surface:#fff;--border:#e4e4e7;--text:#18181b;--muted:#71717a;--faint:#83838c;--lead:#52525b;--accent:#18181b;--on-accent:#fff;--hover:color-mix(in srgb,var(--text) 5%,transparent);--hover-2:color-mix(in oklab,oklch(55.2% .016 285.938) 10%,transparent);color-scheme:light}
+:root[data-theme=dark]{--bg:#09090b;--surface:#141417;--border:#27272a;--text:#f4f4f5;--muted:#a1a1aa;--faint:#71717a;--lead:#a1a1aa;--accent:#fff;--on-accent:#09090b;color-scheme:dark}
 html{overflow-y:scroll}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Geist Variable",ui-sans-serif,system-ui,sans-serif}
 .wrap{box-sizing:border-box;max-width:1440px;margin:0 auto;padding-left:16px;padding-right:16px}@media (min-width:640px){.wrap{padding-left:24px;padding-right:24px}}
 main{padding-top:32px;padding-bottom:48px}h1{margin:0 0 8px;font-size:26px;font-weight:600;line-height:1.25;letter-spacing:-.025em}p{color:var(--muted);margin:0 0 20px}.lead{max-width:48rem;margin-bottom:24px;color:var(--lead);font-size:15px;line-height:1.625}
@@ -693,11 +775,12 @@ main{padding-top:32px;padding-bottom:48px}h1{margin:0 0 8px;font-size:26px;font-
 .brand{display:inline-flex;flex:none;padding:4px;border-radius:2px}.brand:hover{background:var(--hover-2)}.logo{display:inline-flex;height:24px;color:var(--accent)}.logo svg{display:block;height:100%;width:auto}
 .grow{flex:1}
 .sep{flex:none;width:1px;height:20px;background:var(--border)}.links{display:flex;align-items:center;gap:2px;min-width:0}.links a{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:2px;color:var(--muted);font-size:14px;font-weight:500;text-decoration:none}.links a:hover{color:var(--text);background:var(--hover-2)}.links svg{width:15px;height:15px;fill:currentColor}@media (max-width:559px){.sep,.links{display:none}}
-.me{margin-left:4px}.who{display:flex;align-items:center;padding:0;border:0;border-radius:50%;background:none;cursor:pointer}.who[aria-expanded=true]{box-shadow:0 0 0 2px color-mix(in oklab,oklch(70.5% .015 286.067) 40%,transparent)}
+.me{margin-left:4px}.who{position:relative;display:flex;align-items:center;padding:0;border:0;border-radius:50%;background:none;cursor:pointer}.who[aria-expanded=true]{box-shadow:0 0 0 2px color-mix(in oklab,oklch(70.5% .015 286.067) 40%,transparent)}
 .face{display:inline-grid;place-items:center;flex:none;width:28px;height:28px;border-radius:50%;object-fit:cover;background:color-mix(in oklab,oklch(55.2% .016 285.938) 20%,transparent);color:#fff;font:600 11px/1 "Geist Variable",ui-sans-serif,system-ui,sans-serif}.face.big{width:36px;height:36px;font-size:14px}
 .me .menu{box-sizing:border-box;width:288px;font-size:14px}.id{display:flex;align-items:center;gap:12px;padding:8px 10px}.id div{min-width:0}.id b,.id span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.id b{font-weight:500}.id span{color:var(--muted);font-size:12px}
 .me hr{height:1px;margin:4px 0;border:0;background:var(--border)}
 .mi{display:flex;align-items:center;gap:12px;box-sizing:border-box;width:100%;padding:8px 10px;border:0;border-radius:2px;background:none;color:inherit;font:inherit;text-align:left;text-decoration:none;cursor:pointer}.mi[hidden]{display:none}.mi:hover,.mi:focus-visible{background:var(--hover-2)}.mi>svg{width:16px;height:16px;color:var(--muted)}.mi>span:not(.ext){flex:1}.ext{display:inline-flex;color:var(--faint);opacity:0}.mi:hover .ext,.mi:focus-visible .ext{opacity:1}
+.upd-dot{position:absolute;top:-1px;right:-1px;width:9px;height:9px;border-radius:50%;background:oklch(62.3% .214 259.815);box-shadow:0 0 0 2px var(--bg)}.upd-dot.req{background:oklch(76.9% .188 70.08)}.upd-dot[hidden]{display:none}.mi small{display:block;color:var(--muted);font-size:12px}
 .mi kbd{padding:0 6px;border:1px solid var(--border);border-radius:2px;background:var(--hover-2);color:var(--muted);font:12px/1.5 "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace}
 iframe.panel{position:fixed;inset:0;z-index:100;width:100%;height:100%;border:0;background:transparent}iframe.panel[hidden]{display:none}
 .status{display:flex;align-items:center;gap:8px;padding:8px 10px;color:var(--muted);font-size:12px}.status i{flex:none;width:8px;height:8px;border-radius:50%;background:oklch(69.6% .17 162.48)}.status.down i{background:oklch(63.7% .237 25.331)}
@@ -741,10 +824,33 @@ code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospa
 .hint{border-bottom:1px solid color-mix(in oklab,oklch(60.6% .25 292.717) 30%,transparent);background:oklch(96.9% .016 293.756)}:root[data-theme=dark] .hint{background:color-mix(in oklab,oklch(28.3% .141 291.089) 50%,transparent)}.hint[hidden]{display:none}
 .hint .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding-top:8px;padding-bottom:8px;line-height:20px}.hint .wrap>svg{width:16px;height:16px;color:oklch(54.1% .281 293.009)}:root[data-theme=dark] .hint .wrap>svg{color:oklch(70.2% .183 293.541)}
 .hint a{color:oklch(49.1% .27 292.581);font-weight:500;text-decoration:none;text-underline-offset:2px}.hint a:hover{text-decoration:underline}:root[data-theme=dark] .hint a{color:oklch(81.1% .111 293.571)}
-.hint button{display:inline-flex;margin-left:auto;padding:4px;border:0;border-radius:2px;background:none;color:var(--muted);cursor:pointer}.hint button:hover{background:var(--hover-2)}.hint button svg{width:16px;height:16px}</style></head><body>
+.hint button{display:inline-flex;margin-left:auto;padding:4px;border:0;border-radius:2px;background:none;color:var(--muted);cursor:pointer}.hint button:hover{background:var(--hover-2)}.hint button svg{width:16px;height:16px}
+.page{max-width:1040px;padding-left:clamp(16px,4vw,24px);padding-right:clamp(16px,4vw,24px)}.site{border-top:1px solid var(--border)}.site .inner{box-sizing:border-box;max-width:1040px;margin:0 auto;padding:0 clamp(16px,4vw,24px)}.site .top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:40px;padding-top:48px;padding-bottom:40px}
+.brand-col{display:flex;flex-direction:column;align-items:flex-start;gap:14px}.foot-brand{display:inline-flex}.foot-brand .logo{height:26px}.tagline{margin:0;color:var(--muted);font-size:14px}
+.groups{display:flex;flex-wrap:wrap;gap:32px 72px}.group-title{margin:0 0 12px;color:var(--faint);font:11px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase}
+.groups ul{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}.groups a{color:var(--muted);font-size:14px;text-decoration:none}.groups a:hover{color:var(--text)}
+.site .bottom{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:20px;padding-bottom:28px;border-top:1px solid var(--border);color:var(--faint);font-size:13px}
+.gh{display:inline-flex;color:var(--faint)}.gh:hover{color:var(--text)}.gh svg{width:18px;height:18px;fill:currentColor}
+.toggle{position:relative;flex:none;width:42px;height:24px;padding:0;border:1px solid var(--border);border-radius:999px;background:color-mix(in srgb,var(--text) 6%,var(--surface));cursor:pointer}
+.toggle[aria-checked=true]{border-color:color-mix(in srgb,#7d7ae2 55%,var(--border));background:color-mix(in srgb,#7d7ae2 35%,var(--surface))}
+.knob{position:absolute;top:2px;left:2px;display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--surface);color:var(--muted);box-shadow:0 1px 2px rgb(0 0 0/.2);transition:translate .15s ease}
+.knob svg{grid-area:1/1;width:12px;height:12px}.toggle[aria-checked=true] .knob{translate:18px 0;background:#7d7ae2;color:#fff}.toggle[aria-checked=true] .knob svg:first-child,.toggle[aria-checked=false] .knob svg:last-child{display:none}
+.star{--brand:#7d7ae2;box-sizing:border-box;max-width:1040px;margin:0 auto;padding:24px clamp(16px,4vw,24px) 72px}
+.star-box{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);align-items:center;overflow:hidden;border:1px solid var(--border);background:var(--surface)}
+.star-copy{padding:40px}.star h2{margin:0;font-size:clamp(26px,3.2vw,34px);font-weight:600;letter-spacing:-.03em;line-height:1.15}
+.star-text{max-width:400px;margin:14px 0 26px;color:var(--muted);font-size:15px;line-height:1.55}
+.star-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);font-size:14px;font-weight:500;text-decoration:none;white-space:nowrap}
+.star-button:hover{background:color-mix(in srgb,var(--accent) 85%,transparent)}.star-button svg{width:16px;height:16px;fill:currentColor}
+.matrix{display:block;width:100%;height:auto;mask-image:radial-gradient(closest-side,#000 70%,transparent)}
+.grid-dot{fill:color-mix(in srgb,var(--text) 13%,transparent)}.sparkle{fill:color-mix(in srgb,var(--text) 32%,transparent)}
+.matrix .fill{fill:var(--brand);opacity:.18;transition:opacity .24s ease}.lit .matrix .fill{opacity:1;transition-delay:var(--fill-delay)}
+.matrix .outline{fill:var(--brand);animation:twinkle var(--twinkle-duration) ease-in-out var(--twinkle-delay) infinite}@keyframes twinkle{50%{opacity:.55}}
+@media (max-width:760px){.star-box{grid-template-columns:1fr}.star-copy{padding:28px 24px 0}}
+@media (prefers-reduced-motion:reduce){.knob{transition:none}.matrix .outline{animation:none}.matrix .fill,.lit .matrix .fill{transition:none}}</style></head><body>
 <header class="nav"><div class="wrap">${LOGO && `<a class="brand" href="/" title="All reviews" aria-label="All reviews"><span class="logo" aria-hidden="true">${LOGO}</span></a>`}<span class="sep" aria-hidden="true"></span><nav class="links" aria-label="Reflektor">${platformLinks()}</nav><span class="grow"></span>
-<div class="dd me"><button type="button" class="who" aria-haspopup="true" aria-expanded="false" title="Your account and the daemon" aria-label="Your account and the daemon"><span class="face" id="me-face"></span></button><div class="menu" hidden>
+<div class="dd me"><button type="button" class="who" aria-haspopup="true" aria-expanded="false" title="Your account and the daemon" aria-label="Your account and the daemon"><span class="face" id="me-face"></span><i class="upd-dot" id="me-dot" aria-hidden="true" hidden></i></button><div class="menu" hidden>
 <div class="id"><span class="face big" id="me-face-big"></span><div><b id="me-name">Looking you up…</b><span id="me-sub"></span></div></div><hr>
+<button type="button" class="mi" data-panel="update" id="me-update" hidden>${icon("update")}<span><span id="me-update-title">Update available</span><small id="me-update-sub"></small></span></button><hr id="me-update-hr" hidden>
 <a class="mi" id="me-profile" target="_blank" rel="noreferrer" hidden>${icon("user")}<span>Open profile</span>${external}</a>
 <button type="button" class="mi" data-settings>${icon("settings")}<span>Settings</span><kbd>?</kbd></button>
 <button type="button" class="mi" data-panel="help">${icon("help")}<span>Help</span></button>
@@ -753,11 +859,13 @@ code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospa
 <div class="status" id="me-status" role="status"><i aria-hidden="true"></i><span></span></div>
 </div></div></div></header>
 <div class="hint" id="setup-hint" hidden><div class="wrap">${icon("sparkles")}<span>New here? A one-minute setup checks your tools and picks how reports look.</span><a href="/setup">Set up Reflektor</a><button type="button" id="setup-dismiss" title="Not now" aria-label="Not now">${icon("x")}</button></div></div>
-<main class="wrap">
+<main class="wrap page">
 <h1>All reviews</h1><p class="lead">Every review on this machine. Open one to comment, ask questions and send it to your agent.</p>
 ${toolbar}<div id="active" data-rows>${active.length ? `<div class="list">${active.map(inboxRow).join("")}</div>` : `<div class="list">${emptyState(welcome, archived.length)}</div>`}</div>
 ${archived.length ? `<details><summary>Archived (${archived.length}): finished reviews after 3 quiet days, others after 14</summary><div class="archived" data-rows><div class="list">${archived.map(inboxRow).join("")}</div></div></details>` : ""}
 </main>
+${starSection()}
+${siteFooter()}
 <script id="inbox-data" type="application/json">${JSON.stringify(inboxData).replace(/</g, "\\u003c")}</script>
 ${inlineScript(appScript("inbox.js"))}</body></html>`;
 }
@@ -1246,6 +1354,11 @@ async function publishNow(r: ReviewRecord, { organization = null, auto = false }
   r.publishError = { reason: outcome.reason, message: outcome.message, round: entry.round, at: now() };
   if (auto) r.publishRetryAt = Date.now() + (outcome.retryAfterMs ?? (TRANSIENT.has(outcome.reason) ? PUBLISH_RETRY_MS : PUBLISH_QUIET_MS));
   console.log(`Reflektor: publishing ${r.id} round ${entry.round}${auto ? "" : " by hand"} did not work (${outcome.reason}): ${outcome.message}`);
+  // Reflektor only takes reports from pr-report as new as its minimum: the pages ask the reader to update.
+  if (outcome.reason === "update_required" && outcome.minimum) {
+    noteMinimum(outcome.minimum);
+    broadcastUpdate();
+  }
   // Not saved: a failure is not activity, and must not keep the review out of the archive.
   broadcast(r);
   return answer(false, outcome.reason, outcome.message, { round: entry.round, organizations: outcome.organizations });
@@ -1377,6 +1490,92 @@ async function deleteReview(r: ReviewRecord) {
   saveRegistry();
 }
 
+// ------------------------------------------------------------------ updates
+// The daemon looks for a new pr-report once an hour (updates.mjs) and tells open pages over their event stream. The
+// reader updates from a page or with review.mjs update: the daemon downloads and checks the release, installs it next
+// to this one (install.mjs), and hands over to a daemon started from the new version, on the same port. What was
+// waiting stops: agents' waiters are answered "pr-report-updated" and say so, and pages reload into the new version.
+// Reviews, comments and drafts are on disk and carry over.
+
+type UpdateState = "idle" | "checking" | "downloading" | "installing" | "restarting" | "failed";
+let update: { state: UpdateState; error: string | null; target: string | null } = { state: "idle", error: null, target: null };
+let servingPort = FIRST_PORT;
+
+// How many reviews have an agent waiting on them now: those waits stop when the daemon is replaced.
+const waitingAgents = () => [...reviews.values()].filter((r) => (waiters.get(r.id)?.length ?? 0) > 0).length;
+const updateAnswer = () => ({ ...updateInfo(), state: update.state, error: update.error, target: update.target, waiting: waitingAgents() });
+function broadcastUpdate() {
+  const payload = updateAnswer();
+  for (const res of streams) sse(res, "update", payload);
+}
+function setUpdate(state: UpdateState, error: string | null = null) {
+  update = { ...update, state, error };
+  broadcastUpdate();
+}
+
+async function runCheck() {
+  if (!checksEnabled()) return;
+  let apiUrl: string;
+  try {
+    apiUrl = reflektorConfig().apiUrl;
+  } catch {
+    return;
+  }
+  if (await checkForUpdate(apiUrl)) broadcastUpdate();
+}
+
+// The first check soon after start when the last one is over an hour old, then one an hour, each a few random minutes
+// late so machines do not all ask at the same moment.
+function scheduleChecks() {
+  const last = Date.parse(readUpdateFile().checkedAt ?? "") || 0;
+  const firstIn = Math.max(5_000 + Math.random() * 25_000, last + CHECK_EVERY_MS - Date.now());
+  setTimeout(() => {
+    void runCheck();
+    setInterval(() => setTimeout(() => void runCheck(), Math.random() * 5 * 60_000).unref(), CHECK_EVERY_MS).unref();
+  }, firstIn).unref();
+}
+
+async function runUpdate() {
+  if (update.state !== "idle" && update.state !== "failed") return;
+  try {
+    update.target = null;
+    setUpdate("checking");
+    const base = releasesUrl();
+    const manifest = await fetchManifest(base);
+    if (compareVersions(manifest.version, VERSION) <= 0) return setUpdate("failed", `pr-report ${VERSION} is already the newest release.`);
+    update.target = manifest.version;
+    setUpdate("downloading");
+    const dir = await downloadRelease(manifest, base);
+    setUpdate("installing");
+    activate(manifest.version);
+    setUpdate("restarting");
+    handOver(dir, manifest.version);
+  } catch (e) {
+    setUpdate("failed", (e as Error).message);
+  }
+}
+
+// Answers every waiting agent, tells the pages, and starts the new version's daemon, which takes over once this one
+// has exited.
+function handOver(dir: string, version: string) {
+  for (const list of waiters.values()) {
+    for (const w of list.splice(0)) {
+      clearTimeout(w.timer);
+      send(w.res, 409, { error: "pr-report-updated", version });
+    }
+  }
+  for (const stream of streams) sse(stream, "shutdown", { version: VERSION, next: version, reason: "update" });
+  const log = openSync(join(HOME, "daemon.log"), "a");
+  spawn(process.execPath, [join(dir, "scripts", "daemon.mjs")], {
+    detached: true,
+    stdio: ["ignore", log, log],
+    env: { ...process.env, PR_REPORT_TAKEOVER: String(process.pid), PR_REPORT_PORT: String(servingPort) },
+    windowsHide: true,
+  }).unref();
+  console.log(`Updating to pr-report ${version}: the new daemon takes over.`);
+  setTimeout(() => process.exit(0), 300);
+}
+
 // ------------------------------------------------------------------ routes
 
 let lastActivity = Date.now();
@@ -1431,6 +1630,27 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     return;
   }
 
+  // ---------- updates: what is known, update now, later. Pages use the page token, review.mjs the admin token.
+  if (parts[1] === "update") {
+    if (!admin && !same(req.headers["x-review-token"], pageToken)) return send(res, 401, { error: "bad token" });
+    if (req.method === "GET" && !parts[2]) return send(res, 200, updateAnswer());
+    if (req.method === "POST" && !parts[2]) {
+      void runUpdate();
+      return send(res, 202, updateAnswer());
+    }
+    if (req.method === "POST" && parts[2] === "snooze") {
+      const { latest } = updateInfo();
+      if (latest) snooze(latest);
+      broadcastUpdate();
+      return send(res, 200, updateAnswer());
+    }
+    if (req.method === "POST" && parts[2] === "check") {
+      await runCheck();
+      return send(res, 200, updateAnswer());
+    }
+    return send(res, 404, { error: "not found" });
+  }
+
   // ---------- page stream: one connection can watch many reviews
   if (req.method === "GET" && parts[1] === "events") {
     if (!same(url.searchParams.get("token"), pageToken)) return send(res, 401, { error: "bad token" });
@@ -1442,6 +1662,7 @@ async function handle(req: IncomingMessage, res: Res, port: number) {
     for (const r of reviews.values()) if (watches(res, r.id)) sse(res, "state", liveState(r));
     // After the states: a reader of the first chunk still finds a review's state first.
     sse(res, "daemon", daemonInfo());
+    sse(res, "update", updateAnswer());
     req.on("close", () => streams.delete(res));
     return;
   }
@@ -1827,6 +2048,7 @@ async function listen(port: number, attempt = 0) {
     }
   });
   server.listen(port, "127.0.0.1", () => {
+    servingPort = port;
     writeJson(daemonFile, { port, pid: process.pid, version: VERSION, adminToken, startedAt: now() }, 0o600);
     console.log(`pr-report daemon ${VERSION} on http://127.0.0.1:${port}/ (pid ${process.pid})`);
   });
@@ -1895,4 +2117,7 @@ setInterval(() => {
 for (const r of reviews.values()) if (finishIfSettled(r)) save(r);
 
 void listen(FIRST_PORT);
+// An installed release keeps the version in use and the one before it; older ones go.
+if (managedInstall()) prune();
+scheduleChecks();
 console.log(`Reviews known: ${reviews.size}. Home: ${HOME}`);

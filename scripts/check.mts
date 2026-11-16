@@ -7,7 +7,8 @@
 // Usage: pnpm check, or pnpm sample to open the sample report after
 
 import { type ChildProcessByStdio, execFile, execFileSync, spawn } from "node:child_process";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import type { Readable } from "node:stream";
@@ -70,7 +71,7 @@ try {
 
   // The copy of the skill for an agent other than Claude Code: the folder written out in every command, Claude Code's
   // own front matter left out, and the two fields every agent needs kept.
-  const { portableSkillText } = await import("./portable-skill.mjs");
+  const { portableSkillText } = (await fromPackage("portable-skill.mjs")) as typeof import("../skill/scripts/portable-skill.mjs");
   const portable = portableSkillText(readFileSync(join(root, "skill/SKILL.md"), "utf8"), "C:\\Users\\x\\.agents\\skills\\pr-report");
   const frontMatter = portable.slice(0, portable.indexOf("\n---", 4));
   if (portable.includes("CLAUDE_SKILL_DIR") || /^(allowed-tools|argument-hint):/m.test(frontMatter) || !/^name: pr-report$/m.test(frontMatter) || !/^description: /m.test(frontMatter))
@@ -340,6 +341,7 @@ try {
   await hooksFlow();
   await screenshotsFlow();
   await reflektorFlow();
+  await releaseFlow();
 } catch (error) {
   const e = error as ExecError;
   fail(e.stderr?.toString() || e.message);
@@ -569,6 +571,8 @@ async function daemonFlow() {
     if (!/<span class="av" style="background:#[0-9a-f]{6}">AL<\/span>/.test(inbox)) fail("the inbox does not show the owner's initials");
     if (!inbox.includes("<title>(1) All reviews · Reflektor</title>")) fail("the inbox title does not count the review waiting on you");
     if (!inbox.includes('data-owner="acme-labs"')) fail("the inbox rows do not carry the owner they are grouped by");
+    if (!inbox.includes('<nav class="groups" aria-label="Footer">') || !inbox.includes('/signup"') || !inbox.includes("data-theme-toggle")) fail("the inbox has no site footer with its links and theme switch");
+    if (!inbox.includes('<h2 id="star-title">Star us on GitHub</h2>') || !inbox.includes('class="outline"')) fail("the inbox has no Star us on GitHub box with its star");
     if (!/<span class="tag" style="background:#[0-9a-f]{6}"><svg /.test(inbox)) fail("the inbox tag has no color or icon");
     if (!inbox.includes('name="q"') || !(await (await fetch(`${base}/fuse.mjs`)).text()).includes("Fuse.js")) fail("the inbox search or its Fuse.js file is missing");
 
@@ -1507,6 +1511,123 @@ async function reflektorFlow() {
     }
     stub.close();
     github.close();
+  }
+}
+
+// ------------------------------------------------------------------ releases and updates
+// How users get pr-report and new versions of it. pack-release.mts packs this build as 0.9.0 and as 0.9.1, signed with
+// the dev key, and local release servers hand them out. install.sh refuses the dev key unless asked and refuses a
+// tarball that does not match its manifest, then installs 0.9.0. A daemon on it learns of 0.9.1 from a stand-in for
+// Reflektor's version endpoint; review.mjs update replaces it with a daemon on 0.9.1, on the same port, while an agent
+// waits, which says so and exits with code 3. Rollback goes back, and a release build does not trust the dev key.
+
+async function releaseFlow() {
+  if (process.platform === "win32") {
+    console.log("releases: skipped on Windows, where install.ps1 installs instead of install.sh");
+    return;
+  }
+  const { startReleaseStub } = await import("./release-stub.mjs");
+  const out = join(tmp, "releases");
+  const pack = (version: string, extra: string[] = []) => run(process.execPath, [join(root, "dist/tools/scripts/pack-release.mjs"), "--dev", "--version", version, "--out", join(out, version), ...extra]);
+  pack("0.9.0");
+  writeFileSync(join(tmp, "notes.md"), "pr-report 0.9.1\n\n## Notes\n- One\n- Two\n- Three\n- Four\n");
+  pack("0.9.1", ["--notes-file", join(tmp, "notes.md")]);
+  const manifest = JSON.parse(readFileSync(join(out, "0.9.1", "manifest.json"), "utf8")) as { notes: string[]; file: string };
+  if (manifest.notes.join("|") !== "One|Two|Three") fail(`the release notes are not the first three of the notes section: ${manifest.notes.join("|")}`);
+  // A copy of 0.9.0 whose tarball no longer matches its manifest.
+  cpSync(join(out, "0.9.0"), join(out, "bad"), { recursive: true });
+  appendFileSync(join(out, "bad", "pr-report-0.9.0.tar.gz"), "x");
+
+  const r090 = await startReleaseStub(join(out, "0.9.0"));
+  const r091 = await startReleaseStub(join(out, "0.9.1"));
+  const rBad = await startReleaseStub(join(out, "bad"));
+  const api = createServer((req, res) => {
+    if (!req.url?.startsWith("/pr-report/version")) return res.writeHead(404).end("{}");
+    res.writeHead(200, { "content-type": "application/json", etag: '"0.9.1"' }).end(JSON.stringify({ latest: "0.9.1", minimum: null, notes: ["One"], notesUrl: null, publishedAt: new Date().toISOString() }));
+  });
+  await new Promise<void>((done) => api.listen(0, "127.0.0.1", () => done()));
+  const apiUrl = `http://127.0.0.1:${(api.address() as { port: number }).port}`;
+
+  const home = join(tmp, "release-home");
+  const skills = join(tmp, "release-skills");
+  const env = { ...process.env, PR_REPORT_HOME: home, CLAUDE_SKILLS_DIR: skills, PR_REPORT_PORT: String(5600 + Math.floor(Math.random() * 300)), REFLEKTOR_API_URL: apiUrl };
+  // Asynchronous: the release servers and the stand-in for Reflektor answer from this process, which a synchronous
+  // call would block.
+  const exec = (cmd: string, args: string[], extra: NodeJS.ProcessEnv) =>
+    new Promise<{ status: number; stdout: string; stderr: string }>((done) =>
+      execFile(cmd, args, { cwd: root, encoding: "utf8", env: { ...env, ...extra } }, (error, stdout, stderr) =>
+        done({ status: error ? Number((error as { code?: unknown }).code) || 1 : 0, stdout, stderr }),
+      ),
+    );
+  const install = (url: string, extra: NodeJS.ProcessEnv = {}) => exec("sh", [join(root, "install.sh"), "--no-open"], { PR_REPORT_RELEASES_URL: url, ...extra });
+  const installed = () => JSON.parse(readFileSync(join(home, "install.json"), "utf8")) as { version: string; previous: string | null };
+  const linked = () => readlinkSync(join(skills, "pr-report")).split(/[\\/]/).at(-1);
+  const review = async (...args: string[]) => {
+    const r = await exec(process.execPath, [join(skills, "pr-report/scripts/review.mjs"), ...args], { PR_REPORT_RELEASES_URL: r091.url, PR_REPORT_ALLOW_DEV_KEY: "1" });
+    return r.stdout + r.stderr;
+  };
+  // Missing for a moment while the new daemon takes over: the old one removes its daemon.json as it exits.
+  const daemon = () => {
+    try {
+      return JSON.parse(readFileSync(join(home, "daemon.json"), "utf8")) as DaemonFile & { version: string; adminToken: string };
+    } catch {
+      return null;
+    }
+  };
+  try {
+    if ((await install(r090.url)).status === 0 || existsSync(join(home, "versions", "0.9.0"))) fail("install.sh installed a release signed with the dev key without being asked to trust it");
+    if ((await install(rBad.url, { PR_REPORT_ALLOW_DEV_KEY: "1" })).status === 0 || existsSync(join(home, "versions", "0.9.0"))) fail("install.sh installed a tarball that does not match its manifest");
+    const first = await install(r090.url, { PR_REPORT_ALLOW_DEV_KEY: "1" });
+    if (first.status !== 0 || linked() !== "0.9.0" || installed().version !== "0.9.0") fail(`install.sh did not install 0.9.0:\n${first.stdout}${first.stderr}`);
+
+    if (!(await review("version")).includes("pr-report 0.9.1 is available")) fail("review.mjs version did not learn of 0.9.1 from Reflektor");
+    const before = daemon()!;
+
+    // An agent waiting on a review when the update comes.
+    await review("stop");
+    mkdirSync(join(tmp, "release-review"), { recursive: true });
+    writeFileSync(join(home, "reviews.json"), JSON.stringify([{ id: "rel-1", dir: join(tmp, "release-review"), title: "Release", tag: "feature", repo: tmp, branch: "feat" }]));
+    let waited = "";
+    const waiter = spawn(process.execPath, [join(skills, "pr-report/scripts/review.mjs"), "wait", "--id", "rel-1"], { env: { ...env, PR_REPORT_RELEASES_URL: r091.url, PR_REPORT_ALLOW_DEV_KEY: "1" }, stdio: ["ignore", "pipe", "pipe"] });
+    waiter.stdout.on("data", (chunk: Buffer) => (waited += chunk.toString()));
+    const waiterExit = new Promise<number | null>((done) => waiter.on("exit", done));
+    const asAdmin = async () => {
+      try {
+        const d = daemon()!;
+        return (await (await fetch(`http://127.0.0.1:${d.port}/api/update`, { headers: { "x-admin-token": d.adminToken } })).json()) as { waiting: number; status: string };
+      } catch {
+        return null;
+      }
+    };
+    for (let i = 0; i < 50 && (await asAdmin())?.waiting !== 1; i++) await sleep(100);
+    if ((await asAdmin())?.waiting !== 1) fail("the daemon does not count the waiting agent");
+
+    const updated = await review("update");
+    if (!updated.includes("Installed pr-report 0.9.1")) fail(`review.mjs update did not install 0.9.1:\n${updated}`);
+    const code = await Promise.race([waiterExit, sleep(10_000).then(() => "timeout" as const)]);
+    if (code !== 3 || !waited.includes("pr-report was updated to 0.9.1")) fail(`the waiting agent was not told about the update (exit ${code}):\n${waited}`);
+    for (let i = 0; i < 100 && daemon()?.version !== "0.9.1"; i++) await sleep(100);
+    const after = daemon();
+    if (after?.version !== "0.9.1" || after.port !== before.port) fail(`the new daemon is not 0.9.1 on the same port: ${after?.version} on ${after?.port}, before ${before.port}`);
+    if (linked() !== "0.9.1" || installed().version !== "0.9.1" || installed().previous !== "0.9.0") fail("the update did not move the link and record the version before it");
+    if ((await asAdmin())?.status !== "none") fail("pr-report 0.9.1 still says an update is waiting");
+
+    if (!(await review("rollback")).includes("Back on pr-report 0.9.0") || linked() !== "0.9.0" || installed().previous !== "0.9.1") fail("rollback did not go back to 0.9.0");
+
+    // A release build trusts only the release key, whatever signed the manifest it is handed.
+    const released = (await import(pathToFileURL(join(home, "versions", "0.9.0", "scripts", "release.mjs")).href)) as typeof import("../skill/scripts/release.mjs");
+    const signature = readFileSync(join(out, "0.9.1", "manifest.json.sig"), "utf8");
+    let trusted = true;
+    try {
+      released.verifyManifest(readFileSync(join(out, "0.9.1", "manifest.json")), signature, released.trustedKeys({}));
+    } catch {
+      trusted = false;
+    }
+    if (trusted) fail("a release build trusts a manifest signed with the dev key");
+    console.log("releases: signed packing, install.sh refusing the dev key and a bad checksum, the hourly check, review.mjs version/update/rollback, the takeover on the same port, and the waiting agent told about the update all worked");
+  } finally {
+    await review("stop");
+    await Promise.all([r090.close(), r091.close(), rBad.close(), new Promise((done) => api.close(done))]);
   }
 }
 

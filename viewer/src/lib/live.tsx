@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import type { UpdateInfo } from "./update";
 import type { AgentInfo, Bundle, ChecksRun, CommentKind, ScreenshotsRun, LiveQuestion, PrState, Ref, ReviewComment } from "../../../skill/schema/types";
 
 // Live state of a review, streamed from the pr-report daemon.
@@ -73,6 +74,8 @@ type Message =
   | { type: "hello" }
   | { type: "connection"; connected: boolean }
   | { type: "daemon"; daemon: DaemonInfo }
+  | { type: "update"; update: UpdateInfo }
+  | { type: "reload" }
   | { type: "link"; link: Link };
 
 const config = window.__PR_REVIEW__;
@@ -81,12 +84,18 @@ const latest = new Map<string, LiveState>();
 let connected = false;
 let daemon: DaemonInfo | null = null;
 let link: Link = "down";
+let update: UpdateInfo | null = null;
+// Set when the daemon said it is being replaced by an update: the page reloads once the new version answers, so it
+// runs the new viewer.
+let updatingFrom: string | null = null;
 
 const emit = (m: Message) => {
   if (m.type === "state") latest.set(m.state.id, m.state);
   if (m.type === "connection") connected = m.connected;
   if (m.type === "daemon") daemon = m.daemon;
   if (m.type === "link") link = m.link;
+  if (m.type === "update") update = m.update;
+  if (m.type === "reload") window.location.reload();
   for (const l of listeners) l(m);
 };
 
@@ -113,8 +122,15 @@ function startStream() {
           if (source.readyState === EventSource.CLOSED) window.setTimeout(connect, 3000);
         };
         source.addEventListener("state", (e) => share({ type: "state", state: JSON.parse((e as MessageEvent).data) }));
-        source.addEventListener("daemon", (e) => share({ type: "daemon", daemon: JSON.parse((e as MessageEvent).data) }));
-        source.addEventListener("shutdown", () => {
+        source.addEventListener("daemon", (e) => {
+          const next = JSON.parse((e as MessageEvent).data) as DaemonInfo;
+          if (updatingFrom && next.version !== updatingFrom) return share({ type: "reload" });
+          share({ type: "daemon", daemon: next });
+        });
+        source.addEventListener("update", (e) => share({ type: "update", update: JSON.parse((e as MessageEvent).data) }));
+        source.addEventListener("shutdown", (e) => {
+          const said = JSON.parse((e as MessageEvent).data || "{}") as { version?: string; reason?: string };
+          if (said.reason === "update") updatingFrom = said.version ?? daemon?.version ?? null;
           share({ type: "link", link: "restarting" });
           window.setTimeout(() => link === "restarting" && share({ type: "link", link: "down" }), 20_000);
         });
@@ -126,6 +142,7 @@ function startStream() {
         channel.postMessage({ type: "connection", connected });
         channel.postMessage({ type: "link", link });
         if (daemon) channel.postMessage({ type: "daemon", daemon });
+        if (update) channel.postMessage({ type: "update", update });
         for (const state of latest.values()) channel.postMessage({ type: "state", state });
       });
     });
@@ -141,11 +158,12 @@ function startStream() {
 
 startStream();
 
-const Ctx = createContext<{ live: LiveState | null; connected: boolean; daemon: DaemonInfo | null; link: Link; config: ReviewConfig | null }>({
+const Ctx = createContext<{ live: LiveState | null; connected: boolean; daemon: DaemonInfo | null; link: Link; update: UpdateInfo | null; config: ReviewConfig | null }>({
   live: null,
   connected: false,
   daemon: null,
   link: "down",
+  update: null,
   config: null,
 });
 
@@ -154,6 +172,7 @@ export const LiveProvider = ({ children }: { children: ReactNode }) => {
   const [isConnected, setConnected] = useState(connected);
   const [daemonInfo, setDaemon] = useState(daemon);
   const [linkState, setLink] = useState(link);
+  const [updateInfo, setUpdate] = useState(update);
 
   // Tell the daemon this review is on screen, so the agent does not open another tab for each round.
   useEffect(() => {
@@ -177,12 +196,14 @@ export const LiveProvider = ({ children }: { children: ReactNode }) => {
       if (m.type === "connection") setConnected(m.connected);
       if (m.type === "daemon") setDaemon(m.daemon);
       if (m.type === "link") setLink(m.link);
+      if (m.type === "update") setUpdate(m.update);
     };
     listeners.add(onMessage);
     // The stream may have opened or sent state between the first render and this subscription.
     setConnected(connected);
     setDaemon(daemon);
     setLink(link);
+    setUpdate(update);
     const state = latest.get(config.id);
     if (state) setLive(state);
     return () => {
@@ -190,7 +211,7 @@ export const LiveProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  return <Ctx.Provider value={{ live, connected: isConnected, daemon: daemonInfo, link: linkState, config: config ?? null }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ live, connected: isConnected, daemon: daemonInfo, link: linkState, update: updateInfo, config: config ?? null }}>{children}</Ctx.Provider>;
 };
 
 export const useLive = () => useContext(Ctx);

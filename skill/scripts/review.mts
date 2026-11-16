@@ -11,6 +11,10 @@
 //   list                                  every review the daemon knows
 //   setup   [--no-open]                   open the first-run setup page (tools, light or dark, code theme)
 //   stop                                  stop the daemon
+//   version                               this version, the newest release, and whether an update waits
+//   update                                install the newest release now and restart the daemon on it; open pages
+//                                         reload and waiting agents stop (updates.mjs)
+//   rollback                              go back to the release installed before this one
 //
 // Reflektor, where an organization reads its members' reports (reflektor.mjs):
 //
@@ -24,7 +28,6 @@
 // --agent <id> says it outright; --agent-name "<product>" is the agent's own answer when nothing else is known.
 
 import { execFileSync, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -36,6 +39,9 @@ import { runReportHooks } from "./hooks.mjs";
 import { finishDeviceLogin, forgetLogin, LOGIN_FILE, type Organization, readLogin, reflektorConfig, saveLogin, startDeviceLogin, whoami } from "./reflektor.mjs";
 import { shellPath } from "./repo.mjs";
 import { readSettings } from "./settings.mjs";
+import { readInstall, rollback } from "./install.mjs";
+import { managedInstall, terminalLine, type UpdateInfo } from "./updates.mjs";
+import { isRelease, readVersion } from "./version.mjs";
 
 // daemon.json, which the daemon writes when it starts: where it listens and its admin token.
 type DaemonInfo = { port: number; pid: number; version: string; adminToken: string; startedAt: string };
@@ -77,9 +83,25 @@ const here = dirname(fileURLToPath(import.meta.url));
 const HOME = process.env.PR_REPORT_HOME ?? join(homedir(), ".pr-report");
 const daemonScript = join(here, "daemon.mjs");
 const daemonFile = join(HOME, "daemon.json");
-// Read from disk each time: a waiter that started before the skill was updated must take the new
-// daemon as current, not shut it down as out of date.
-const expectedVersion = () => createHash("sha1").update(readFileSync(daemonScript)).digest("hex").slice(0, 12);
+// Read from disk each time: a waiter that started before the skill was rebuilt must take the new daemon as current,
+// not shut it down as out of date.
+const expectedVersion = () => readVersion();
+
+// An installed release this script is no longer part of: pr-report was updated (or rolled back) while it ran, so the
+// daemon belongs to the other version and must not be replaced by this one's.
+const superseded = () => {
+  const install = readInstall();
+  return Boolean(install && isRelease() && install.version !== readVersion());
+};
+const updatedMessage = (version = readInstall()?.version ?? "a new version") =>
+  `pr-report was updated to ${version} while this was running, so it stopped here. Comments and drafts are saved. Tell the user, then continue with /pr-report resume (review.mjs resume), which uses the new version.`;
+// GET /api/update in daemon.mjs.
+type UpdateAnswer = UpdateInfo & { state: string; error: string | null; target: string | null; waiting: number };
+// The line every answer the agent relays ends with while an update waits (updates.mjs).
+const noteUpdate = () => {
+  const line = terminalLine();
+  if (line) console.log(`\nnote: ${line}`);
+};
 
 const [command, ...rest] = process.argv.slice(2);
 const args: Record<string, string | true> = {};
@@ -131,12 +153,14 @@ async function ensureDaemon(): Promise<DaemonInfo> {
   let info = readJson(daemonFile) as DaemonInfo | null;
   let status = info && (await health(info));
   if (status && status.version !== expectedVersion()) {
-    // The skill was updated: replace the running daemon with the new code.
+    if (superseded()) throw new Error(updatedMessage());
+    // The skill was rebuilt: replace the running daemon with the new code.
     await fetch(`http://127.0.0.1:${info!.port}/api/shutdown`, { method: "POST", headers: { "x-admin-token": info!.adminToken } }).catch(() => {});
     for (let i = 0; i < 30 && (await health(info!)); i++) await sleep(100);
     status = null;
   }
   if (status) return info!;
+  if (superseded()) throw new Error(updatedMessage());
 
   mkdirSync(HOME, { recursive: true });
   const log = openSync(join(HOME, "daemon.log"), "a");
@@ -185,7 +209,9 @@ const describe = (t: CommentTarget) => {
   }
 };
 
-const self = `node "${shellPath(join(here, "review.mjs"))}"`;
+// The path the agent ran this with, not where it resolves to: a release is a link to ~/.pr-report/versions/<version>/,
+// and the commands printed here must keep working after an update moves the link.
+const self = `node "${shellPath(process.argv[1] && /review\.mjs$/.test(process.argv[1]) ? process.argv[1] : join(here, "review.mjs"))}"`;
 
 // This branch's review: the newest one whose files are in this repo's git folder (--repo, else the working folder).
 // Prints why when there is none.
@@ -302,6 +328,7 @@ async function main() {
     // Nothing in this shell says which agent this is, so the page speaks of "your agent" until it is told.
     if (!agent) console.log(`note: the page does not know which agent you are. Add --agent-name "<the product you run in>" to review.mjs commands so it can say.`);
     console.log(`Next: run in the background: ${self} wait --id ${data.id}`);
+    noteUpdate();
   } else if (command === "setup") {
     // The first-run page: the tools on this machine, light or dark, and a code theme. The installer
     // runs this after a first install; it works any time by hand too.
@@ -322,7 +349,14 @@ async function main() {
         result = await api<NextEvent>(info, "GET", `/api/r/${encodeURIComponent(args.id)}/next-event`);
         failures = 0;
       } catch (e) {
-        // The daemon restarts when the skill is updated. Start it again and keep waiting.
+        // An update stops every waiter: the daemon answers "pr-report-updated", or is gone and a newer version is
+        // installed. Exit code 3 tells the agent this is not a failure.
+        if ((e as Error).message === "pr-report-updated" || superseded()) {
+          console.log(updatedMessage());
+          process.exitCode = 3;
+          return;
+        }
+        // The daemon restarts when the skill is rebuilt. Start it again and keep waiting.
         if (++failures > 3) {
           console.log(`The review daemon is not reachable (${(e as Error).message}). Run wait again in the background.`);
           return;
@@ -357,6 +391,7 @@ async function main() {
       console.log(`Nothing is waiting for you: round ${review.round} waits on ${waitingOn}.`);
       console.log(`\nNext: run in the background: ${self} wait --id ${review.id}`);
     }
+    noteUpdate();
   } else if (command === "answer") {
     need("id", "question");
     const text = textArg();
@@ -451,11 +486,47 @@ async function main() {
       if (picked) ({ data } = await send(picked));
     }
     console.log(data.message);
+    noteUpdate();
     if (data.ok) return;
     if (data.reason === "organization_required" || data.reason === "unknown_organization")
       console.log(`Publish to one of them with: ${self} publish --id ${id} --org ${data.organizations?.[0]?.slug ?? "<slug>"}`);
     if (data.reason === "unauthorized" || data.reason === "signed_out") console.log(`Sign in again with: ${self} login`);
     process.exitCode = 1;
+  } else if (command === "version") {
+    console.log(`pr-report ${readVersion()}${isRelease() ? "" : " (a build from a checkout, which does not update itself)"}`);
+    const install = readInstall();
+    if (install) console.log(`Installed release: ${install.version} for ${install.targets.join(", ")}${install.previous ? `; rollback goes to ${install.previous}` : ""}.`);
+    const info = await ensureDaemon();
+    const { data } = await api<UpdateAnswer>(info, "POST", "/api/update/check");
+    if (data.status === "required") console.log(`Update needed: Reflektor takes reports from ${data.minimum} or newer. Run: ${self} update`);
+    else if (data.status === "available") console.log(`pr-report ${data.latest} is available. Run: ${self} update`);
+    else if (data.latest) console.log(`Up to date (the newest release is ${data.latest}).`);
+    else console.log("No release information yet.");
+  } else if (command === "update") {
+    if (!managedInstall() && process.env.PR_REPORT_UPDATE_CHECK !== "1") {
+      console.log("This pr-report is a build from a checkout, so it does not update itself. Update it with: git pull && pnpm build && pnpm run deploy");
+      process.exitCode = 1;
+      return;
+    }
+    const info = await ensureDaemon();
+    let { data } = await api<UpdateAnswer>(info, "POST", "/api/update");
+    console.log("Updating pr-report. Open pages reload, and agents waiting on a review stop and say so.");
+    for (let i = 0; i < 600 && !["failed", "restarting"].includes(data.state); i++) {
+      await sleep(500);
+      data = (await api<UpdateAnswer>(info, "GET", "/api/update").catch(() => ({ data: { ...data, state: "restarting" } }))).data;
+    }
+    if (data.state === "failed") {
+      console.log(`The update did not happen: ${data.error}`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`Installed pr-report ${data.target ?? readInstall()?.version}. The daemon restarted on it.`);
+    console.log("An agent session that already loaded pr-report keeps the old instructions until its next /pr-report.");
+  } else if (command === "rollback") {
+    const back = rollback();
+    const info = readJson(daemonFile) as DaemonInfo | null;
+    if (info) await api(info, "POST", "/api/shutdown").catch(() => {});
+    console.log(`Back on pr-report ${back.version}. The daemon starts on it with the next command.`);
   } else if (command === "stop") {
     const info = readJson(daemonFile) as DaemonInfo | null;
     if (!info || !existsSync(daemonFile)) console.log("The daemon is not running.");
@@ -464,7 +535,7 @@ async function main() {
       console.log("Stopped the daemon.");
     }
   } else {
-    console.log("Usage: review.mjs open|wait|resume|answer|plan|status|pr|list|setup|stop|login|logout|whoami|publish (see the top of this file)");
+    console.log("Usage: review.mjs open|wait|resume|answer|plan|status|pr|list|setup|stop|version|update|rollback|login|logout|whoami|publish (see the top of this file)");
     process.exit(2);
   }
 }

@@ -436,4 +436,61 @@ import type { Identity, InboxData, RepoAvatar } from "../../../skill/schema/type
     showStatus();
   });
   document.querySelector(".who")!.addEventListener("click", showStatus);
+  // After an update the stream comes back from the new version's daemon: reload, so the page is the new one.
+  es.addEventListener("daemon", (e) => {
+    if ((JSON.parse(e.data) as { version: string }).version !== DAEMON.version) location.reload();
+  });
+  // A new pr-report (skill/scripts/updates.mts): a dot on the avatar, an item at the top of the menu, and the update
+  // modal, which opens by itself once per version when the daemon says to ask. It is the report's own dialog, in the panel.
+  let promptedFor: string | null = null;
+  es.addEventListener("update", (e) => {
+    const u = JSON.parse(e.data) as { status: "none" | "available" | "required"; latest: string | null; minimum: string | null; prompt: boolean };
+    const on = u.status !== "none";
+    const dot = document.getElementById("me-dot")!;
+    dot.hidden = !on;
+    dot.classList.toggle("req", u.status === "required");
+    document.getElementById("me-update")!.hidden = !on;
+    document.getElementById("me-update-hr")!.hidden = !on;
+    document.getElementById("me-update-title")!.textContent = u.status === "required" ? "Update needed" : "Update available";
+    document.getElementById("me-update-sub")!.textContent = "pr-report " + (u.status === "required" ? u.minimum + " or newer" : u.latest);
+    const version = u.latest ?? u.minimum;
+    if (u.prompt && version !== promptedFor) {
+      promptedFor = version;
+      openPanel("update");
+    }
+  });
+  // The star box lights its star while the button or the picture is hovered, or the button has focus.
+  const starBox = document.querySelector(".star-display");
+  if (starBox) {
+    let hovered = false,
+      focused = false;
+    const light = () => starBox.classList.toggle("lit", hovered || focused);
+    for (const el of document.querySelectorAll("[data-star]")) {
+      el.addEventListener("mouseenter", () => ((hovered = true), light()));
+      el.addEventListener("mouseleave", () => ((hovered = false), light()));
+    }
+    const button = document.querySelector(".star-button");
+    button?.addEventListener("focus", () => ((focused = true), light()));
+    button?.addEventListener("blur", () => ((focused = false), light()));
+  }
+  // The footer's light and dark switch saves the choice where the review page keeps it (pr-report:theme), so every
+  // page follows it. theme.ts in the head keeps the page's theme in step with the system and other tabs.
+  const themeSwitch = document.querySelector<HTMLButtonElement>("[data-theme-toggle]");
+  if (themeSwitch) {
+    const root = document.documentElement;
+    const sync = () => {
+      const dark = root.dataset.theme === "dark";
+      themeSwitch.setAttribute("aria-checked", String(dark));
+      themeSwitch.title = dark ? "Switch to light mode" : "Switch to dark mode";
+    };
+    sync();
+    new MutationObserver(sync).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    themeSwitch.addEventListener("click", () => {
+      const next = root.dataset.theme === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem("pr-report:theme", JSON.stringify(next));
+      } catch {}
+      root.dataset.theme = next;
+    });
+  }
 })();

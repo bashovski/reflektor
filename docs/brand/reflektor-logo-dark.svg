@@ -1,0 +1,12 @@
+<svg viewBox="0 0 47 54" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M24.7525 4.95049V9.90099H19.802V4.95049H24.7525V0H34.6535V4.95049H39.604V14.8515H29.703V4.95049H24.7525ZM24.7525 44.5545V49.5049H0V44.5545H4.9505V9.90099H0V4.95049H14.8515V9.90099H19.802V14.8515H14.8515V44.5545H24.7525Z" fill="#FFFFFF"/>
+<path d="M46.0493 21.9025C40.1087 37.0018 46.3251 53.8367 39.4899 53.8367C32.6548 53.8367 19.3167 46.3122 19.3167 39.477C19.3167 32.6416 21.0211 31.3119 27.8563 31.3119C34.6914 31.3119 41.5939 17.4505 46.0493 21.9025Z" fill="url(#reflektor-logo-gradient)"/>
+<defs>
+<linearGradient id="reflektor-logo-gradient" x1="19.6879" y1="27.1008" x2="49.2671" y2="47.3976" gradientUnits="userSpaceOnUse">
+<stop offset="0.110577" stop-color="#9F81E4"/>
+<stop offset="0.302769" stop-color="#7D7AE2"/>
+<stop offset="0.539773" stop-color="#8D92E4"/>
+<stop offset="0.782594" stop-color="#C2E1CC"/>
+</linearGradient>
+</defs>
+</svg>

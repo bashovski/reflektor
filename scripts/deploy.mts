@@ -10,14 +10,13 @@
 //   pnpm run deploy --no-open             do not open the setup page in the browser after a first install
 //
 // --target can be given more than once (--target claude --target agents); without it the target is claude.
-// A copy for another agent gets its own SKILL.md (see portable-skill.mts) and is not a link, so deploy again after
+// A copy for another agent gets its own SKILL.md (see skill/scripts/portable-skill.mts) and is not a link, so deploy again after
 // each build. On Windows the link is a directory junction, which needs no admin rights or Developer Mode.
 
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
-import { portableSkillText } from "./portable-skill.mjs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { forgetInstall, installTarget, targetLabel } from "../skill/scripts/install.mjs";
 import { root } from "./paths.mjs";
 
 const pkg = join(root, "dist", "skill");
@@ -50,43 +49,20 @@ const targets = process.argv.flatMap((arg, i, all) => (arg === "--target" && all
 if (process.argv.includes("--target") && !targets.length) fail("--target needs a value: claude, agents, or a skills folder");
 if (!targets.length) targets.push("claude");
 
+// Installing is the skill's own install.mjs, which a release uses too. A build from a checkout is not a release, so
+// install.json goes: nothing offers to update it, and the daemon does not look for new versions.
 function install(name: string) {
-  const claude = name === "claude";
-  const skills = claude
-    ? (process.env.CLAUDE_SKILLS_DIR ?? join(homedir(), ".claude", "skills"))
-    : name === "agents"
-      ? (process.env.AGENTS_SKILLS_DIR ?? join(homedir(), ".agents", "skills"))
-      : resolve(name);
-  const target = join(skills, "pr-report");
-  // Only Claude Code can use the package as it is. Another agent needs its own SKILL.md, so it gets a copy.
-  const how = claude ? mode : "copy";
-  mkdirSync(skills, { recursive: true });
-
-  // A link from an earlier install (to dist/skill/, or to skill/ from before dist/ existed) is removed as a link.
-  // A copy is removed only when it is this skill, and never when it resolves to the package itself.
-  let existing = null;
   try {
-    existing = lstatSync(target);
-  } catch {
-    // Not installed yet.
+    const t = installTarget(pkg, name, { copy: mode === "copy" });
+    console.log(`Installed pr-report for ${targetLabel(t)} (${t.how}): ${t.target}`);
+    return t;
+  } catch (e) {
+    return fail((e as Error).message);
   }
-  if (existing?.isSymbolicLink()) unlinkSync(target);
-  else if (existing) {
-    const skillFile = join(target, "SKILL.md");
-    if (!existsSync(skillFile) || !/^name: pr-report$/m.test(readFileSync(skillFile, "utf8"))) fail(`${target} exists and is not this skill. Move it away first.`);
-    if (realpathSync(target) === realpathSync(pkg)) fail(`${target} points at dist/skill/ itself. Remove that link by hand, then run this again.`);
-    rmSync(target, { recursive: true, force: true });
-  }
-
-  if (how === "link") symlinkSync(pkg, target, "junction");
-  else cpSync(pkg, target, { recursive: true });
-  if (!claude) writeFileSync(join(target, "SKILL.md"), portableSkillText(readFileSync(join(pkg, "SKILL.md"), "utf8"), target));
-
-  console.log(`Installed pr-report for ${claude ? "Claude Code" : name === "agents" ? "agents that read ~/.agents/skills" : name} (${how}): ${target}`);
-  return { claude, target, first: existing === null };
 }
 
 const installed = targets.map(install);
+forgetInstall();
 
 // A first install ends in the browser: the setup page checks the tools on this machine and picks how
 // reports look. review.mjs starts the review daemon for it, from the installed skill, the same way a
