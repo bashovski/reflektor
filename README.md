@@ -39,22 +39,39 @@ Run on your own machine, or in the cloud. Do it solo, or collaborate with your t
 
 ## Get Started
 
-To get started, check out [Install](https://reflektor.dev/install) for instructions on how to install Reflektor.
-Or, you can install it directly with the following commands:
+Needs Node.js 18 or later and git. Pick your agent, run its command, then start a new session in a repo on a branch with changes. Run the same command again to update. The full guide is at [reflektor.dev/install](https://reflektor.dev/install).
 
-```bash
-npx skills@latest add bashovski/reflektor
-```
-or
+<details>
+<summary><strong>Claude Code</strong></summary>
+
 ```bash
 curl -fsSL https://reflektor.dev/install.sh | sh
 ```
 
-When it's done, open your agent in a repo, on a branch with changes, and run the skill: `/reflektor` in Claude Code, `$reflektor` in Codex. In other agents, ask for a review report.
+On Windows, in PowerShell:
 
-### Using Codex
+```powershell
+irm https://reflektor.dev/install.ps1 | iex
+```
 
-To install reflektor for Codex, add `--target agents` to the installer (`curl -fsSL https://reflektor.dev/install.sh | sh -s -- --target agents`). That copies it to `~/.agents/skills/reflektor`, where Codex reads skills. Start a new Codex thread after installing.
+Then run `/reflektor`.
+
+</details>
+
+<details>
+<summary><strong>Codex</strong> (needs a sandbox profile)</summary>
+
+```bash
+curl -fsSL https://reflektor.dev/install.sh | sh -s -- --target agents
+```
+
+On Windows, in PowerShell:
+
+```powershell
+& ([scriptblock]::Create((irm https://reflektor.dev/install.ps1))) -Target agents
+```
+
+That copies reflektor to `~/.agents/skills/reflektor`, where Codex reads skills. Start a new Codex thread, then run `$reflektor`.
 
 Codex's default sandbox blocks three things reflektor needs:
 
@@ -62,7 +79,7 @@ Codex's default sandbox blocks three things reflektor needs:
 - writing to `~/.reflektor`
 - running a local server on `127.0.0.1`, which serves the review pages
 
-Either run reflektor with full access, or give Codex a permission profile that allows those. This one worked in our tests (Codex CLI 0.169):
+Either run reflektor with full access, or give Codex a permission profile that allows those. This one worked in our tests (Codex CLI 0.169). Put it in the repo's `.codex/config.toml` and trust the project in Codex first: Codex ignores the config of a project it doesn't trust.
 
 ```toml
 default_permissions = "reflektor-local"
@@ -91,6 +108,21 @@ allow_local_binding = true
 ```
 
 While you review in the browser, Codex waits for you in its current turn. If that turn has ended, type `$reflektor resume` and Codex picks up your comments.
+
+</details>
+
+<details>
+<summary><strong>Cursor, Gemini CLI, GitHub Copilot and other agents</strong></summary>
+
+Install into the folder your agent reads skills from:
+
+```bash
+curl -fsSL https://reflektor.dev/install.sh | sh -s -- --target <your agent's skills folder>
+```
+
+If your agent reads `~/.agents/skills`, use `--target agents`. Then ask your agent for a review report.
+
+</details>
 
 ## Docs
 

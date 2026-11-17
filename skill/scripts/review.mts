@@ -2,7 +2,7 @@
 // The agent's side of a review. Talks to the reflektor daemon and starts it when needed.
 //
 //   open    --report <json> [--open]     publish a report (a new review, or the next round of one)
-//   wait    --id <review>                block until the reviewer does something; run in the background
+//   wait    --id <review>                block until the reviewer does something; run it as SKILL.md step 7 says
 //   answer  --id <review> --question <id> (--text <t> | --text-file <f>) [--ref path:line]
 //   plan    --id <review> --file <plan.json>
 //   status  --id <review> --comment <id> --status working|fixed|answered|wontfix|noted [--text <t>] [--ref path:line]
@@ -141,11 +141,14 @@ const openInBrowser = (url: string): Promise<boolean> =>
   new Promise((done) => {
     const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
     const child = spawn(opener, [url], { detached: true, stdio: "ignore" });
-    const timer = setTimeout(() => done(true), 3000);
-    timer.unref();
-    child.on("error", () => (clearTimeout(timer), done(false)));
-    child.on("exit", (code) => (clearTimeout(timer), done(process.platform === "win32" || code === 0)));
-    child.unref();
+    const settle = (opened: boolean) => {
+      clearTimeout(timer);
+      child.unref();
+      done(opened);
+    };
+    const timer = setTimeout(() => settle(true), 3000);
+    child.on("error", () => settle(false));
+    child.on("exit", (code) => settle(process.platform === "win32" || code === 0));
   });
 
 async function health(info: DaemonInfo) {
@@ -261,13 +264,13 @@ function explain(event: ReviewEvent, review: EventReview) {
     if (q.target.fix) console.log(`Suggested fix shown with it: ${q.target.fix}`);
     console.log(`Question: ${q.text}`);
     console.log(`\nAnswer: ${self} answer --id ${review.id} --question ${q.id} --text "<answer>"`);
-    console.log("Then run wait again in the background.");
+    console.log("Then run wait again, the same way as before.");
   } else if (event.type === "review-submitted" && event.count === 0) {
     console.log(`The reviewer finished round ${event.round} of ${review.id} with no comments. The review is done.`);
   } else if (event.type === "review-submitted") {
     console.log(`Review for round ${event.round} of ${review.id} was sent with ${event.count} comments: ${shellPath(event.file)}`);
     console.log(`\nNext: read the file, then post your plan: ${self} plan --id ${review.id} --file <plan.json>`);
-    console.log("Then run wait again in the background for the reviewer's decision.");
+    console.log("Then run wait again, the same way as before, for the reviewer's decision.");
   } else if (event.type === "plan-decision" && event.decision.decision === "approve") {
     const kinds = Object.entries(event.decision.kinds ?? {});
     console.log(`The reviewer approved the plan for ${review.id}.`);
@@ -281,11 +284,11 @@ function explain(event: ReviewEvent, review: EventReview) {
     const files = event.files.length ? `: ${event.files.slice(0, 10).join(", ")}${event.files.length > 10 ? ", ..." : ""}` : "";
     console.log(`The reviewer asked for an updated report: the code changed after round ${event.round} of ${review.id} was built${event.commits ? ` (${event.commits} new commits)` : ""}${files}.`);
     console.log(`\nNext: collect with --update (it carries report.json forward), update report.json for those files, build, and publish the same round: ${self} open --report <new json>`);
-    console.log("Comments the reviewer wrote stay. Then run wait again in the background.");
+    console.log("Comments the reviewer wrote stay. Then run wait again, the same way as before.");
   } else if (event.type === "plan-decision") {
     console.log(`The reviewer wants a different plan for ${review.id}.`);
     if (event.decision.note) console.log(`Note: ${event.decision.note}`);
-    console.log(`\nNext: post a new plan with ${self} plan, then run wait again in the background.`);
+    console.log(`\nNext: post a new plan with ${self} plan, then run wait again, the same way as before.`);
   } else {
     console.log(JSON.stringify(event, null, 2));
   }
@@ -337,7 +340,7 @@ async function main() {
     }
     // Nothing in this shell says which agent this is, so the page speaks of "your agent" until it is told.
     if (!agent) console.log(`note: the page does not know which agent you are. Add --agent-name "<the product you run in>" to review.mjs commands so it can say.`);
-    console.log(`Next: run in the background: ${self} wait --id ${data.id}`);
+    console.log(`Next: start the waiter (SKILL.md step 7 says whether in the background or the foreground): ${self} wait --id ${data.id}`);
     noteUpdate();
   } else if (command === "setup") {
     // The first-run page: the tools on this machine, light or dark, and a code theme. The installer
@@ -367,7 +370,7 @@ async function main() {
         }
         // The daemon restarts when the skill is rebuilt. Start it again and keep waiting.
         if (++failures > 3) {
-          console.log(`The review daemon is not reachable (${(e as Error).message}). Run wait again in the background.`);
+          console.log(`The review daemon is not reachable (${(e as Error).message}). Run wait again.`);
           return;
         }
         await sleep(1000);
@@ -398,7 +401,7 @@ async function main() {
     } else {
       const waitingOn = review.phase === "planning" ? "the reviewer's decision on your plan" : "the reviewer";
       console.log(`Nothing is waiting for you: round ${review.round} waits on ${waitingOn}.`);
-      console.log(`\nNext: run in the background: ${self} wait --id ${review.id}`);
+      console.log(`\nNext: start the waiter (SKILL.md step 7 says whether in the background or the foreground): ${self} wait --id ${review.id}`);
     }
     noteUpdate();
   } else if (command === "answer") {

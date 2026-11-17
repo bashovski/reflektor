@@ -6,7 +6,7 @@ argument-hint: "[base-branch] [--since last] [--session] [resume] [push]"
 allowed-tools: Bash(node "${CLAUDE_SKILL_DIR}/scripts/collect.mjs" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/checks.mjs" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/build.mjs" *), Bash(node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/collect.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/checks.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/build.mjs *), Bash(node ${CLAUDE_SKILL_DIR}/scripts/review.mjs *)
 ---
 
-# PR report
+# reflektor
 
 You write the judgment in `report.json`: words, grouping, risks and flows. Scripts handle the facts: git data, diffs, coverage numbers and rendering. Never copy code into report.json. Point at files and lines instead.
 
@@ -19,7 +19,7 @@ The request can carry arguments: a base branch, `--since last`, `--session`, `re
 Base branch, first match wins:
 
 1. A branch the user passed as an argument, or named in this conversation as the PR target.
-2. Otherwise leave `--base` out. collect.mjs then tries the open PR for this branch (through `gh`), then `base` in `.reflektor.json`, then the remote's default branch, then a common name (main, master, develop, staging, demo, trunk), and last the branch this one most recently forked from. When it prints `(guess)`, name the base in your message to the user, so they can correct it with `/reflektor <branch>`.
+2. Otherwise leave `--base` out. collect.mjs then tries the open PR for this branch (through `gh`), then `base` in `.reflektor.json`, then the remote's default branch, then a common name (main, master, develop, staging, demo, trunk), and last the branch this one most recently forked from. When it prints `(guess)`, name the base in your message to the user, so they can correct it with `/reflektor <branch>` (in Codex, `$reflektor <branch>`).
 
 Scope:
 
@@ -244,7 +244,7 @@ Tell the user, in a few lines:
 
 Do not paste the report into the chat. Do not poll: the waiter exits when the reviewer does something. With a background waiter, end your turn, and its exit wakes you. Its output says what happened and what to run next. After handling it, start the waiter again the same way, unless the review is done.
 
-**reflektor was updated:** the user can update reflektor from the page while you wait. The waiter then prints that reflektor was updated and exits with code 3. Tell the user that line, and do not start the waiter again from this session: they continue with `/reflektor resume`, which runs the new version.
+**reflektor was updated:** the user can update reflektor from the page while you wait. The waiter then prints that reflektor was updated and exits with code 3. Tell the user that line, and do not start the waiter again from this session: they continue with `/reflektor resume` (in Codex, `$reflektor resume`), which runs the new version.
 
 **An update is out:** while a newer reflektor is out, `review.mjs` ends some answers with a line starting `note: reflektor`. Pass it on to the user once per session, in one sentence, and do not update on your own: the user updates from the report's menu, or asks you to run `review.mjs update`.
 
