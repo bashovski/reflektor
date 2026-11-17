@@ -18,6 +18,8 @@ export type UpdateInfo = {
   // Whether the modal should open by itself: a required update, or an available one not snoozed.
   prompt: boolean;
   managed: boolean;
+  // The command that updates this install when reflektor cannot update itself: `npx skills` installed it.
+  command: string | null;
   checkedAt: string | null;
   state: "idle" | "checking" | "downloading" | "installing" | "restarting" | "failed";
   error: string | null;

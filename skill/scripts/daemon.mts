@@ -29,7 +29,7 @@ import { DEFAULT_REFLEKTOR_API, finishDeviceLogin, forgetLogin, type Organizatio
 import { readSettings, writeSettings } from "./settings.mjs";
 import { activate, prune } from "./install.mjs";
 import { downloadRelease, fetchManifest, releasesUrl } from "./release.mjs";
-import { CHECK_EVERY_MS, checkForUpdate, checksEnabled, managedInstall, noteMinimum, readUpdateFile, snooze, updateInfo } from "./updates.mjs";
+import { CHECK_EVERY_MS, checkForUpdate, checksEnabled, managedInstall, noteMinimum, readUpdateFile, snooze, updateCommand, updateInfo } from "./updates.mjs";
 import { compareVersions, skillVersion } from "./version.mjs";
 import { replaceFile } from "./repo.mjs";
 import type { AgentInfo, Bundle, ChecksRun, ScreenshotsRun, CommentKind, CommentTarget, InboxData, LiveQuestion, PrState, Ref, RepoAvatar, Review, ReviewComment, Tag } from "../schema/types.js";
@@ -1541,6 +1541,8 @@ function scheduleChecks() {
 
 async function runUpdate() {
   if (update.state !== "idle" && update.state !== "failed") return;
+  const command = updateCommand();
+  if (command) return setUpdate("failed", `npx skills installed this reflektor, so update it with: ${command}`);
   try {
     update.target = null;
     setUpdate("checking");

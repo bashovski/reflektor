@@ -2,7 +2,8 @@
 #
 # It runs the check suite, builds, packs dist/skill/ with scripts/pack-release.mts, signs the manifest with the
 # release key (the REFLEKTOR_RELEASE_KEY secret), and attaches the tarball, manifest.json, its signature and the
-# installers to a GitHub Release. The tag must match package.json's version. The release text is the tag's message;
+# installers to a GitHub Release, then puts the same package on the skill branch for npx skills
+# (scripts/skill-branch.sh). The tag must match package.json's version. The release text is the tag's message;
 # its "## Notes" section, up to three "- " lines, becomes the notes the update modal shows. Tag with
 # git tag -a v0.9.1 --cleanup=verbatim -F notes.md, since git otherwise drops "## Notes" as a comment line.
 #
@@ -63,3 +64,6 @@ jobs:
           --title "reflektor ${GITHUB_REF_NAME#v}"
           --notes-file "$RUNNER_TEMP/notes.md"
           dist/release/*
+
+      - name: Skill branch for npx skills
+        run: scripts/skill-branch.sh "dist/release/reflektor-${GITHUB_REF_NAME#v}.tar.gz" skill

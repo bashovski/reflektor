@@ -39,39 +39,16 @@ Run on your own machine, or in the cloud. Do it solo, or collaborate with your t
 
 ## Get Started
 
-Needs Node.js 18 or later and git. Pick your agent, run its command, then start a new session in a repo on a branch with changes. Run the same command again to update. The full guide is at [reflektor.dev/install](https://reflektor.dev/install).
-
-<details>
-<summary><strong>Claude Code</strong></summary>
+Needs Node.js 18 or later and git.
 
 ```bash
-curl -fsSL https://reflektor.dev/install.sh | sh
+npx skills add bashovski/reflektor#skill -g
 ```
 
-On Windows, in PowerShell:
-
-```powershell
-irm https://reflektor.dev/install.ps1 | iex
-```
-
-Then run `/reflektor`.
-
-</details>
+It asks which of your agents to install it for: Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot and others. Then start a new session in a repo, on a branch with changes, and run `/reflektor` in Claude Code or `$reflektor` in Codex. In other agents, ask for a review report. Reflektor tells you when a new version is out; update with `npx skills update reflektor`. The full guide is at [reflektor.dev/install](https://reflektor.dev/install).
 
 <details>
-<summary><strong>Codex</strong> (needs a sandbox profile)</summary>
-
-```bash
-curl -fsSL https://reflektor.dev/install.sh | sh -s -- --target agents
-```
-
-On Windows, in PowerShell:
-
-```powershell
-& ([scriptblock]::Create((irm https://reflektor.dev/install.ps1))) -Target agents
-```
-
-That copies reflektor to `~/.agents/skills/reflektor`, where Codex reads skills. Start a new Codex thread, then run `$reflektor`.
+<summary><strong>Codex</strong>: allow what Reflektor needs</summary>
 
 Codex's default sandbox blocks three things reflektor needs:
 
@@ -112,15 +89,22 @@ While you review in the browser, Codex waits for you in its current turn. If tha
 </details>
 
 <details>
-<summary><strong>Cursor, Gemini CLI, GitHub Copilot and other agents</strong></summary>
+<summary><strong>Install without npx</strong>: the signed installer</summary>
 
-Install into the folder your agent reads skills from:
+The installer checks the release's signature before installing, and reflektor then updates itself from the review page.
 
 ```bash
-curl -fsSL https://reflektor.dev/install.sh | sh -s -- --target <your agent's skills folder>
+curl -fsSL https://reflektor.dev/install.sh | sh                                     # Claude Code
+curl -fsSL https://reflektor.dev/install.sh | sh -s -- --target agents               # Codex and agents that read ~/.agents/skills
+curl -fsSL https://reflektor.dev/install.sh | sh -s -- --target <skills folder>      # any other agent
 ```
 
-If your agent reads `~/.agents/skills`, use `--target agents`. Then ask your agent for a review report.
+On Windows, in PowerShell:
+
+```powershell
+irm https://reflektor.dev/install.ps1 | iex
+& ([scriptblock]::Create((irm https://reflektor.dev/install.ps1))) -Target agents
+```
 
 </details>
 

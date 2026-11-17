@@ -1,4 +1,4 @@
-import { Check, CircleArrowUp, ExternalLink, LoaderCircle } from "lucide-react";
+import { Check, CircleArrowUp, Copy, ExternalLink, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { fetchUpdate, nextVersion, snoozeUpdate, startUpdate, type UpdateInfo, useUpdate } from "../lib/update";
 import { cx } from "./ui";
@@ -21,10 +21,12 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 // confirms. While it runs, the modal follows the daemon's steps; the page reloads by itself once the new daemon answers
 // (live.tsx), and this modal also reloads when it sees the new version, for pages without the event stream.
 // "Later" snoozes this version for a day. A required update has no Later: publishing waits for it.
+// An install from `npx skills` cannot update itself: the modal shows the command to run instead of "Update now".
 export const UpdateDialog = ({ open, info, onClose }: { open: boolean; info: UpdateInfo | null; onClose: () => void }) => {
   const ref = useRef<HTMLDialogElement>(null);
   const [polled, setPolled] = useState<UpdateInfo | null>(null);
   const [started, setStarted] = useState(false);
+  const [copied, setCopied] = useState(false);
   const shown = (started ? polled : null) ?? info ?? polled;
 
   useEffect(() => {
@@ -59,6 +61,14 @@ export const UpdateDialog = ({ open, info, onClose }: { open: boolean; info: Upd
   const failed = started && shown.state === "failed";
   const step = STEPS.findIndex((s) => s.state === shown.state);
   const version = nextVersion(shown);
+
+  const command = shown.command;
+  const copy = async () => {
+    if (!command) return;
+    await navigator.clipboard.writeText(command);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
 
   const later = async () => {
     if (!required) await snoozeUpdate();
@@ -107,7 +117,19 @@ export const UpdateDialog = ({ open, info, onClose }: { open: boolean; info: Upd
           </a>
         )}
 
-        {!started && (
+        {command && (
+          <div className="space-y-2 text-sm">
+            <p className="text-muted">Run this in a terminal, then start a new agent session:</p>
+            <div className="flex items-center gap-2 rounded-control border border-[var(--border)] bg-zinc-500/5 py-1.5 pr-1.5 pl-3">
+              <code className="min-w-0 flex-1 overflow-x-auto font-mono text-[13px] whitespace-nowrap">{command}</code>
+              <button type="button" onClick={() => void copy()} className={secondary} aria-label={copied ? "Copied" : "Copy command"} title={copied ? "Copied" : "Copy"}>
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!started && !command && (
           <p className="rounded-control border border-[var(--border)] bg-zinc-500/5 px-3 py-2 text-sm text-zinc-600 dark:text-zinc-400">
             Updating restarts reflektor now.{" "}
             {shown.waiting > 0
@@ -144,7 +166,7 @@ export const UpdateDialog = ({ open, info, onClose }: { open: boolean; info: Upd
               {failed || required ? "Close" : "Later"}
             </button>
           )}
-          {!busy && (
+          {!busy && !command && (
             <button type="button" onClick={() => void update()} className={primary} autoFocus>
               {failed ? "Try again" : "Update now"}
             </button>
