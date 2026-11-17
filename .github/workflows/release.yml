@@ -4,6 +4,10 @@
 # release key (the REFLEKTOR_RELEASE_KEY secret), and attaches the tarball, manifest.json, its signature and the
 # installers to a GitHub Release. The tag must match package.json's version. The release text is the tag's message;
 # its "## Notes" section, up to three "- " lines, becomes the notes the update modal shows.
+#
+# The release key is an Ed25519 key pair. Its private half goes in the repo's Actions secrets as
+# REFLEKTOR_RELEASE_KEY (PEM or base64 DER). Its public half is committed as RELEASE_KEY in
+# skill/scripts/release.mts and in the keys list of install.sh and install.ps1. A new pair means updating all three.
 name: Release
 
 on:
