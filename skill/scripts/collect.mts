@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import type { BaseSource, CoverageData, DiffData, DiffFile, FileStatus, Finding, Forge, PrState, Ref, RepoConfig, Report, Review, Severity, Target } from "../schema/types.js";
 import { ownerAvatar } from "./avatar.mjs";
 import { runHooks } from "./hooks.mjs";
-import { globToRegExp, parseRemote, reportDir, shellPath } from "./repo.mjs";
+import { globToRegExp, needWritable, parseRemote, reportDir, shellPath } from "./repo.mjs";
 import { readSettings } from "./settings.mjs";
 
 const MAX_BYTES = 512 * 1024;
@@ -256,6 +256,7 @@ const gitDir = resolve(repoRoot, git("rev-parse", "--git-dir").trim());
 const out = resolve(args.out ?? join(reportDir(gitDir, head), "diff.json"));
 const stateFile = join(dirname(out), "last.json");
 const reportFile = join(dirname(out), "report.json");
+needWritable([dirname(out), join(gitDir, "reflektor")]);
 
 // last.json, which build.mjs writes after each build: the commits that report showed.
 type LastBuild = { headSha: string; snapshot?: string };
@@ -285,7 +286,6 @@ function snapshotWorkingTree() {
   const tmpIndex = join(gitDir, "reflektor", "snapshot.index");
   mkdirSync(dirname(tmpIndex), { recursive: true });
   const realIndex = join(gitDir, "index");
-  if (existsSync(realIndex)) copyFileSync(realIndex, tmpIndex);
   const env = {
     ...process.env,
     GIT_INDEX_FILE: tmpIndex,
@@ -295,6 +295,7 @@ function snapshotWorkingTree() {
     GIT_COMMITTER_EMAIL: "reflektor@localhost",
   };
   try {
+    if (existsSync(realIndex)) copyFileSync(realIndex, tmpIndex);
     run("git", ["add", "-A"], repoRoot, { env });
     const tree = run("git", ["write-tree"], repoRoot, { env }).trim();
     return run("git", ["commit-tree", tree, "-p", headSha, "-m", "reflektor snapshot"], repoRoot, { env }).trim();

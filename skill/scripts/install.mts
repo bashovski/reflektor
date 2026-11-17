@@ -168,7 +168,7 @@ if (process.argv[1] && process.argv[2] === "activate" && realpathSync(process.ar
     }
     console.log("");
     if (installed.some((t) => t.claude)) console.log("Next, in Claude Code: open it in a repo, on a branch with changes, and type /reflektor. Start a new session if it does not know /reflektor yet.");
-    if (installed.some((t) => !t.claude)) console.log("Next, in another agent: open it in a repo, on a branch with changes, and ask for a PR report. In Codex, type $reflektor.");
+    if (installed.some((t) => !t.claude)) console.log("Next, in another agent: open it in a repo, on a branch with changes, and ask for a review report. In Codex, type $reflektor.");
     console.log("reflektor tells you when a new version is out, and updates from the report's menu.");
   } catch (e) {
     console.error(`error: ${(e as Error).message}`);

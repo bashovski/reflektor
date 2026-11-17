@@ -111,9 +111,9 @@ export const UpdateDialog = ({ open, info, onClose }: { open: boolean; info: Upd
           <p className="rounded-control border border-[var(--border)] bg-zinc-500/5 px-3 py-2 text-sm text-zinc-600 dark:text-zinc-400">
             Updating restarts reflektor now.{" "}
             {shown.waiting > 0
-              ? `${plural(shown.waiting, "review has an agent", "reviews have agents")} waiting; ${shown.waiting === 1 ? "it stops" : "they stop"}, and comments and drafts are kept. Run /reflektor resume afterwards. `
+              ? `${plural(shown.waiting, "review has an agent", "reviews have agents")} waiting; ${shown.waiting === 1 ? "it stops" : "they stop"}, and comments and drafts are kept. Resume afterwards: /reflektor resume in Claude Code, $reflektor resume in Codex. `
               : ""}
-            Open pages reload. An agent session that already loaded reflektor keeps the old instructions until its next /reflektor.
+            Open pages reload. An agent session that already loaded reflektor keeps the old instructions until it loads reflektor again.
           </p>
         )}
 

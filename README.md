@@ -50,7 +50,47 @@ or
 curl -fsSL https://reflektor.dev/install.sh | sh
 ```
 
-When completed, simply run the Reflector skill in your agent:
+When it's done, open your agent in a repo, on a branch with changes, and run the skill: `/reflektor` in Claude Code, `$reflektor` in Codex. In other agents, ask for a review report.
+
+### Using Codex
+
+To install reflektor for Codex, add `--target agents` to the installer (`curl -fsSL https://reflektor.dev/install.sh | sh -s -- --target agents`). That copies it to `~/.agents/skills/reflektor`, where Codex reads skills. Start a new Codex thread after installing.
+
+Codex's default sandbox blocks three things reflektor needs:
+
+- writing to the repo's `.git` folder: `.git/reflektor`, `.git/objects` and `.git/refs/reflektor`
+- writing to `~/.reflektor`
+- running a local server on `127.0.0.1`, which serves the review pages
+
+Either run reflektor with full access, or give Codex a permission profile that allows those. This one worked in our tests (Codex CLI 0.169):
+
+```toml
+default_permissions = "reflektor-local"
+
+[features]
+network_proxy = true
+
+[permissions.reflektor-local]
+extends = ":workspace"
+
+[permissions.reflektor-local.filesystem]
+"~/.reflektor" = "write"
+
+[permissions.reflektor-local.filesystem.":workspace_roots"]
+".git/reflektor" = "write"
+".git/objects" = "write"
+".git/refs/reflektor" = "write"
+
+[permissions.reflektor-local.network]
+enabled = true
+allow_local_binding = true
+
+[permissions.reflektor-local.network.domains]
+"127.0.0.1" = "allow"
+"localhost" = "allow"
+```
+
+While you review in the browser, Codex waits for you in its current turn. If that turn has ended, type `$reflektor resume` and Codex picks up your comments.
 
 ## Docs
 

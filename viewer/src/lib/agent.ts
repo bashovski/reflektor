@@ -24,7 +24,7 @@ const GENERIC: Agent = {
   Name: "Your agent",
   noun: "agent",
   resumeLead: "Tell your agent:",
-  resumeCommand: "resume the PR report review",
+  resumeCommand: "resume the reflektor review",
 };
 
 export const describeAgent = (info: AgentInfo | null | undefined): Agent => {

@@ -3,7 +3,7 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, renameSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 
@@ -111,6 +111,27 @@ const quietGit = (root: string, ...argv: string[]): string | null => {
 export function remoteOf(root: string): string | undefined {
   const remotes = (quietGit(root, "remote") ?? "").split("\n").filter(Boolean);
   return remotes.includes("origin") ? "origin" : remotes[0];
+}
+
+// What the reader can do when a sandbox blocks reflektor. Printed with the error, for the agent to pass on.
+export const SANDBOX_HINT =
+  'Allow writes to this repo\'s .git folder and to ~/.reflektor, and a local server on 127.0.0.1, or run the agent with full access. For Codex, see "Using Codex" in the reflektor README.';
+
+// Stops with one plain sentence when a folder reflektor writes to is not writable, which is what an agent's
+// sandbox does, instead of a raw EPERM from deep inside a later step.
+export function needWritable(dirs: string[]): void {
+  for (const dir of dirs) {
+    const probe = join(dir, `.write-check-${process.pid}`);
+    try {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(probe, "");
+      rmSync(probe, { force: true });
+    } catch (e) {
+      if (!["EPERM", "EACCES", "EROFS"].includes((e as NodeJS.ErrnoException).code ?? "")) throw e;
+      console.error(`error: reflektor cannot write to ${dir}. ${SANDBOX_HINT}`);
+      process.exit(1);
+    }
+  }
 }
 
 // What reflektor keeps for one repo on this machine: ~/.reflektor/repos/<host>/<owner>/<repo>/, with the

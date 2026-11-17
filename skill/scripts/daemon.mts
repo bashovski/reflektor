@@ -820,7 +820,7 @@ details{margin-top:28px}summary{cursor:pointer;color:var(--muted);margin-bottom:
 .empty{padding:32px;text-align:center;color:var(--muted)}.empty button{margin-left:6px;font:inherit;color:var(--text);background:none;border:0;text-decoration:underline;cursor:pointer}
 .intro{padding:44px 24px}.intro h2{margin:0 0 8px;font-size:18px;color:var(--text)}.intro p{max-width:540px;margin:0 auto}
 code{font:12.5px "Geist Mono Variable",ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--hover);border:1px solid var(--border);border-radius:2px;padding:1px 6px;color:var(--text);white-space:nowrap}
-.cmds{list-style:none;margin:20px auto 0;padding:0;display:grid;gap:8px;max-width:480px;text-align:left}.cmds li{display:flex;align-items:center;gap:12px}.cmds code{flex:none;min-width:156px;text-align:center}
+.cmds{list-style:none;margin:20px auto 0;padding:0;display:grid;gap:8px;max-width:480px;text-align:left}.cmds li{display:flex;align-items:center;gap:12px}.cmds code{flex:none;min-width:156px;text-align:center}.intro .cmds-note{margin-top:14px;font-size:13px}
 .hint{border-bottom:1px solid color-mix(in oklab,oklch(60.6% .25 292.717) 30%,transparent);background:oklch(96.9% .016 293.756)}:root[data-theme=dark] .hint{background:color-mix(in oklab,oklch(28.3% .141 291.089) 50%,transparent)}.hint[hidden]{display:none}
 .hint .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding-top:8px;padding-bottom:8px;line-height:20px}.hint .wrap>svg{width:16px;height:16px;color:oklch(54.1% .281 293.009)}:root[data-theme=dark] .hint .wrap>svg{color:oklch(70.2% .183 293.541)}
 .hint a{color:oklch(49.1% .27 292.581);font-weight:500;text-decoration:none;text-underline-offset:2px}.hint a:hover{text-decoration:underline}:root[data-theme=dark] .hint a{color:oklch(81.1% .111 293.571)}
@@ -915,8 +915,8 @@ const ASSET_TYPES: Record<string, string> = {
 function emptyState(welcome: boolean, archivedCount: number) {
   if (archivedCount) return '<div class="empty">Nothing open. The archived reviews are below.</div>';
   return `<div class="empty intro"><h2>${welcome ? "You're all set" : "No reviews yet"}</h2>
-<p>Open your coding agent in a repo, on a branch with changes, and ask it for a PR report. In Claude Code, type <code>/reflektor</code>. The report opens in a new tab, and every review on this machine shows up here.</p>
-<ul class="cmds"><li><code>/reflektor</code><span>compare with the PR base or the default branch</span></li><li><code>/reflektor develop</code><span>compare with another branch</span></li><li><code>/reflektor resume</code><span>pick a review up in a new Claude Code session</span></li></ul></div>`;
+<p>Open your coding agent in a repo, on a branch with changes, and ask it for a review report. In Claude Code, type <code>/reflektor</code>. In Codex, type <code>$reflektor</code>. The report opens in a new tab, and every review on this machine shows up here.</p>
+<ul class="cmds"><li><code>/reflektor</code><span>compare with the PR base or the default branch</span></li><li><code>/reflektor develop</code><span>compare with another branch</span></li><li><code>/reflektor resume</code><span>pick a review up in a new session</span></li></ul><p class="cmds-note">In Codex, use <code>$reflektor</code> the same way.</p></div>`;
 }
 
 // First-run setup: the viewer at /setup, with the page token so it can ask the daemon about the
