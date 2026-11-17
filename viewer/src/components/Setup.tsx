@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CodeThemeStep, finishSetup, IntroStep, type SetupStep, SetupFrame, SpeedStep, ThemeStep, useCodeThemeKeys, useThemeKeys } from "./SetupSteps";
 import { ScreenshotsStep } from "./SetupSteps";
+import { SetupIntro } from "./SetupIntro";
 import { ToolsStep } from "./ToolsStep";
 
 // First-run setup: what reflektor is, the tools it can use, how reports get written, then how the page should look. The last
@@ -14,8 +15,17 @@ const STEPS: SetupStep[] = [
   { id: "code", title: "Pick a code theme", next: "Finish" },
 ];
 
+const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 export const Setup = () => {
   const [index, setIndex] = useState(0);
+  const [intro, setIntro] = useState(!REDUCED_MOTION);
+  const [revealed, setRevealed] = useState(REDUCED_MOTION);
+  const reveal = useCallback(() => setRevealed(true), []);
+  const endIntro = useCallback(() => {
+    setRevealed(true);
+    setIntro(false);
+  }, []);
   const step = STEPS[index];
   const next = useCallback(() => (index < STEPS.length - 1 ? setIndex(index + 1) : finishSetup()), [index]);
   const back = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);
@@ -26,10 +36,16 @@ export const Setup = () => {
     document.title = "Setup · Reflektor";
   }, []);
 
-  // Enter moves on, even from a focused option button, so it never re-picks what is already picked.
+  // Enter moves on, even from a focused option button, so it never re-picks what is already picked. While the opening
+  // plays, any key only skips it.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (intro) {
+        endIntro();
+        e.preventDefault();
+        return;
+      }
       if ((e.target as HTMLElement).closest("input, textarea, select")) return;
       if (e.key === "Enter") next();
       else if (e.key === "Escape") finishSetup();
@@ -38,10 +54,18 @@ export const Setup = () => {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [next, themeKeys, codeKeys]);
+  }, [next, themeKeys, codeKeys, intro, endIntro]);
 
   return (
-    <SetupFrame steps={STEPS} index={index} onBack={back} onNext={next} onSkip={finishSetup}>
+    <SetupFrame
+      steps={STEPS}
+      index={index}
+      onBack={back}
+      onNext={next}
+      onSkip={finishSetup}
+      revealed={revealed}
+      overlay={intro && <SetupIntro onReveal={reveal} onEnd={endIntro} />}
+    >
       {step.id === "intro" && <IntroStep />}
       {step.id === "tools" && <ToolsStep />}
       {step.id === "speed" && <SpeedStep />}

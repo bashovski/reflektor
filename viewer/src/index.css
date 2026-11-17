@@ -209,6 +209,108 @@ html.panel body {
   }
 }
 
+/* The setup page's opening (SetupIntro.tsx). One clock for every part: the mark grows in (0 to 0.8 s), shrinks to two
+   thirds and lifts (1.4 to 2.0 s), and fades as the wizard rises (4.3 to 4.9 s). The tagline's words slide up and in
+   from 1.7 s and up and out from 3.9 s, each a little after the one before. */
+.setup-intro {
+  --mark: clamp(140px, 36vh, 340px);
+  --lift: -5vh;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.setup-intro-logo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: var(--mark);
+  translate: -50% -50%;
+  animation: setup-intro-logo 5s both;
+}
+
+@keyframes setup-intro-logo {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+    animation-timing-function: cubic-bezier(0, 0, 0.58, 1);
+  }
+  16% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  28% {
+    transform: scale(1);
+    animation-timing-function: var(--ease);
+  }
+  40% {
+    transform: translateY(var(--lift)) scale(0.6667);
+  }
+  86% {
+    opacity: 1;
+    transform: translateY(var(--lift)) scale(0.6667);
+    animation-timing-function: var(--ease);
+  }
+  98%,
+  100% {
+    opacity: 0;
+    transform: translateY(calc(var(--lift) - 8px)) scale(0.62);
+  }
+}
+
+.setup-intro-tagline {
+  position: absolute;
+  top: calc(50% + var(--lift) + var(--mark) / 3 + 3vh);
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: clamp(22px, 4.4vh, 40px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.setup-intro-word {
+  display: inline-block;
+  margin: 0 0.12em;
+  animation:
+    setup-intro-word-in 400ms var(--ease) calc(1700ms + var(--i) * 60ms) both,
+    setup-intro-word-out 300ms var(--ease) calc(3900ms + var(--i) * 40ms) forwards;
+}
+
+@keyframes setup-intro-word-in {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes setup-intro-word-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+}
+
+/* The wizard, held back while the opening plays, then rising into place. */
+.setup-wizard {
+  transition:
+    opacity 600ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.setup-wizard[data-hidden] {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
 /* For readers who ask their system for less motion: nothing rises, flashes, spins or pulses, and a change of
    state is instant. The "Saved" note still waits its two seconds before it goes, it just does not fade. */
 @media (prefers-reduced-motion: reduce) {
