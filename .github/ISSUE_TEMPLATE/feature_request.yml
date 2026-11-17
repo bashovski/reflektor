@@ -1,0 +1,35 @@
+name: Feature request
+description: An idea that would make reflektor better.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What's hard or missing today when you review with reflektor?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What you'd like reflektor to do instead.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do now
+      description: How you work around it today, if at all.
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent you use
+      multiple: true
+      options:
+        - Claude Code
+        - Codex
+        - Cursor
+        - Gemini CLI
+        - GitHub Copilot
+        - Other

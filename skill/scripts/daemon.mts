@@ -725,14 +725,18 @@ function inboxPage(welcome = false) {
   const phases = Object.keys(PHASES).filter((p) => all.some((r) => statusOf(r) === p));
   const tags = Object.keys(TAGS).filter((t) => all.some((r) => r.tag === t));
   // Whose account the top bar shows. A report asks about its own repo; the inbox spans repos, so it asks about the
-  // newest review's: the forge account when that host's CLI is logged in, else the repo's git identity.
+  // newest review's: the forge account when that host's CLI is logged in, else the repo's git identity. A review of
+  // a repo with no remote has no host to ask, so the newest review with one comes first, and the newest of all only
+  // when no review has a host.
   let newest: RoundFacts | null = null;
   for (const r of all) {
     const facts = roundFacts(r);
-    if (facts?.root) {
+    if (!facts?.root) continue;
+    if (facts.host) {
       newest = facts;
       break;
     }
+    newest ??= facts;
   }
   const host = newest?.host ?? "";
   const me = { host, forge: /github/i.test(host) ? "github" : /gitlab/i.test(host) ? "gitlab" : "", root: newest?.root ?? "" };

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://reflektor.dev/docs
+    about: Install steps, review rounds, flags and publishing.
