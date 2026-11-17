@@ -83,6 +83,8 @@ export const SetupFrame = ({
   onBack,
   onNext,
   onSkip,
+  revealed = true,
+  overlay,
   children,
 }: {
   steps: SetupStep[];
@@ -90,6 +92,8 @@ export const SetupFrame = ({
   onBack: () => void;
   onNext: () => void;
   onSkip: () => void;
+  revealed?: boolean;
+  overlay?: ReactNode;
   children: ReactNode;
 }) => {
   const step = steps[index];
@@ -101,38 +105,42 @@ export const SetupFrame = ({
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
         <Dither {...BACKDROP} palette={BACKDROP_PALETTE[resolvedTheme]} />
       </div>
-      {/* The label and the step marks get the card's surface, as a strip joined to its top: on the moving background
-          itself, small text and the grey marks could not be read over a bright wave. */}
-      <div className="surface flex items-center justify-between border border-b-0 px-6 py-3 text-xs text-muted sm:px-8">
-        <span className="inline-flex items-center gap-2 font-semibold tracking-tight text-[var(--text)]">
-          <Logo className="h-4" />
-          Reflektor
-        </span>
-        <span className="inline-flex items-center gap-1.5" aria-label={`Step ${index + 1} of ${steps.length}`}>
-          {steps.map((s, i) => (
-            <span key={s.id} className={cx("h-1.5 transition-all", i === index ? "w-6 bg-accent" : "w-1.5 bg-zinc-500/30")} />
-          ))}
-        </span>
-      </div>
-      <section className="surface border p-6 sm:p-8">
-        <h1 className="text-[24px] font-semibold tracking-tight text-balance">{step.title}</h1>
-        <div className="mt-4">{children}</div>
-        <div className="mt-8 flex flex-wrap items-center gap-3">
-          {index > 0 && (
-            <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 rounded-control px-2.5 py-2 text-sm text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
-              <ArrowLeft className="size-4" /> Back
-            </button>
-          )}
-          <span className="ml-auto inline-flex items-center gap-3">
-            {index < steps.length - 1 && (
-              <button type="button" onClick={onSkip} className="inline-flex items-center gap-1.5 text-xs text-muted hover:underline">
-                Skip setup <Kbd name="Escape" />
-              </button>
-            )}
-            <Primary label={step.next} onClick={onNext} />
+      {overlay}
+      {/* Held back and out of reach while the opening plays (SetupIntro), then rising into place. */}
+      <div className="setup-wizard" data-hidden={revealed ? undefined : ""} inert={!revealed}>
+        {/* The label and the step marks get the card's surface, as a strip joined to its top: on the moving background
+            itself, small text and the grey marks could not be read over a bright wave. */}
+        <div className="surface flex items-center justify-between border border-b-0 px-6 py-3 text-xs text-muted sm:px-8">
+          <span className="inline-flex items-center gap-2 font-semibold tracking-tight text-[var(--text)]">
+            <Logo className="h-4" />
+            Reflektor
+          </span>
+          <span className="inline-flex items-center gap-1.5" aria-label={`Step ${index + 1} of ${steps.length}`}>
+            {steps.map((s, i) => (
+              <span key={s.id} className={cx("h-1.5 transition-all", i === index ? "w-6 bg-accent" : "w-1.5 bg-zinc-500/30")} />
+            ))}
           </span>
         </div>
-      </section>
+        <section className="surface border p-6 sm:p-8">
+          <h1 className="text-[24px] font-semibold tracking-tight text-balance">{step.title}</h1>
+          <div className="mt-4">{children}</div>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            {index > 0 && (
+              <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 rounded-control px-2.5 py-2 text-sm text-zinc-600 hover:bg-zinc-500/10 dark:text-zinc-400">
+                <ArrowLeft className="size-4" /> Back
+              </button>
+            )}
+            <span className="ml-auto inline-flex items-center gap-3">
+              {index < steps.length - 1 && (
+                <button type="button" onClick={onSkip} className="inline-flex items-center gap-1.5 text-xs text-muted hover:underline">
+                  Skip setup <Kbd name="Escape" />
+                </button>
+              )}
+              <Primary label={step.next} onClick={onNext} />
+            </span>
+          </div>
+        </section>
+      </div>
     </main>
   );
 };
