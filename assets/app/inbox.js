@@ -1,0 +1,500 @@
+(() => {
+	const data = JSON.parse(document.getElementById("inbox-data").textContent);
+	const { phases: PHASES, tags: TAGS, folderIcon: FOLDER, shown, token, me: ME, daemon: DAEMON } = data;
+	// A browser that never saw the setup page (see viewer/src/lib/setup.ts) is offered it once, here and above a report.
+	try {
+		const hint = document.getElementById("setup-hint");
+		if (!localStorage.getItem("reflektor:setup")) {
+			hint.hidden = false;
+			document.getElementById("setup-dismiss").onclick = () => {
+				localStorage.setItem("reflektor:setup", JSON.stringify({ at: new Date().toISOString() }));
+				hint.hidden = true;
+			};
+		}
+	} catch {}
+	const ago = (t) => {
+		const s = (Date.now() - Date.parse(t)) / 1e3;
+		return s < 60 ? "now" : s < 3600 ? Math.round(s / 60) + " min ago" : s < 86400 ? Math.round(s / 3600) + " h ago" : Math.round(s / 86400) + " d ago";
+	};
+	for (const el of document.querySelectorAll("time")) el.textContent = ago(el.dataset.at);
+	const WAITING = ["reviewing", "planning"];
+	const LABELS = {
+		group: {
+			owner: "Owner",
+			repo: "Repo",
+			status: "Status",
+			type: "Type",
+			none: "None"
+		},
+		sort: {
+			activity: "Recent activity",
+			waiting: "Waiting on you",
+			title: "Title"
+		}
+	};
+	// Group, sort and filter happen here, on the rows the server sent. The choice is remembered in this browser.
+	const prefs = {
+		group: "owner",
+		sort: "activity",
+		phase: [],
+		tag: []
+	};
+	try {
+		const saved = JSON.parse(localStorage.getItem("reflektor-inbox") || "{}");
+		if (LABELS.group[saved.group]) prefs.group = saved.group;
+		if (LABELS.sort[saved.sort]) prefs.sort = saved.sort;
+		for (const k of ["phase", "tag"]) if (Array.isArray(saved[k])) prefs[k] = saved[k];
+	} catch {}
+	// A saved filter for a status or tag no review has any more would hide everything with nothing to untick.
+	for (const k of ["phase", "tag"]) {
+		const offered = [...document.querySelectorAll("input[name=" + k + "]")].map((i) => i.value);
+		prefs[k] = prefs[k].filter((v) => offered.includes(v));
+	}
+	const save = () => {
+		try {
+			localStorage.setItem("reflektor-inbox", JSON.stringify(prefs));
+		} catch {}
+	};
+	// The search lasts for this tab, through the reloads that new events cause, but not into the next visit.
+	let query = "";
+	try {
+		query = sessionStorage.getItem("reflektor-inbox-q") || "";
+	} catch {}
+	const searchBox = document.querySelector("input[name=q]");
+	if (searchBox) searchBox.value = query;
+	const make = (tag, cls, text) => {
+		const e = document.createElement(tag);
+		if (cls) e.className = cls;
+		if (text != null) e.textContent = text;
+		return e;
+	};
+	const boxes = [...document.querySelectorAll("[data-rows]")].map((box) => ({
+		box,
+		rows: [...box.querySelectorAll(".row")]
+	}));
+	const at = (r) => r.dataset.updated;
+	const rank = (list, k) => {
+		const i = list.indexOf(k);
+		return i < 0 ? list.length : i;
+	};
+	const SORTS = {
+		activity: (a, b) => at(b).localeCompare(at(a)),
+		waiting: (a, b) => Number(WAITING.includes(b.dataset.phase)) - Number(WAITING.includes(a.dataset.phase)) || at(b).localeCompare(at(a)),
+		title: (a, b) => a.dataset.title.localeCompare(b.dataset.title, undefined, { sensitivity: "base" })
+	};
+	const KEYS = {
+		owner: (r) => r.dataset.owner,
+		repo: (r) => r.dataset.repo,
+		status: (r) => r.dataset.phase,
+		type: (r) => r.dataset.tag,
+		none: () => ""
+	};
+	const nameOf = (k) => prefs.group === "owner" && !k ? "Local repos" : k;
+	// Fuzzy search with Fuse.js over title, repo and branch. Until it loads, or if it cannot, a plain substring match.
+	const items = boxes.flatMap((b) => b.rows).map((row) => ({
+		row,
+		title: row.dataset.title,
+		repo: row.dataset.repo,
+		branch: row.dataset.branch
+	}));
+	let fuse = null;
+	let hits = null;
+	const search = () => {
+		const q = query.trim();
+		hits = !q ? null : new Set(fuse ? fuse.search(q).map((x) => x.item.row) : items.filter((i) => (i.title + " " + i.repo + " " + i.branch).toLowerCase().includes(q.toLowerCase())).map((i) => i.row));
+	};
+	// "View All Reports for <owner>" on a review page links here with ?owner=, to show only that owner's reviews.
+	const onlyOwner = new URLSearchParams(location.search).get("owner");
+	const left = document.querySelector(".bar .left");
+	// It starts a fresh look at that owner, so a search left from earlier in this tab does not hide their reviews.
+	if (onlyOwner !== null) {
+		query = "";
+		try {
+			sessionStorage.removeItem("reflektor-inbox-q");
+		} catch {}
+		if (searchBox) searchBox.value = "";
+	}
+	if (onlyOwner !== null && left) {
+		const chip = make("span", "only", "Owner: " + (onlyOwner || "Local repos")), x = make("a", "", "×");
+		x.href = "/";
+		x.title = "Show every owner";
+		x.setAttribute("aria-label", "Show every owner");
+		chip.append(x);
+		left.append(chip);
+	}
+	const matches = (r) => (onlyOwner === null || r.dataset.owner === onlyOwner) && (!prefs.phase.length || prefs.phase.includes(r.dataset.phase)) && (!prefs.tag.length || prefs.tag.includes(r.dataset.tag)) && (!hits || hits.has(r));
+	function heading(key, first, count) {
+		const h = make("h2", "gh");
+		if (prefs.group === "owner" || prefs.group === "repo") {
+			let av = first.querySelector(".av")?.cloneNode(true);
+			if (prefs.group === "owner" && !key) {
+				av = make("span", "av local");
+				av.innerHTML = FOLDER;
+			}
+			if (av) h.append(av);
+			h.append(make("span", "", nameOf(key)));
+		} else if (prefs.group === "status") {
+			const dot = make("span", "dot");
+			dot.style.background = (PHASES[key] ?? [])[1] ?? "#71717a";
+			h.append(dot, (PHASES[key] ?? [key])[0]);
+		} else h.append(first.querySelector(".tag").cloneNode(true));
+		h.append(make("span", "count", String(count)));
+		return h;
+	}
+	function render() {
+		document.body.dataset.group = prefs.group;
+		for (const { box, rows } of boxes) {
+			if (!rows.length) continue;
+			const kept = rows.filter(matches).sort(SORTS[prefs.sort]), groups = new Map();
+			for (const r of kept) {
+				const k = KEYS[prefs.group](r);
+				if (!groups.has(k)) groups.set(k, []);
+				groups.get(k).push(r);
+			}
+			const order = [...groups.keys()];
+			if (prefs.group === "status") order.sort((a, b) => rank(Object.keys(PHASES), a) - rank(Object.keys(PHASES), b));
+			else if (prefs.group === "type") order.sort((a, b) => rank(TAGS, a) - rank(TAGS, b));
+			else if (prefs.sort === "title") order.sort((a, b) => nameOf(a).localeCompare(nameOf(b), undefined, { sensitivity: "base" }));
+			box.replaceChildren(...order.map((k) => {
+				const section = make("section", "group"), list = make("div", "list");
+				if (prefs.group !== "none") section.append(heading(k, groups.get(k)[0], groups.get(k).length));
+				list.append(...groups.get(k));
+				section.append(list);
+				return section;
+			}));
+			if (!kept.length) {
+				const list = make("div", "list"), empty = make("div", "empty", "No reviews match these filters."), clear = make("button", "clear-all", "Clear filters");
+				clear.type = "button";
+				empty.append(clear);
+				list.append(empty);
+				box.append(list);
+			}
+		}
+		const active = boxes[0].rows, visible = active.filter(matches), shown = visible.length, waiting = visible.filter((r) => WAITING.includes(r.dataset.phase)).length;
+		const summary = document.getElementById("summary");
+		if (summary) summary.textContent = (shown === active.length ? active.length + " " + (active.length === 1 ? "review" : "reviews") : shown + " of " + active.length + " reviews") + (waiting ? ", " + waiting + " waiting on you" : "");
+		for (const i of document.querySelectorAll(".menu input[type=radio],.menu input[type=checkbox]")) i.checked = i.type === "radio" ? prefs[i.name] === i.value : prefs[i.name].includes(i.value);
+		for (const k of ["group", "sort"]) {
+			const b = document.querySelector("[data-label=" + k + "]");
+			if (b) b.textContent = LABELS[k][prefs[k]];
+		}
+		const n = prefs.phase.length + prefs.tag.length + (query.trim() ? 1 : 0), f = document.querySelector("[data-label=filter]");
+		if (f) {
+			f.textContent = n ? String(n) : "";
+			f.className = n ? "badge" : "";
+		}
+	}
+	search();
+	render();
+	// Fuse.js is served by the daemon (/fuse.mjs), not bundled here. The address is a variable so TypeScript does not
+	// look for it as a module.
+	const fuseUrl = "/fuse.mjs";
+	import(fuseUrl).then(({ default: FuseClass }) => {
+		fuse = new FuseClass(items, {
+			keys: [
+				{
+					name: "title",
+					weight: 2
+				},
+				"repo",
+				"branch"
+			],
+			threshold: .35,
+			ignoreLocation: true
+		});
+		search();
+		render();
+	}).catch(() => {});
+	const setQuery = (q) => {
+		query = q;
+		try {
+			sessionStorage.setItem("reflektor-inbox-q", q);
+		} catch {}
+		search();
+		render();
+	};
+	document.addEventListener("input", (e) => {
+		if (searchBox && e.target === searchBox) setQuery(searchBox.value);
+	});
+	// Menus: one open at a time; a click outside or Escape closes them.
+	const dds = [...document.querySelectorAll(".dd")], openMenu = () => dds.find((d) => !d.querySelector(".menu").hidden);
+	const toggle = (dd, open) => {
+		dd.querySelector(".menu").hidden = !open;
+		dd.querySelector("[aria-haspopup]").setAttribute("aria-expanded", String(open));
+		if (open && searchBox && dd.contains(searchBox)) searchBox.focus();
+	};
+	let reloadLater = false;
+	document.addEventListener("click", (e) => {
+		const target = e.target;
+		const dd = target.closest(".dd");
+		for (const d of dds) if (d !== dd) toggle(d, false);
+		if (dd && target.closest("[aria-haspopup]")) toggle(dd, Boolean(dd.querySelector(".menu").hidden));
+		if (target.closest(".clear,.clear-all")) {
+			prefs.phase = [];
+			prefs.tag = [];
+			save();
+			if (searchBox) searchBox.value = "";
+			setQuery("");
+		}
+		if (reloadLater && !openMenu()) location.reload();
+	});
+	// "/" opens the filter menu at the search box, as on GitHub.
+	document.addEventListener("keydown", (e) => {
+		if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey || e.target.closest("input,textarea") || !searchBox) return;
+		e.preventDefault();
+		for (const d of dds) toggle(d, d.contains(searchBox));
+	});
+	document.addEventListener("keydown", (e) => {
+		const d = openMenu();
+		if (e.key === "Escape" && d) {
+			toggle(d, false);
+			d.querySelector("[aria-haspopup]").focus();
+			if (reloadLater) location.reload();
+		}
+	});
+	document.addEventListener("change", (e) => {
+		const i = e.target;
+		if (!(i.name in prefs)) return;
+		if (i.type === "radio") {
+			prefs[i.name] = i.value;
+			toggle(i.closest(".dd"), false);
+		} else prefs[i.name] = [...document.querySelectorAll("input[name=" + i.name + "]:checked")].map((x) => x.value);
+		save();
+		render();
+	});
+	// The stream starts with every review's current state, so reload only for a review that changed or is new.
+	const es = new EventSource(`/api/events?token=${token}&watch=*`);
+	let t;
+	es.addEventListener("state", (e) => {
+		const s = JSON.parse(e.data);
+		if (shown[s.id] === s.updatedAt) return;
+		clearTimeout(t);
+		t = setTimeout(() => openMenu() ? reloadLater = true : location.reload(), 400);
+	});
+	document.addEventListener("click", async (e) => {
+		const b = e.target.closest("button[data-act]");
+		if (!b) return;
+		if (b.dataset.act === "delete" && !confirm("Delete this review's files (" + b.dataset.size + ") and its saved rounds? This cannot be undone. Your code and branches are not touched.")) return;
+		const act = b.dataset.act === "delete" ? "delete" : "archive";
+		const res = await fetch("/api/r/" + encodeURIComponent(b.dataset.id) + "/" + act, {
+			method: "POST",
+			headers: {
+				"x-review-token": token,
+				"content-type": "application/json"
+			},
+			body: JSON.stringify({ archived: b.dataset.act !== "restore" })
+		});
+		if (!res.ok) alert((await res.json().catch(() => ({}))).error || "Could not do that");
+		location.reload();
+	});
+	// The reader's menu in the top bar, with the options a report's menu has (viewer/src/components/UserMenu.tsx): who is
+	// reading, the profile, Settings, Help, a bug report, the cache purge and the daemon. A change to one menu needs the
+	// same change to the other.
+	const SOURCES = {
+		gh: "via the GitHub CLI",
+		glab: "via the GitLab CLI",
+		git: "from git config",
+		none: "no identity found"
+	};
+	// Draws an avatar into the element with this id, as a picture or as initials on a color, whichever it was before.
+	const paint = (id, a) => {
+		let el = document.getElementById(id);
+		if (!el || !a) return;
+		const swap = (tag) => {
+			if (el.tagName === tag) return;
+			const n = document.createElement(tag);
+			n.id = id;
+			n.className = el.className;
+			el.replaceWith(n);
+			el = n;
+		};
+		if (String(a.image || "").startsWith("data:image/")) {
+			swap("IMG");
+			el.alt = "";
+			el.src = a.image;
+			return;
+		}
+		swap("SPAN");
+		el.style.background = /^#[0-9a-f]{6}$/i.test(a.color || "") ? a.color : "#71717a";
+		el.textContent = String(a.initials || "").slice(0, 2);
+	};
+	const showMe = (who) => {
+		document.getElementById("me-name").textContent = who.name || who.login || who.email || "Unknown";
+		document.getElementById("me-sub").textContent = (who.login ? "@" + who.login : who.email || "") + (who.login || who.email ? " · " : "") + SOURCES[who.source];
+		for (const id of ["me-face", "me-face-big"]) paint(id, who.avatar);
+		if (who.url) {
+			const p = document.getElementById("me-profile"), forge = {
+				github: "GitHub ",
+				gitlab: "GitLab "
+			}[ME.forge] || "";
+			p.href = who.url;
+			p.querySelector("span").textContent = "Open " + forge + "profile";
+			p.hidden = false;
+		}
+	};
+	// The last answer is kept in the browser and drawn at once, so the avatar is there at the first paint and does not
+	// pop in a moment later on every page. A report keeps and reads the same entry (viewer/src/lib/identity.ts).
+	const ME_KEY = ME.host + "|" + ME.forge + "|" + ME.root;
+	try {
+		const kept = JSON.parse(localStorage.getItem("reflektor:me") || "null");
+		if (kept && kept.key === ME_KEY && kept.who) showMe(kept.who);
+	} catch {}
+	fetch("/api/me?" + new URLSearchParams(ME), { headers: { "x-review-token": token } }).then((r) => r.ok ? r.json() : null).catch(() => null).then((who) => {
+		if (!who) {
+			if (document.getElementById("me-name").textContent === "Looking you up…") document.getElementById("me-name").textContent = "Unknown";
+			return;
+		}
+		showMe(who);
+		try {
+			localStorage.setItem("reflektor:me", JSON.stringify({
+				key: ME_KEY,
+				who
+			}));
+		} catch {}
+	});
+	// "<" and "!--" are kept apart: this script sits inside the page's HTML, where the two together start a comment.
+	document.getElementById("me-bug").href += "?" + new URLSearchParams({ body: [
+		"<" + "!-- What happened, and what you expected --" + ">",
+		"",
+		"",
+		"---",
+		"Reflektor daemon " + DAEMON.version + ", Node " + DAEMON.node,
+		"Browser: " + navigator.userAgent
+	].join("\n") });
+	// Settings, Help and the cache purge are the report's own dialogs. They are not written a second time here: the page
+	// at /panel holds them, and it is loaded in a see-through frame over the window (viewer/src/lib/panel.ts). The frame
+	// is fetched when the menu first opens, so a dialog is there at once when it is asked for. A theme picked in Settings
+	// reaches this page through the storage event the script in the head listens to.
+	let panel = null, panelReady = false, wanted = null;
+	const loadPanel = () => {
+		if (panel) return;
+		panel = document.createElement("iframe");
+		panel.className = "panel";
+		panel.title = "Settings, help and the cache";
+		panel.hidden = true;
+		panel.src = "/panel";
+		document.body.append(panel);
+	};
+	const showPanel = () => {
+		if (!panelReady || !wanted) return;
+		panel.hidden = false;
+		panel.contentWindow.postMessage({ open: wanted }, location.origin);
+		panel.focus();
+	};
+	const openPanel = (name) => {
+		wanted = name;
+		loadPanel();
+		showPanel();
+	};
+	addEventListener("message", (e) => {
+		if (!panel || e.origin !== location.origin || e.source !== panel.contentWindow || !e.data) return;
+		if (e.data.panel === "ready") {
+			panelReady = true;
+			showPanel();
+		}
+		if (e.data.panel === "closed" && !panel.hidden) {
+			panel.hidden = true;
+			wanted = null;
+			document.querySelector(".who").focus();
+		}
+	});
+	document.querySelector(".who").addEventListener("click", loadPanel);
+	document.addEventListener("click", (e) => {
+		const b = e.target.closest("[data-panel]");
+		if (!b) return;
+		toggle(b.closest(".dd"), false);
+		openPanel(b.dataset.panel);
+	});
+	document.addEventListener("click", (e) => {
+		if (!e.target.closest("[data-settings]")) return;
+		location.href = "/settings";
+	});
+	// "?" opens Settings, as in a report.
+	document.addEventListener("keydown", (e) => {
+		if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey || e.target.closest("input,textarea")) return;
+		e.preventDefault();
+		location.href = "/settings";
+	});
+	// How long the daemon has run, worded as in the report's menu: its two largest units, never rounded up.
+	const upFor = (since) => {
+		const s = (Date.now() - Date.parse(since)) / 1e3;
+		if (s < 90) return "just started";
+		const m = Math.floor(s / 60), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), min = m % 60;
+		return "up " + (d ? [d + "d", h > 0 && h + "h"] : h ? [h + "h", min > 0 && min + "min"] : [min + "min"]).filter(Boolean).join(" ");
+	};
+	const status = document.getElementById("me-status");
+	let daemonUp = true;
+	const showStatus = () => {
+		status.classList.toggle("down", !daemonUp);
+		status.lastElementChild.textContent = daemonUp ? "Daemon up · " + DAEMON.version.slice(0, 7) + " · " + upFor(DAEMON.startedAt) : "Daemon unavailable";
+	};
+	showStatus();
+	es.addEventListener("open", () => {
+		daemonUp = true;
+		showStatus();
+	});
+	es.addEventListener("error", () => {
+		daemonUp = false;
+		showStatus();
+	});
+	document.querySelector(".who").addEventListener("click", showStatus);
+	// After an update the stream comes back from the new version's daemon: reload, so the page is the new one.
+	es.addEventListener("daemon", (e) => {
+		if (JSON.parse(e.data).version !== DAEMON.version) location.reload();
+	});
+	// A new reflektor (skill/scripts/updates.mts): a dot on the avatar, an item at the top of the menu, and the update
+	// modal, which opens by itself once per version when the daemon says to ask. It is the report's own dialog, in the panel.
+	let promptedFor = null;
+	es.addEventListener("update", (e) => {
+		const u = JSON.parse(e.data);
+		const on = u.status !== "none";
+		const dot = document.getElementById("me-dot");
+		dot.hidden = !on;
+		dot.classList.toggle("req", u.status === "required");
+		document.getElementById("me-update").hidden = !on;
+		document.getElementById("me-update-hr").hidden = !on;
+		document.getElementById("me-update-title").textContent = u.status === "required" ? "Update needed" : "Update available";
+		document.getElementById("me-update-sub").textContent = "reflektor " + (u.status === "required" ? u.minimum + " or newer" : u.latest);
+		const version = u.latest ?? u.minimum;
+		if (u.prompt && version !== promptedFor) {
+			promptedFor = version;
+			openPanel("update");
+		}
+	});
+	// The star box lights its star while the button or the picture is hovered, or the button has focus.
+	const starBox = document.querySelector(".star-display");
+	if (starBox) {
+		let hovered = false, focused = false;
+		const light = () => starBox.classList.toggle("lit", hovered || focused);
+		for (const el of document.querySelectorAll("[data-star]")) {
+			el.addEventListener("mouseenter", () => (hovered = true, light()));
+			el.addEventListener("mouseleave", () => (hovered = false, light()));
+		}
+		const button = document.querySelector(".star-button");
+		button?.addEventListener("focus", () => (focused = true, light()));
+		button?.addEventListener("blur", () => (focused = false, light()));
+	}
+	// The footer's light and dark switch saves the choice where the review page keeps it (reflektor:theme), so every
+	// page follows it. theme.ts in the head keeps the page's theme in step with the system and other tabs.
+	const themeSwitch = document.querySelector("[data-theme-toggle]");
+	if (themeSwitch) {
+		const root = document.documentElement;
+		const sync = () => {
+			const dark = root.dataset.theme === "dark";
+			themeSwitch.setAttribute("aria-checked", String(dark));
+			themeSwitch.title = dark ? "Switch to light mode" : "Switch to dark mode";
+		};
+		sync();
+		new MutationObserver(sync).observe(root, {
+			attributes: true,
+			attributeFilter: ["data-theme"]
+		});
+		themeSwitch.addEventListener("click", () => {
+			const next = root.dataset.theme === "dark" ? "light" : "dark";
+			try {
+				localStorage.setItem("reflektor:theme", JSON.stringify(next));
+			} catch {}
+			root.dataset.theme = next;
+		});
+	}
+})();
