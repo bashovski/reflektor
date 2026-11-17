@@ -1,6 +1,6 @@
 # Screenshots
 
-collect.mjs sends you here when the reader turned on Screenshots in Settings and the change touches UI files. The report gets pictures of what changed on screen, taken with Playwright while you write it. They never hold the report up.
+collect.mjs sends you here when the reader turned on Screenshots in Settings and the change touches UI files. `<skill folder>` below is the folder this file is in: put its absolute path there, with forward slashes. The report gets pictures of what changed on screen, taken with Playwright while you write it. They never hold the report up.
 
 ## Start the subagent (the main agent)
 
@@ -9,14 +9,14 @@ Skip this when nothing a user sees changed, for example a refactor with the same
 1. Check what is ready:
 
    ```bash
-   node "${CLAUDE_SKILL_DIR}/scripts/screenshots.mjs" --repo . --status
+   node "<skill folder>/scripts/screenshots.mjs" --repo . --status
    ```
 
    - **Playwright or Chromium is missing:** skip the screenshots and say in your final message which command installs it. Record why, so the page says it too: `screenshots.mjs --repo . --skip "<reason>"`.
    - **No app is saved:** work it out once. Find the dev server's address and the command that starts it in package.json scripts and the dev server's config (vite.config, next.config, and so on). Save it, naming the files it came from. Do not ask first.
 
      ```bash
-     node "${CLAUDE_SKILL_DIR}/scripts/screenshots.mjs" --repo . --save --url http://localhost:5173 --start "pnpm dev" --source "<where from>" --from package.json
+     node "<skill folder>/scripts/screenshots.mjs" --repo . --save --url http://localhost:5173 --start "pnpm dev" --source "<where from>" --from package.json
      ```
 
    - **It says to ask the user first:** the branch has commits by someone else and the app runs their code. Ask in one line, as for the checks. On a yes, the subagent adds `--trust` to `--prepare`.

@@ -77,8 +77,8 @@ try {
   if (portable.includes("CLAUDE_SKILL_DIR") || /^(allowed-tools|argument-hint):/m.test(frontMatter) || !/^name: reflektor$/m.test(frontMatter) || !/^description: /m.test(frontMatter))
     fail("the skill text for other agents still has Claude Code's placeholder or front matter, or lost its name or description");
   if (!portable.includes('node "C:/Users/x/.agents/skills/reflektor/scripts/collect.mjs" --repo .')) fail("the skill text for other agents does not spell out the skill's folder in its commands");
-  // The steps for subagent mode are a file of their own. The placeholder is replaced in SKILL.md only, so it must not be in there.
-  if (readFileSync(join(root, "skill/subagents.md"), "utf8").includes("CLAUDE_SKILL_DIR")) fail("skill/subagents.md has Claude Code's placeholder, which nothing replaces in that file");
+  // The steps for subagent mode and for screenshots are files of their own. The placeholder is replaced in SKILL.md only, so it must not be in them.
+  for (const file of ["subagents.md", "screenshots.md"]) if (readFileSync(join(root, "skill", file), "utf8").includes("CLAUDE_SKILL_DIR")) fail(`skill/${file} has Claude Code's placeholder, which nothing replaces in that file`);
 
   // Which agent runs reflektor: said outright, read from the shell's variables, from the skills folder a script was
   // started from, or from the agent's own answer, in that order. Every case names its own variables, so the result does
@@ -91,7 +91,8 @@ try {
     return a ? `${a.id}|${a.name}|${a.product}|${a.resume}|${a.version}|${a.source}` : "nobody";
   };
   const agentCases: [string, AgentOptions, string][] = [
-    ["a flag wins over the shell", { id: "codex", env: { CLAUDECODE: "1" } }, "codex|Codex|Codex|null|null|flag"],
+    ["a flag wins over the shell", { id: "codex", env: { CLAUDECODE: "1" } }, "codex|Codex|Codex|$reflektor resume|null|flag"],
+    ["the Codex marker", { env: { CODEX_THREAD_ID: "019c410f" } }, "codex|Codex|Codex|$reflektor resume|null|env"],
     ["REFLEKTOR_AGENT", { env: { REFLEKTOR_AGENT: "claude-code", AI_AGENT: "codex" } }, "claude-code|Claude|Claude Code|/reflektor resume|null|flag"],
     ["AI_AGENT with a version", { env: { AI_AGENT: "claude-code_2-1-321_agent" } }, "claude-code|Claude|Claude Code|/reflektor resume|2.1.321|env"],
     ["AI_AGENT of an agent with no entry", { env: { AI_AGENT: "some-new-agent_0-9_agent" } }, "some-new-agent|Some New Agent|Some New Agent|null|0.9|env"],

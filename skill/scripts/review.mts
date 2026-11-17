@@ -28,7 +28,7 @@
 // --agent <id> says it outright; --agent-name "<product>" is the agent's own answer when nothing else is known.
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
+import { existsSync, openSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -37,7 +37,7 @@ import type { CommentTarget, LiveQuestion, PrState, ReviewComment } from "../sch
 import { AGENT_HEADER, detectAgent, encodeAgent } from "./agent.mjs";
 import { runReportHooks } from "./hooks.mjs";
 import { finishDeviceLogin, forgetLogin, LOGIN_FILE, type Organization, readLogin, reflektorConfig, saveLogin, startDeviceLogin, whoami } from "./reflektor.mjs";
-import { shellPath } from "./repo.mjs";
+import { needWritable, SANDBOX_HINT, shellPath } from "./repo.mjs";
 import { readSettings } from "./settings.mjs";
 import { readInstall, rollback } from "./install.mjs";
 import { managedInstall, terminalLine, type UpdateInfo } from "./updates.mjs";
@@ -94,7 +94,7 @@ const superseded = () => {
   return Boolean(install && isRelease() && install.version !== readVersion());
 };
 const updatedMessage = (version = readInstall()?.version ?? "a new version") =>
-  `reflektor was updated to ${version} while this was running, so it stopped here. Comments and drafts are saved. Tell the user, then continue with /reflektor resume (review.mjs resume), which uses the new version.`;
+  `reflektor was updated to ${version} while this was running, so it stopped here. Comments and drafts are saved. Tell the user, then continue ${agent?.resume ? `with ${agent.resume}` : "by asking the agent to resume the review"} (review.mjs resume), which uses the new version.`;
 // GET /api/update in daemon.mjs.
 type UpdateAnswer = UpdateInfo & { state: string; error: string | null; target: string | null; waiting: number };
 // The line every answer the agent relays ends with while an update waits (updates.mjs).
@@ -134,11 +134,19 @@ const textArg = () => {
   if (file === true) throw new Error(`${command} needs a file path after --text-file`);
   return file ? readFileSync(file, "utf8") : typeof args.text === "string" ? args.text : null;
 };
-// The default browser, detached so this command can end right away.
-const openInBrowser = (url: string) => {
-  const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
-  spawn(opener, [url], { detached: true, stdio: "ignore" }).unref();
-};
+// The default browser, detached so this command can end right away. Resolves false when the opener is missing or
+// says it failed, as it does in a sandbox that blocks it. explorer.exe exits with 1 even when it worked, so on
+// Windows only a missing opener counts. An opener still running after 3 seconds counts as having worked.
+const openInBrowser = (url: string): Promise<boolean> =>
+  new Promise((done) => {
+    const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "explorer" : "xdg-open";
+    const child = spawn(opener, [url], { detached: true, stdio: "ignore" });
+    const timer = setTimeout(() => done(true), 3000);
+    timer.unref();
+    child.on("error", () => (clearTimeout(timer), done(false)));
+    child.on("exit", (code) => (clearTimeout(timer), done(process.platform === "win32" || code === 0)));
+    child.unref();
+  });
 
 async function health(info: DaemonInfo) {
   try {
@@ -162,8 +170,10 @@ async function ensureDaemon(): Promise<DaemonInfo> {
   if (status) return info!;
   if (superseded()) throw new Error(updatedMessage());
 
-  mkdirSync(HOME, { recursive: true });
-  const log = openSync(join(HOME, "daemon.log"), "a");
+  needWritable([HOME]);
+  const logFile = join(HOME, "daemon.log");
+  const logStart = existsSync(logFile) ? statSync(logFile).size : 0;
+  const log = openSync(logFile, "a");
   // windowsHide: on Windows a detached process gets a console window of its own, and closing it would stop the daemon.
   spawn(process.execPath, [daemonScript], { detached: true, stdio: ["ignore", log, log], env: process.env, windowsHide: true }).unref();
   for (let i = 0; i < 80; i++) {
@@ -171,7 +181,8 @@ async function ensureDaemon(): Promise<DaemonInfo> {
     info = readJson(daemonFile) as DaemonInfo | null;
     if (info && info.version === expectedVersion() && (await health(info))) return info;
   }
-  throw new Error(`The daemon did not start. See ${join(HOME, "daemon.log")}`);
+  if (/listen (EPERM|EACCES)/.test(readFileSync(logFile).subarray(logStart).toString("utf8"))) throw new Error(`The daemon could not start a local server on 127.0.0.1. ${SANDBOX_HINT}`);
+  throw new Error(`The daemon did not start. See ${logFile}`);
 }
 
 // `data` is the daemon's JSON answer, read as T; it is null on a 204, which only next-event sends.
@@ -222,7 +233,7 @@ async function branchReview(info: DaemonInfo): Promise<string | null> {
   const { data } = await api<ReviewList>(info, "GET", "/api/reviews");
   const mine = data.reviews.filter((r) => r.branch === branch && (r.dir === join(gitDir, "reflektor") || r.dir.startsWith(gitDir)));
   const id = mine.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id;
-  if (!id) console.log(`No review of ${branch} is open. Run /reflektor to start one.`);
+  if (!id) console.log(`No review of ${branch} is open. ${agent?.resume ? `Run ${agent.resume.replace(/ resume$/, "")} to start one.` : "Ask for a review report to start one."}`);
   return id ?? null;
 }
 
@@ -311,8 +322,7 @@ async function main() {
     console.log(`Review id: ${data.id} (round ${data.round})`);
     if (data.republished) console.log(`Round ${data.round} was already published. It now uses this build; comments, plan and progress are kept.`);
     if (args.open && data.tabs === 0) {
-      openInBrowser(data.url);
-      console.log("Opened it in the browser.");
+      console.log((await openInBrowser(data.url)) ? "Opened it in the browser." : `Could not open the browser from here. Give the user the review address to open: ${data.url}`);
     } else if (data.tabs > 0) {
       console.log(
         data.republished
@@ -336,8 +346,7 @@ async function main() {
     const url = `http://127.0.0.1:${info.port}/setup`;
     if (args["no-open"]) console.log(`Setup page: ${url}`);
     else {
-      openInBrowser(url);
-      console.log(`Opened the setup page in your browser: ${url}`);
+      console.log((await openInBrowser(url)) ? `Opened the setup page in your browser: ${url}` : `Could not open the browser from here. Open the setup page: ${url}`);
     }
     console.log(`Inbox of every review: http://127.0.0.1:${info.port}/`);
   } else if (command === "wait") {
@@ -437,8 +446,8 @@ async function main() {
     const start = await startDeviceLogin(config);
     console.log(`To sign in to Reflektor, open ${start.verificationUriComplete} and check that it shows the code ${start.userCode}.`);
     if (!args["no-open"]) {
-      openInBrowser(start.verificationUriComplete);
-      console.log("Opened it in your browser.");
+      if (await openInBrowser(start.verificationUriComplete)) console.log("Opened it in your browser.");
+      else console.log("Could not open the browser from here. Open the address above.");
     }
     console.log("Waiting for you to approve it there...");
     const login = await finishDeviceLogin(config, start);
@@ -521,7 +530,7 @@ async function main() {
       return;
     }
     console.log(`Installed reflektor ${data.target ?? readInstall()?.version}. The daemon restarted on it.`);
-    console.log("An agent session that already loaded reflektor keeps the old instructions until its next /reflektor.");
+    console.log("An agent session that already loaded reflektor keeps the old instructions until it loads reflektor again.");
   } else if (command === "rollback") {
     const back = rollback();
     const info = readJson(daemonFile) as DaemonInfo | null;

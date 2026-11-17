@@ -12,7 +12,7 @@ You write the judgment in `report.json`: words, grouping, risks and flows. Scrip
 
 Scripts and reference files live in `${CLAUDE_SKILL_DIR}`. That is this skill's folder: the folder this file is in. Where a command below still shows a `${...}` name instead of a real path, put the folder's absolute path there, with forward slashes. Needs git and Node.js 18 or newer. `gh` is optional.
 
-The request can carry arguments: a base branch, `--since last`, `--session`, `resume` or `push`. In Claude Code the user types them after `/reflektor`; with another agent they say them in words. For `resume`, or when the user asks to continue or pick up a review, go to "Pick up a review" at the end and skip the other steps. For `push`, or when the user asks to push, publish or upload the report to Reflektor, go to "Publish to Reflektor" and skip the other steps.
+The request can carry arguments: a base branch, `--since last`, `--session`, `resume` or `push`. In Claude Code the user types them after `/reflektor`, in Codex after `$reflektor`; with another agent they say them in words. For `resume`, or when the user asks to continue or pick up a review, go to "Pick up a review" at the end and skip the other steps. For `push`, or when the user asks to push, publish or upload the report to Reflektor, go to "Publish to Reflektor" and skip the other steps.
 
 ## 1. Pick the base branch and scope
 
@@ -231,7 +231,7 @@ Publish the report to the reflektor daemon. It is one local server for every rev
 node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" open --report <json file from build> --open
 ```
 
-It prints the review address and the review id, and opens the browser unless a tab already shows this review (open tabs get a banner for each new round instead). Then start the waiter as a background process (in Claude Code: the Bash tool with `run_in_background`):
+It prints the review address and the review id, and opens the browser unless a tab already shows this review (open tabs get a banner for each new round instead). Then start the waiter. Run it as a background process when its exit wakes you (in Claude Code: the Bash tool with `run_in_background`). Some agents, Codex among them, are not woken when a background process ends: they only see its output when the user writes next. There, tell the user the lines below first, then run the waiter in the foreground with the longest time limit your tool allows. If it stops at the time limit with nothing to report, run it again.
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" wait --id <review id>
@@ -242,7 +242,7 @@ Tell the user, in a few lines:
 - the title, how many files are must-read, and the top one or two risks
 - that they can comment (hover a line number and click +), use "Fix this" or "It's fine" on problems, answer the questions, ask you live with the "Ask ... now" button, and send the review with the button at the bottom of the page when done
 
-Do not paste the report into the chat. End your turn and do not poll: the waiter exits when the reviewer does something, and that wakes you. Its output says what happened and what to run next. After handling it, start the waiter again in the background, unless the review is done.
+Do not paste the report into the chat. Do not poll: the waiter exits when the reviewer does something. With a background waiter, end your turn, and its exit wakes you. Its output says what happened and what to run next. After handling it, start the waiter again the same way, unless the review is done.
 
 **reflektor was updated:** the user can update reflektor from the page while you wait. The waiter then prints that reflektor was updated and exits with code 3. Tell the user that line, and do not start the waiter again from this session: they continue with `/reflektor resume`, which runs the new version.
 
@@ -262,7 +262,7 @@ If you cannot run a background process, run build.mjs with `--open` instead. It 
 
 ## 7b. When the checks end
 
-When the background checks from step 2b exit (you are notified), the page already shows their results. Update the report with what they found:
+When the background checks from step 2b exit (you are notified; with a foreground waiter, look each time it returns), the page already shows their results. Update the report with what they found:
 
 1. If the tests wrote a coverage file, run collect.mjs again with `--update` and the same `--base` and `--coverage` arguments, for the fresh coverage. `--update` keeps report.json and moves its line references if code changed.
 2. In report.json, add a `beforeMerge` item for each failed check (its name and first error), and update the test gaps and `gap` highlights from the new coverage.
@@ -336,7 +336,7 @@ build.mjs also writes `pr-description.md` next to the report: the first line is 
 
 ## Pick up a review
 
-A review outlives the session that made it: when no session listens for it, the page tells the user how to pick it up: `/reflektor resume` in Claude Code, or asking the agent to resume the PR report review. In the repo of the review:
+A review outlives the session that made it: when no session listens for it, the page tells the user how to pick it up: `/reflektor resume` in Claude Code, `$reflektor resume` in Codex, or asking the agent to resume the reflektor review. In the repo of the review:
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/review.mjs" resume --repo .

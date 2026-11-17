@@ -25,7 +25,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { CheckStatus, ProjectCheck, RepoConfig } from "../schema/types.js";
-import { globToRegExp, replaceFile, repoHome, reportDir, runShell, shellPath, untrustedAuthors } from "./repo.mjs";
+import { globToRegExp, needWritable, replaceFile, repoHome, reportDir, runShell, shellPath, untrustedAuthors } from "./repo.mjs";
 
 const TAIL_LINES = 80;
 
@@ -137,6 +137,7 @@ const quietGit = (...argv: string[]): string | null => {
 };
 const savedFile = join(repoHome(root), "checks.json");
 const trustFile = join(repoHome(root), "trust.json");
+needWritable([dirname(out), repoHome(root)]);
 const configFile = join(root, ".reflektor.json");
 const readJson = <T,>(file: string): T | null => {
   try {

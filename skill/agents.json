@@ -10,6 +10,8 @@
   "codex": {
     "name": "Codex",
     "product": "Codex",
+    "resume": "$reflektor resume",
+    "env": ["CODEX_THREAD_ID"],
     "aliases": ["openai codex", "codex cli"]
   },
   "cursor": {
