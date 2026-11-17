@@ -1,8 +1,10 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/reflektor-logo-dark.svg">
-    <img src="docs/brand/reflektor-logo-light.svg" alt="Reflektor" width="96">
-  </picture>
+  <a href="https://reflektor.dev">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/brand/reflektor-logo-dark.svg">
+      <img src="docs/brand/reflektor-logo-light.svg" alt="Reflektor" width="96">
+    </picture>
+  </a>
 </p>
 
 <p align="center">
@@ -14,10 +16,12 @@
   <a href="https://reflektor.dev">Platform</a> - <a href="https://reflektor.dev/docs">Documentation</a> - <a href="https://reflektor.dev/install">Install</a> - <a href="https://reflektor.dev/examples">Examples</a> - <a href="https://github.com/bashovski/reflektor/issues/new?assignees=&labels=bug&template=bug_report.yml">Report a Bug</a>
 </p>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/readme-hero-dark.webp">
-  <img alt="Reflektor: the blocks of a report, with types and contracts, the diff, database changes, risks and gaps, and the plan check" src="docs/readme-hero-light.webp">
-</picture>
+<a href="https://reflektor.dev">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-hero-dark.webp">
+    <img alt="Reflektor: the blocks of a report, with types and contracts, the diff, database changes, risks and gaps, and the plan check" src="docs/readme-hero-light.webp">
+  </picture>
+</a>
 
 # Reflektor - code review on steroids
 
