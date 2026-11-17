@@ -10,14 +10,15 @@
 //
 // "Later" snoozes one version for a day. A newer release than the snoozed one asks again at once, and a required
 // update ignores the snooze. Builds from a checkout never look for updates (REFLEKTOR_UPDATE_CHECK=1 makes one look,
-// for trying the modal), and neither does a machine where install.json is missing.
+// for trying the modal), and neither does a machine where install.json is missing, unless `npx skills` installed this
+// release: then it looks, and the reader updates with `npx skills update reflektor` instead of from the page.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readInstall } from "./install.mjs";
 import { HOME } from "./release.mjs";
 import { replaceFile } from "./repo.mjs";
-import { compareVersions, isRelease, isVersion, skillVersion } from "./version.mjs";
+import { compareVersions, fromSkills, isRelease, isVersion, SKILLS_UPDATE, skillVersion } from "./version.mjs";
 
 export type UpdateFile = {
   checkedAt: string | null;
@@ -42,6 +43,8 @@ export type UpdateInfo = {
   snoozed: boolean;
   prompt: boolean;
   managed: boolean;
+  // The command that updates this install, when reflektor cannot update itself (`npx skills` installed it).
+  command: string | null;
   checkedAt: string | null;
 };
 
@@ -70,7 +73,8 @@ export function writeUpdateFile(patch: Partial<UpdateFile>): UpdateFile {
 
 // A release installed with install.sh or by an update, running as the version install.json names.
 export const managedInstall = () => isRelease() && readInstall() !== null;
-export const checksEnabled = (env: NodeJS.ProcessEnv = process.env) => env.REFLEKTOR_UPDATE_CHECK === "1" || (env.REFLEKTOR_UPDATE_CHECK !== "0" && managedInstall());
+export const checksEnabled = (env: NodeJS.ProcessEnv = process.env) => env.REFLEKTOR_UPDATE_CHECK === "1" || (env.REFLEKTOR_UPDATE_CHECK !== "0" && (managedInstall() || fromSkills()));
+export const updateCommand = () => (managedInstall() ? null : fromSkills() ? SKILLS_UPDATE : null);
 
 export function updateInfo(file = readUpdateFile(), current = skillVersion(), at = Date.now()): UpdateInfo {
   const known = checksEnabled();
@@ -87,6 +91,7 @@ export function updateInfo(file = readUpdateFile(), current = skillVersion(), at
     snoozed,
     prompt: status === "required" || (status === "available" && !snoozed),
     managed: managedInstall(),
+    command: updateCommand(),
     checkedAt: file.checkedAt,
   };
 }
@@ -141,7 +146,8 @@ export const noteMinimum = (minimum: string) => (isVersion(minimum) ? writeUpdat
 
 // The line review.mjs ends its answers with while an update is waiting, for the agent to pass on once.
 export function terminalLine(info = updateInfo()): string | null {
-  if (info.status === "required") return `Publishing needs reflektor ${info.minimum} or newer (this is ${info.current}). Update from the report's menu, or run review.mjs update.`;
-  if (info.status === "available") return `reflektor ${info.latest} is available (this is ${info.current}). Update from the report's menu, or run review.mjs update.`;
+  const how = info.command ? `Update it with: ${info.command}` : "Update from the report's menu, or run review.mjs update.";
+  if (info.status === "required") return `Publishing needs reflektor ${info.minimum} or newer (this is ${info.current}). ${how}`;
+  if (info.status === "available") return `reflektor ${info.latest} is available (this is ${info.current}). ${how}`;
   return null;
 }

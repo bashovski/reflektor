@@ -40,8 +40,8 @@ import { finishDeviceLogin, forgetLogin, LOGIN_FILE, type Organization, readLogi
 import { needWritable, SANDBOX_HINT, shellPath } from "./repo.mjs";
 import { readSettings } from "./settings.mjs";
 import { readInstall, rollback } from "./install.mjs";
-import { managedInstall, terminalLine, type UpdateInfo } from "./updates.mjs";
-import { isRelease, readVersion } from "./version.mjs";
+import { managedInstall, terminalLine, updateCommand, type UpdateInfo } from "./updates.mjs";
+import { fromSkills, isRelease, readVersion } from "./version.mjs";
 
 // daemon.json, which the daemon writes when it starts: where it listens and its admin token.
 type DaemonInfo = { port: number; pid: number; version: string; adminToken: string; startedAt: string };
@@ -508,13 +508,21 @@ async function main() {
     console.log(`reflektor ${readVersion()}${isRelease() ? "" : " (a build from a checkout, which does not update itself)"}`);
     const install = readInstall();
     if (install) console.log(`Installed release: ${install.version} for ${install.targets.join(", ")}${install.previous ? `; rollback goes to ${install.previous}` : ""}.`);
+    else if (fromSkills()) console.log("Installed with npx skills.");
     const info = await ensureDaemon();
     const { data } = await api<UpdateAnswer>(info, "POST", "/api/update/check");
-    if (data.status === "required") console.log(`Update needed: Reflektor takes reports from ${data.minimum} or newer. Run: ${self} update`);
-    else if (data.status === "available") console.log(`reflektor ${data.latest} is available. Run: ${self} update`);
+    const run = updateCommand() ?? `${self} update`;
+    if (data.status === "required") console.log(`Update needed: Reflektor takes reports from ${data.minimum} or newer. Run: ${run}`);
+    else if (data.status === "available") console.log(`reflektor ${data.latest} is available. Run: ${run}`);
     else if (data.latest) console.log(`Up to date (the newest release is ${data.latest}).`);
     else console.log("No release information yet.");
   } else if (command === "update") {
+    const skillsCommand = updateCommand();
+    if (skillsCommand) {
+      console.log(`npx skills installed this reflektor, so it updates with npx skills. Run: ${skillsCommand}`);
+      process.exitCode = 1;
+      return;
+    }
     if (!managedInstall() && process.env.REFLEKTOR_UPDATE_CHECK !== "1") {
       console.log("This reflektor is a build from a checkout, so it does not update itself. Update it with: git pull && pnpm build && pnpm run deploy");
       process.exitCode = 1;

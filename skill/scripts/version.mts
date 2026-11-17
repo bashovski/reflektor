@@ -9,7 +9,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // dist/skill/build.json. `version` and `channel` are missing from builds made before versions existed.
-export type BuildInfo = { builtAt?: string; commit?: string | null; version?: string; channel?: "release" | "dev" };
+// `distribution: "skills"` marks the copy on the repo's skill branch, which `npx skills add bashovski/reflektor#skill`
+// installs and `npx skills update reflektor` updates.
+export type BuildInfo = { builtAt?: string; commit?: string | null; version?: string; channel?: "release" | "dev"; distribution?: "skills" };
 
 // The package this file belongs to: scripts/ is one folder down.
 export const SKILL_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -23,6 +25,10 @@ export function buildInfo(dir = SKILL_DIR): BuildInfo {
 }
 
 export const isRelease = (dir = SKILL_DIR) => buildInfo(dir).channel === "release";
+
+// A release installed with `npx skills`: it learns about new versions like any release, but `npx skills` updates it.
+export const fromSkills = (dir = SKILL_DIR) => isRelease(dir) && buildInfo(dir).distribution === "skills";
+export const SKILLS_UPDATE = "npx skills update reflektor";
 
 // The version this package reports: "1.4.0" for a release, "1.4.0-dev+3f2a9c1b7e04" for a build from a checkout.
 // The running package's own version is worked out once per process: its files do not change under it.
