@@ -1,0 +1,80 @@
+name: Bug report
+description: Something in reflektor doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. Please don't paste tokens, keys or code you can't share publicly.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, and what went wrong. Paste the exact error text if there was one.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. On a branch with changes, ran /reflektor
+        2. Sent a review with one comment
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      options:
+        - Claude Code
+        - Codex
+        - Cursor
+        - Gemini CLI
+        - GitHub Copilot
+        - Other (say which below)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: reflektor version
+      description: Shown at the bottom of the menu under your avatar in the report page.
+      placeholder: 0.9.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - Windows (WSL)
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      description: The output of `node --version`.
+      placeholder: v22.11.0
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: What the agent's terminal printed, and the end of `~/.reflektor/daemon.log` if the page didn't load.
+      render: shell
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Screenshots, the stack of the repo, or the agent you picked "Other" for.
