@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-    <a href="https://github.com/bashovski/reflektor/blob/main/LICENSE"><img alt="license" src="https://img.shields.io/github/license/bashovski/stampede"></a>
+    <a href="https://github.com/bashovski/reflektor/blob/main/LICENSE"><img alt="license" src="https://img.shields.io/github/license/bashovski/reflektor"></a>
    <a href='http://makeapullrequest.com'><img alt='PRs Welcome' src='https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=shields'/></a>
 </p>
 
@@ -120,9 +120,6 @@ The full documentation is at [reflektor.dev/docs](https://reflektor.dev/docs):
 
 ## Examples
 We've built a large library of examples for you to explore. You can find them in the [Examples](https://reflektor.dev/examples).
-
-## Requirements
-- Node.js 18 or higher
 
 ## Contributing
 Whilst feedback and bug reports are more than welcome, I don't mind external help. Pick any open issues and communicate here on GitHub.
