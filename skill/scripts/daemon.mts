@@ -709,7 +709,7 @@ function siteFooter() {
     ["Account", [["Sign in", `${app}/login`], ["Sign up", `${app}/signup`]]],
   ];
   const link = (label: string, href: string) => `<li><a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${label}</a></li>`;
-  return `<footer class="site"><div class="inner top"><div class="brand-col">${LOGO ? `<a class="foot-brand" href="${escapeHtml(app)}" target="_blank" rel="noreferrer" aria-label="Reflektor home"><span class="logo" aria-hidden="true">${LOGO}</span></a>` : ""}<p class="tagline">Code reviews done right.</p>
+  return `<footer class="site"><div class="inner top"><div class="brand-col">${LOGO ? `<a class="foot-brand" href="${escapeHtml(app)}" target="_blank" rel="noreferrer" aria-label="Reflektor home"><span class="logo" aria-hidden="true">${LOGO}</span></a>` : ""}<p class="tagline">Code review on steroids.</p>
 <button type="button" role="switch" class="toggle" data-theme-toggle aria-checked="false" aria-label="Dark mode" title="Switch to dark mode"><span class="knob">${icon("sun")}${icon("moon")}</span></button></div>
 <nav class="groups" aria-label="Footer">${groups.map(([title, links]) => `<div><p class="group-title">${title}</p><ul>${links.map(([label, href]) => link(label, href)).join("")}</ul></div>`).join("")}</nav></div>
 <div class="inner bottom"><span>© ${new Date().getFullYear()} Reflektor</span><a class="gh" href="${repo}" target="_blank" rel="noreferrer" aria-label="GitHub">${GITHUB_MARK}</a></div></footer>`;
