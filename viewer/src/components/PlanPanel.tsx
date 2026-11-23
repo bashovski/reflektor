@@ -41,8 +41,10 @@ export const PlanPanel = () => {
       <ol className="space-y-1.5">
         {plan.steps.map((step, i) => {
           const kind = kinds[i] ?? step.kind;
+          // Below sm the four columns leave the action almost no width, so it gets its own row under the
+          // place and the kind.
           return (
-            <li key={i} className={cx("grid grid-cols-[24px_minmax(0,180px)_130px_minmax(0,1fr)] items-start gap-3 text-sm", kind === "skip" && "opacity-50")}>
+            <li key={i} className={cx("grid grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 text-sm sm:grid-cols-[24px_minmax(0,180px)_130px_minmax(0,1fr)] sm:gap-y-3", kind === "skip" && "opacity-50")}>
               <span className="num pt-1 text-right text-xs text-faint">{i + 1}.</span>
               <span className="truncate pt-1 font-mono text-xs text-muted" title={step.where}>
                 {step.where}
@@ -58,7 +60,7 @@ export const PlanPanel = () => {
                   </option>
                 ))}
               </select>
-              <RichText text={step.action} className={cx("block pt-0.5 leading-snug", kind === "skip" && "line-through")} />
+              <RichText text={step.action} className={cx("col-span-2 col-start-2 block pt-0.5 leading-snug wrap-anywhere sm:col-span-1 sm:col-start-auto", kind === "skip" && "line-through")} />
             </li>
           );
         })}
